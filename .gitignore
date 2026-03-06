@@ -1,20 +1,7 @@
-# Environment
-.env
+# Node
+node_modules/
+*.env
 
 # Python
 __pycache__/
-*.py[cod]
-*.egg-info/
-dist/
-build/
-
-# Virtual environment
-venv/
-.venv/
-
-# IDE
-.vscode/
-.idea/
-
-# Alembic
-alembic/versions/__pycache__/
+*.pyc
