@@ -2,6 +2,9 @@
 Business logic for assessment sessions and rounds.
 
 Provides the full session lifecycle: creation → round management → completion.
+
+This service handles ONLY session-level operations. Module-specific logic
+(aptitude, coding, interview) should be in their respective module services.
 """
 
 from datetime import datetime, timezone

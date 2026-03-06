@@ -1,5 +1,5 @@
 """
-Business logic for user management.
+Business logic for user authentication and management.
 
 All database operations related to user accounts are centralised here so
 that routers remain thin.
