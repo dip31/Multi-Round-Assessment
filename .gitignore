@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 # Environment
 .env
 
@@ -228,3 +229,12 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 >>>>>>> 032ebf80f816d1fa265f625dfb0bbe243e2ceed6
+=======
+# Node
+node_modules/
+*.env
+
+# Python
+__pycache__/
+*.pyc
+>>>>>>> eb40f00d6ca923eeedaa04609b01efedb4d78ed7
