@@ -7,19 +7,19 @@ Provides ``get_current_user`` which decodes the JWT from the
 """
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from app.config.security import decode_access_token
 from app.database.db import get_db
 from app.models.user import User
-from app.services.user_service import get_user_by_id
+from app.services.auth_service import get_user_by_id
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+bearer_scheme = HTTPBearer()
 
 
 def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
     """Decode the JWT bearer token and return the corresponding user.
@@ -33,6 +33,8 @@ def get_current_user(
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+    token = credentials.credentials
 
     payload = decode_access_token(token)
     if payload is None:

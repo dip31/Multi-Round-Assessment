@@ -16,6 +16,8 @@ from app.database.base import Base
 # Import every model module so that Base.metadata is fully populated.
 import app.models.user  # noqa: F401
 import app.models.assessment  # noqa: F401
+import app.models.aptitude  # noqa: F401
+import app.models.proctoring  # noqa: F401
 
 # ── Alembic Config ────────────────────────────────────────────────────
 config = context.config

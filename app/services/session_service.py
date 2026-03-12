@@ -7,7 +7,7 @@ This service handles ONLY session-level operations. Module-specific logic
 (aptitude, coding, interview) should be in their respective module services.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -15,7 +15,48 @@ from sqlalchemy.orm import Session
 from app.models.assessment import AssessmentRound, AssessmentSession
 
 
+# ── Constants ─────────────────────────────────────────────────────────
+SESSION_TIMEOUT_MINUTES: int = 30
+
+
 # ── Session operations ────────────────────────────────────────────────
+
+from sqlalchemy import text
+
+def _expire_stale_session(db: Session, user_id: int) -> None:
+    """Auto-close any in_progress session that has exceeded the timeout.
+
+    This ensures stale sessions (e.g. user left without completing) are
+    cleaned up automatically so a new session can be started.
+    """
+    cutoff = text(f"NOW() - INTERVAL '{SESSION_TIMEOUT_MINUTES} minutes'")
+
+    stale = (
+        db.query(AssessmentSession)
+        .filter(
+            AssessmentSession.user_id == user_id,
+            AssessmentSession.status == "in_progress",
+            AssessmentSession.started_at < cutoff,
+        )
+        .all()
+    )
+
+    for s in stale:
+        s.status = "expired"
+        s.completed_at = datetime.now(timezone.utc)
+
+    if stale:
+        # Also close any active rounds in those sessions
+        stale_ids = [s.id for s in stale]
+        db.query(AssessmentRound).filter(
+            AssessmentRound.session_id.in_(stale_ids),
+            AssessmentRound.status == "active",
+        ).update(
+            {"status": "expired", "completed_at": datetime.now(timezone.utc)},
+            synchronize_session="fetch",
+        )
+        db.commit()
+
 
 def create_session(db: Session, user_id: int) -> AssessmentSession:
     """Create a new assessment session for *user_id*.
@@ -38,9 +79,14 @@ def create_session(db: Session, user_id: int) -> AssessmentSession:
 def get_active_session(db: Session, user_id: int) -> Optional[AssessmentSession]:
     """Return the currently active (``in_progress``) session for *user_id*.
 
+    Automatically expires sessions older than ``SESSION_TIMEOUT_MINUTES``.
+
     Returns:
         The ``AssessmentSession`` if one is active, otherwise ``None``.
     """
+    # Clean up stale sessions first
+    _expire_stale_session(db, user_id)
+
     return (
         db.query(AssessmentSession)
         .filter(
@@ -132,3 +178,36 @@ def end_round(db: Session, round_id: int) -> Optional[AssessmentRound]:
     db.commit()
     db.refresh(assessment_round)
     return assessment_round
+
+
+def get_user_active_round(
+    db: Session,
+    user_id: int,
+    round_type: str = "aptitude",
+) -> Optional[AssessmentRound]:
+    """Return the active round of *round_type* for a user's in-progress session.
+
+    Chains: user_id → active session → active round of the given type.
+
+    Args:
+        db: Active database session.
+        user_id: The authenticated user's ID.
+        round_type: ``aptitude``, ``coding``, or ``interview``.
+
+    Returns:
+        The ``AssessmentRound`` if found, otherwise ``None``.
+    """
+    active_session = get_active_session(db, user_id)
+    if active_session is None:
+        return None
+
+    return (
+        db.query(AssessmentRound)
+        .filter(
+            AssessmentRound.session_id == active_session.id,
+            AssessmentRound.round_type == round_type,
+            AssessmentRound.status == "active",
+        )
+        .first()
+    )
+

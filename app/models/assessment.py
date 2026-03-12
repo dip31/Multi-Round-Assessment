@@ -33,12 +33,28 @@ class AssessmentSession(Base):
     rounds = relationship(
         "AssessmentRound",
         back_populates="session",
-        lazy="select",
         cascade="all, delete-orphan",
+        lazy="select",
+    )
+    proctoring_events = relationship(
+        "ProctoringEvent",
+        back_populates="session",
+        cascade="all, delete-orphan",
+        lazy="select",
     )
 
     def __repr__(self) -> str:
         return f"<AssessmentSession id={self.id} status={self.status!r}>"
+
+    @property
+    def time_remaining_seconds(self) -> int:
+        """Calculate the remaining seconds out of a 30-minute global limit."""
+        if not self.started_at:
+            return 1800
+        # Use simple naive local time to match Postgres timezone-naive func.now() behavior
+        now = datetime.now()
+        elapsed = (now - self.started_at).total_seconds()
+        return max(0, int(1800 - elapsed))
 
 
 class AssessmentRound(Base):

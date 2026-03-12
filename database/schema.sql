@@ -62,7 +62,7 @@ CREATE TABLE assessment_sessions (
     id SERIAL PRIMARY KEY,
     user_id INTEGER NOT NULL,
     status VARCHAR(20) NOT NULL
-        CHECK (status IN ('not_started','in_progress','completed','terminated')),
+        CHECK (status IN ('not_started','in_progress','completed','terminated','expired')),
     started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at TIMESTAMP,
     total_score FLOAT DEFAULT 0,
@@ -84,7 +84,7 @@ CREATE TABLE assessment_rounds (
     round_type VARCHAR(20) NOT NULL
         CHECK (round_type IN ('aptitude','coding','interview')),
     status VARCHAR(20) NOT NULL
-        CHECK (status IN ('pending','active','completed','terminated')),
+        CHECK (status IN ('pending','active','completed','terminated','expired')),
     score FLOAT DEFAULT 0,
     max_questions INTEGER NOT NULL DEFAULT 20,
     started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -259,18 +259,16 @@ ON coding_submissions(judge0_token);
 -- ============================================
 CREATE TABLE proctoring_events (
     id SERIAL PRIMARY KEY,
-    round_id INTEGER NOT NULL,
+    session_id INTEGER NOT NULL,
     event_type VARCHAR(50) NOT NULL,
-    severity VARCHAR(10) NOT NULL DEFAULT 'low'
-        CHECK (severity IN ('low','medium','high','critical')),
-    event_data JSONB,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (round_id)
-        REFERENCES assessment_rounds(id) ON DELETE CASCADE
+    event_metadata JSONB,
+    created_at TIMESTAMP DEFAULT NOW(),
+    FOREIGN KEY (session_id)
+        REFERENCES assessment_sessions(id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_proctoring_round
-ON proctoring_events(round_id);
+CREATE INDEX idx_proctoring_session
+ON proctoring_events(session_id);
 
 
 

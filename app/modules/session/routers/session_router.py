@@ -11,7 +11,7 @@ from app.core.auth import get_current_user
 from app.database.db import get_db
 from app.models.user import User
 from app.schemas.assessment import SessionResponse
-from app.services.assessment_service import create_session, get_active_session
+from app.services.session_service import create_session, create_round, get_active_session
 
 router = APIRouter(prefix="/session", tags=["Assessment Sessions"])
 
@@ -26,7 +26,7 @@ def start_session(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> SessionResponse:
-    """Create a new assessment session for the authenticated user.
+    """Create a new assessment session and its first aptitude round.
 
     Raises:
         HTTPException (409): If the user already has an active session.
@@ -39,6 +39,12 @@ def start_session(
         )
 
     session = create_session(db, user_id=current_user.id)
+
+    # Auto-create the first round (aptitude)
+    create_round(db, session_id=session.id, round_type="aptitude")
+
+    # Refresh to include the new round in the response
+    db.refresh(session)
     return session
 
 

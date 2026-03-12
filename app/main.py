@@ -25,9 +25,9 @@ app = FastAPI(
 )
 
 # ── Middleware (order matters: last added = first executed) ────────────
-add_cors_middleware(app)
-add_request_logging_middleware(app)
 add_rate_limit_middleware(app, max_requests=100, window_seconds=60)
+add_request_logging_middleware(app)
+add_cors_middleware(app)
 
 # ── Routers ───────────────────────────────────────────────────────────
 app.include_router(api_router)
