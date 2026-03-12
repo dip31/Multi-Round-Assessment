@@ -29,10 +29,12 @@ export default function AptitudeTest() {
     const [sessionId, setSessionId] = useState(null);
     const [proctoringWarnings, setProctoringWarnings] = useState([]);
     const [proctoringBlocked, setProctoringBlocked] = useState(false);
+    const [testTerminated, setTestTerminated] = useState(false);
 
     const startTimeRef = useRef(null);
     const navigate = useNavigate();
     const retryTimeoutRef = useRef(null);
+    const videoRef = useRef(null);
 
     // Initialize proctoring hook
     const { 
@@ -40,16 +42,45 @@ export default function AptitudeTest() {
         enterFullscreen, 
         cancelFullscreen,
         showFullscreenPrompt,
-        clearWarnings 
+        clearWarnings,
+        mediaStream
     } = useProctoring(
         sessionId,
         (warning) => {
-            setProctoringWarnings(prev => [...prev, warning]);
-            if (warning.blocking) {
-                setProctoringBlocked(true);
+            if (warning.terminate) {
+                setTestTerminated(true);
+            } else {
+                setProctoringWarnings(prev => [...prev, warning]);
+                if (warning.blocking) {
+                    setProctoringBlocked(true);
+                }
             }
         }
     );
+
+    // Attach media stream to video and manage termination
+    useEffect(() => {
+        if (videoRef.current && mediaStream) {
+            videoRef.current.srcObject = mediaStream;
+        }
+    }, [mediaStream]);
+
+    useEffect(() => {
+        if (testTerminated) {
+            // Unconditionally finalize question gracefully
+            if (question && !submitting) {
+                const endTime = Date.now();
+                const responseTime = (endTime - startTimeRef.current) / 1000;
+                submitAnswer(question.question_id, null, responseTime).catch(() => {});
+            }
+            // Navigate after 5 seconds to let user read the warning
+            const tm = setTimeout(() => {
+                navigate('/result');
+            }, 5000);
+            return () => clearTimeout(tm);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [testTerminated, navigate]);
 
     const fetchQuestion = useCallback(async () => {
         if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
@@ -234,7 +265,7 @@ export default function AptitudeTest() {
             <Navbar rightContent={headerControls} />
 
             {/* Proctoring Warnings */}
-            {proctoringWarnings.length > 0 && (
+            {proctoringWarnings.length > 0 && !testTerminated && (
                 <div className="max-w-6xl mx-auto w-full px-4 pt-4 space-y-2">
                     {proctoringWarnings.map((warning, index) => (
                         <ProctoringWarning
@@ -247,8 +278,28 @@ export default function AptitudeTest() {
                 </div>
             )}
 
+            {/* Test Terminated Overlay */}
+            {testTerminated && (
+                <div className="fixed inset-0 bg-black/95 z-[150] flex items-center justify-center">
+                    <div className="bg-white rounded-3xl p-8 max-w-lg mx-4 text-center shadow-2xl">
+                        <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-[var(--color-danger)]/10 text-[var(--color-danger)] mb-6">
+                            <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                        </div>
+                        <h3 className="text-3xl font-black tracking-tight mb-4 text-[var(--color-danger)]">Test Terminated</h3>
+                        <p className="text-[var(--color-text-secondary)] text-base mb-8 leading-relaxed">
+                            You have exceeded the maximum limit for proctoring violations. Your test session has been immediately halted and finalized.
+                        </p>
+                        <div className="animate-pulse text-sm font-semibold text-[var(--color-text-primary)]">
+                            Redirecting to results...
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Proctoring Blocked Overlay */}
-            {proctoringBlocked && (
+            {proctoringBlocked && !testTerminated && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
                     <div className="bg-white rounded-lg p-6 max-w-md mx-4">
                         <h3 className="text-lg font-semibold mb-2">Proctoring Requirements</h3>
@@ -426,6 +477,22 @@ export default function AptitudeTest() {
                                 Submit Test
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+            {/* Camera Preview */}
+            {mediaStream && !testTerminated && (
+                <div className="fixed bottom-6 right-6 z-[90] overflow-hidden rounded-xl border border-[var(--color-border)] shadow-2xl bg-black h-36 w-48 transition-all hover:scale-105">
+                    <video 
+                        ref={videoRef} 
+                        autoPlay 
+                        playsInline 
+                        muted 
+                        className="h-full w-full object-cover scale-x-[-1]"
+                    />
+                    <div className="absolute top-3 right-3 flex items-center gap-2 rounded-md bg-black/60 px-2 py-1 backdrop-blur-md">
+                        <div className="h-2 w-2 rounded-full bg-[var(--color-danger)] animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
+                        <span className="text-[10px] font-bold tracking-wider text-white uppercase">Rec</span>
                     </div>
                 </div>
             )}
