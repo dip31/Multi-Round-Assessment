@@ -181,6 +181,53 @@ export default function Result() {
                     )}
                 </div>
 
+                {/* ANSWER REVIEW */}
+                <div className="rounded-[12px] border border-[var(--color-border)] bg-white p-6 shadow-sm mb-12">
+                    <h3 className="mb-6 text-sm font-bold tracking-wide text-[var(--color-text-primary)] uppercase font-display">ANSWER REVIEW</h3>
+                    {result?.answer_review && result.answer_review.length > 0 ? (
+                        <div className="space-y-3">
+                            {result.answer_review.map((item) => (
+                                <div
+                                    key={item.attempt_number}
+                                    className="rounded-xl border border-[var(--color-border)] p-4"
+                                >
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div>
+                                            <div className="text-xs font-mono text-[var(--color-text-secondary)] mb-1">
+                                                Q{item.attempt_number} • {item.difficulty}
+                                                {item.response_time != null ? ` • ${item.response_time.toFixed(1)}s` : ''}
+                                            </div>
+                                            <div className="text-sm font-semibold text-[var(--color-text-primary)]">
+                                                {item.question_text}
+                                            </div>
+                                        </div>
+                                        <div className={`shrink-0 rounded-lg px-3 py-1 text-xs font-bold ${item.is_correct ? 'bg-[var(--color-success)]/10 text-[var(--color-success)]' : 'bg-[var(--color-danger)]/10 text-[var(--color-danger)]'}`}>
+                                            {item.is_correct ? 'CORRECT' : 'WRONG'}
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs font-mono">
+                                        <div className="rounded-lg bg-[var(--color-bg-primary)] p-2 border border-[var(--color-border)]/50">
+                                            <span className="text-[var(--color-text-secondary)]">Selected:</span>{' '}
+                                            <span className="text-[var(--color-text-primary)] font-bold">{item.selected_option ?? '—'}</span>
+                                        </div>
+                                        <div className="rounded-lg bg-[var(--color-bg-primary)] p-2 border border-[var(--color-border)]/50">
+                                            <span className="text-[var(--color-text-secondary)]">Correct:</span>{' '}
+                                            <span className="text-[var(--color-text-primary)] font-bold">{item.correct_option ?? '—'}</span>
+                                        </div>
+                                        <div className="rounded-lg bg-[var(--color-bg-primary)] p-2 border border-[var(--color-border)]/50">
+                                            <span className="text-[var(--color-text-secondary)]">Reward:</span>{' '}
+                                            <span className="text-[var(--color-text-primary)] font-bold">{item.reward != null ? item.reward.toFixed(2) : '—'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-sm text-[var(--color-text-secondary)] font-mono">No answer review available.</p>
+                    )}
+                </div>
+
                 {/* Back button */}
                 <div className="text-center">
                     <button

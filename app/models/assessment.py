@@ -10,6 +10,8 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
 from app.database.base import Base
+from app.models.proctoring import ProctoringEvent
+from app.models.advanced_proctoring import AdvancedProctoringEvent
 
 
 class AssessmentSession(Base):
@@ -38,6 +40,12 @@ class AssessmentSession(Base):
     )
     proctoring_events = relationship(
         "ProctoringEvent",
+        back_populates="session",
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
+    advanced_proctoring_events = relationship(
+        "AdvancedProctoringEvent",
         back_populates="session",
         cascade="all, delete-orphan",
         lazy="select",

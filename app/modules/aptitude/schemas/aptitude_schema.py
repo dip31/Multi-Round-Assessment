@@ -31,6 +31,19 @@ class SubmitAnswerResponse(BaseModel):
     next_question: Optional[NextQuestionResponse] = None
 
 
+class AnswerReviewItem(BaseModel):
+    """Per-question answer review for the completed round."""
+    attempt_number: int
+    question_id: int
+    question_text: str
+    difficulty: str
+    selected_option: Optional[str] = None
+    correct_option: str
+    is_correct: bool
+    response_time: Optional[float] = None
+    reward: Optional[float] = None
+
+
 class RoundResultResponse(BaseModel):
     """Summary statistics for a completed aptitude round."""
     total_questions: int
@@ -40,3 +53,4 @@ class RoundResultResponse(BaseModel):
     longest_correct_streak: int
     difficulty_progression: List[str]
     rl_report: List[Dict]
+    answer_review: List[AnswerReviewItem]

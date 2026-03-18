@@ -29,6 +29,7 @@ from app.modules.aptitude.schemas.aptitude_schema import (
 
 from app.modules.aptitude.services.aptitude_service import (
     get_next_question,
+    get_current_difficulty,
     submit_answer_and_adapt,
     calculate_round_result,
 )
@@ -56,14 +57,18 @@ def next_question(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Fetch the next aptitude question for the authenticated user.
+    Fetch the next aptitude question for authenticated user.
 
     For the first question in a session, returns a medium-difficulty question.
     After submissions, difficulty is managed by the RL engine.
     """
-    _require_active_round(db, current_user.id)
-
-    question = get_next_question(db)
+    active_round = _require_active_round(db, current_user.id)
+    active_session = get_active_session(db, current_user.id)
+    
+    # Get current difficulty from RL session, default to medium for first question
+    current_difficulty = get_current_difficulty(db, active_round.id, current_user.id)
+    
+    question = get_next_question(db, difficulty=current_difficulty)
 
     if not question:
         raise HTTPException(

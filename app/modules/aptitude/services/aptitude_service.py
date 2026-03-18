@@ -15,7 +15,7 @@ from sqlalchemy.sql import func
 
 from app.models.aptitude import AptitudeQuestion, AptitudeAttempt
 from app.models.rl import RLAttemptLog
-from app.models.assessment import AssessmentRound
+from app.models.assessment import AssessmentRound, AssessmentSession
 from app.modules.aptitude.services.question_selector import select_question_by_difficulty
 from app.modules.aptitude.rl_engine import (
     build_state,
@@ -25,7 +25,35 @@ from app.modules.aptitude.rl_engine import (
     apply_policy,
     log_attempt,
 )
+from app.models.aptitude import RLSession
 from app.modules.aptitude.rl_engine.reward_calculator import DEFAULT_TIME_LIMIT
+
+
+def get_current_difficulty(db: Session, round_id: int, user_id: int) -> str:
+    """Get the current difficulty level from RL session.
+    
+    Args:
+        db: Active database session.
+        round_id: The aptitude round ID.
+        user_id: The user ID.
+        
+    Returns:
+        Current difficulty as string (easy/medium/hard).
+    """
+    # Get the most recent RL session entry to find the last action taken
+    latest_rl = (
+        db.query(RLSession)
+        .filter(RLSession.round_id == round_id)
+        .order_by(RLSession.step_number.desc())
+        .first()
+    )
+    
+    if latest_rl:
+        # The action_taken represents the next difficulty that was selected
+        return latest_rl.action_taken
+    
+    # Default to medium for first question
+    return "medium"
 
 
 def get_next_question(db: Session, difficulty: str = "medium") -> Optional[dict]:
@@ -212,11 +240,32 @@ def submit_answer_and_adapt(
     state_key, state_tuple = build_state(history, question.difficulty)
 
     # ── 3. Calculate reward ───────────────────────────────────────────
+    # Derive a dynamic per-question time limit from the remaining session time
+    # and remaining questions in this round (10 questions over 30 minutes, etc.).
+    round_obj = db.query(AssessmentRound).filter(AssessmentRound.id == round_id).first()
+    session_obj = (
+        db.query(AssessmentSession)
+        .filter(AssessmentSession.id == session_id)
+        .first()
+        if session_id
+        else None
+    )
+
+    # Fallback to DEFAULT_TIME_LIMIT if we cannot compute a dynamic one
+    question_time_limit = DEFAULT_TIME_LIMIT
+    if round_obj and session_obj:
+        remaining_seconds = session_obj.time_remaining_seconds
+        remaining_questions = max(round_obj.max_questions - existing_count, 1)
+        question_time_limit = max(
+            5.0,  # don't go below a small minimum window
+            remaining_seconds / remaining_questions,
+        )
+
     reward = calculate_reward(
         is_correct=is_correct,
         difficulty=question.difficulty,
         response_time=response_time,
-        question_time_limit=DEFAULT_TIME_LIMIT,
+        question_time_limit=question_time_limit,
         correct_streak=state_tuple.correct_streak,
         wrong_streak=state_tuple.wrong_streak,
     )
@@ -238,6 +287,28 @@ def submit_answer_and_adapt(
     # ── 6. Build next state and update Q-table ────────────────────────
     next_state_key, _ = build_state(history, next_difficulty)
     update_q_table(user_id, state_key, action, reward, next_state_key, db)
+
+    # ── 6b. Snapshot RL session for this round step ────────────────────
+    total_attempts = len(history)
+    correct_so_far = sum(1 for h in history if h["is_correct"])
+    accuracy_so_far = (correct_so_far / total_attempts) if total_attempts > 0 else 0.0
+    avg_response_time = (
+        sum(h["response_time"] for h in history) / total_attempts
+        if total_attempts > 0
+        else 0.0
+    )
+
+    rl_session_row = RLSession(
+        round_id=round_id,
+        step_number=total_attempts,
+        prev_difficulty=question.difficulty,
+        action_taken=next_difficulty,
+        reward_received=reward,
+        accuracy_so_far=accuracy_so_far,
+        avg_response_time=avg_response_time,
+        q_values=None,  # can be populated later with full Q-table snapshot if needed
+    )
+    db.add(rl_session_row)
 
     # ── 7. Log attempt (non-blocking) ─────────────────────────────────
     log_attempt(
@@ -294,9 +365,24 @@ def calculate_round_result(db: Session, round_id: int) -> dict:
     longest_correct_streak = 0
     current_streak = 0
     difficulty_progression = []
+    answer_review = []
     
     for a in attempts:
         difficulty_progression.append(a.difficulty)
+        q = a.question
+        answer_review.append(
+            {
+                "attempt_number": a.attempt_number,
+                "question_id": a.question_id,
+                "question_text": q.question_text if q else "",
+                "difficulty": a.difficulty or (q.difficulty if q else "medium"),
+                "selected_option": a.selected_option,
+                "correct_option": q.correct_option if q else "",
+                "is_correct": bool(a.is_correct),
+                "response_time": float(a.response_time) if a.response_time is not None else None,
+                "reward": float(a.reward) if a.reward is not None else None,
+            }
+        )
         if a.is_correct:
             current_streak += 1
             longest_correct_streak = max(longest_correct_streak, current_streak)
@@ -330,4 +416,5 @@ def calculate_round_result(db: Session, round_id: int) -> dict:
         "longest_correct_streak": longest_correct_streak,
         "difficulty_progression": difficulty_progression,
         "rl_report": rl_report,
+        "answer_review": answer_review,
     }

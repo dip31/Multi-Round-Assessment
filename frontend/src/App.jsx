@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import Instructions from './pages/Instructions';
 import AptitudeTest from './pages/AptitudeTest';
 import Result from './pages/Result';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 export default function App() {
   return (
@@ -33,7 +34,9 @@ export default function App() {
           path="/aptitude"
           element={
             <PrivateRoute>
-              <AptitudeTest />
+              <ErrorBoundary>
+                <AptitudeTest />
+              </ErrorBoundary>
             </PrivateRoute>
           }
         />

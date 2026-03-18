@@ -54,10 +54,15 @@ export const useProctoring = (sessionId, onWarning) => {
         setEventCounts(prev => ({ ...prev, idle_activity: count }));
         
         // Log the event
-        await logProctorEvent(sessionId, PROCTORING_EVENTS.IDLE_ACTIVITY, {
-            count,
-            duration_seconds: 60,
-        });
+        try {
+            await logProctorEvent(sessionId, PROCTORING_EVENTS.IDLE_ACTIVITY, {
+                count,
+                duration_seconds: 60,
+            });
+        } catch (error) {
+            // Don't let proctoring errors interrupt the test
+            console.debug('Failed to log idle activity:', error);
+        }
 
         // Check warning threshold
         if (count >= WARNING_THRESHOLDS.IDLE_ACTIVITY) {
@@ -88,10 +93,14 @@ export const useProctoring = (sessionId, onWarning) => {
         setEventCounts(prev => ({ ...prev, tab_switch: count }));
         
         // Log the event
-        await logProctorEvent(sessionId, PROCTORING_EVENTS.TAB_SWITCH, {
-            count,
-            timestamp: new Date().toISOString(),
-        });
+        try {
+            await logProctorEvent(sessionId, PROCTORING_EVENTS.TAB_SWITCH, {
+                count,
+                timestamp: new Date().toISOString(),
+            });
+        } catch (error) {
+            console.debug('Failed to log tab switch:', error);
+        }
 
         // Check warning threshold
         if (count >= WARNING_THRESHOLDS.TAB_SWITCH) {
@@ -154,11 +163,15 @@ export const useProctoring = (sessionId, onWarning) => {
             console.error('Failed to enter fullscreen:', error);
             
             // Log fullscreen failure
-            await logProctorEvent(sessionId, PROCTORING_EVENTS.FULLSCREEN_EXIT, {
-                error: error.name,
-                message: error.message,
-                timestamp: new Date().toISOString(),
-            });
+            try {
+                await logProctorEvent(sessionId, PROCTORING_EVENTS.FULLSCREEN_EXIT, {
+                    error: error.name,
+                    message: error.message,
+                    timestamp: new Date().toISOString(),
+                });
+            } catch (logError) {
+                console.debug('Failed to log fullscreen exit:', logError);
+            }
             
             return false;
         }
@@ -208,10 +221,14 @@ export const useProctoring = (sessionId, onWarning) => {
                 setEventCounts(prev => ({ ...prev, fullscreen_exit: count }));
                 
                 // Log the event
-                await logProctorEvent(sessionId, PROCTORING_EVENTS.FULLSCREEN_EXIT, {
-                    count,
-                    timestamp: new Date().toISOString(),
-                });
+                try {
+                    await logProctorEvent(sessionId, PROCTORING_EVENTS.FULLSCREEN_EXIT, {
+                        count,
+                        timestamp: new Date().toISOString(),
+                    });
+                } catch (logError) {
+                    console.debug('Failed to log fullscreen exit:', logError);
+                }
 
                 // Check warning threshold
                 if (count >= WARNING_THRESHOLDS.FULLSCREEN_EXIT) {
@@ -237,9 +254,13 @@ export const useProctoring = (sessionId, onWarning) => {
     // Handle page reload/exit
     const handleBeforeUnload = useCallback(async (event) => {
         // Log the event
-        await logProctorEvent(sessionId, PROCTORING_EVENTS.PAGE_RELOAD, {
-            timestamp: new Date().toISOString(),
-        });
+        try {
+            await logProctorEvent(sessionId, PROCTORING_EVENTS.PAGE_RELOAD, {
+                timestamp: new Date().toISOString(),
+            });
+        } catch (error) {
+            console.debug('Failed to log page reload:', error);
+        }
 
         // Show warning message
         const message = 'Reloading the page will be logged as a proctoring violation. Are you sure?';
@@ -257,10 +278,14 @@ export const useProctoring = (sessionId, onWarning) => {
             return true;
         } catch (error) {
             // Log permission denied
-            await logProctorEvent(sessionId, PROCTORING_EVENTS.CAMERA_PERMISSION_DENIED, {
-                error: error.name,
-                timestamp: new Date().toISOString(),
-            });
+            try {
+                await logProctorEvent(sessionId, PROCTORING_EVENTS.CAMERA_PERMISSION_DENIED, {
+                    error: error.name,
+                    timestamp: new Date().toISOString(),
+                });
+            } catch (logError) {
+                console.debug('Failed to log camera permission denied:', logError);
+            }
 
             const warning = {
                 type: PROCTORING_EVENTS.CAMERA_PERMISSION_DENIED,

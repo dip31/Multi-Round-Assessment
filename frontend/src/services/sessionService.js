@@ -6,6 +6,13 @@ export const startSession = async () => {
 };
 
 export const getSessionStatus = async () => {
-    const response = await api.get('/session/status');
-    return response.data;
+    console.log('🔍 DEBUG: Calling getSessionStatus...');
+    try {
+        const response = await api.get('/session/status');
+        console.log('🔍 DEBUG: Session status response:', response);
+        return response.data;
+    } catch (error) {
+        console.error('🔍 DEBUG: Session status error:', error);
+        throw error;
+    }
 };

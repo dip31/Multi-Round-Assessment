@@ -23,9 +23,10 @@ from app.modules.aptitude.rl_engine.q_table_store import (
 # ── Hyperparameters ───────────────────────────────────────────────────
 ALPHA: float         = 0.1     # learning rate
 GAMMA: float         = 0.9     # discount factor
-EPSILON_START: float = 0.3     # initial exploration rate
-EPSILON_MIN: float   = 0.05    # minimum exploration rate
-EPSILON_DECAY: float = 0.995   # decay multiplier per episode
+# Make exploration more visible within a single 10-question round
+EPSILON_START: float = 0.5     # initial exploration rate
+EPSILON_MIN: float   = 0.1     # minimum exploration rate
+EPSILON_DECAY: float = 0.999   # decay multiplier per step
 
 # Per-user epsilon storage (in-memory, resets on server restart)
 _user_epsilons: dict[int, float] = {}

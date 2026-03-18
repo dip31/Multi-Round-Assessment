@@ -6,10 +6,9 @@ import Timer from '../components/Timer';
 import Toast from '../components/shared/Toast';
 import LoadingSkeleton from '../components/shared/LoadingSkeleton';
 import ProctoringWarning from '../components/ProctoringWarning';
-import FullscreenPrompt from '../components/FullscreenPrompt';
 import { getNextQuestion, submitAnswer } from '../services/aptitudeService';
 import { getSessionStatus } from '../services/sessionService';
-import { useProctoring } from '../hooks/useProctoring';
+import { useAdvancedProctoring } from '../hooks/useAdvancedProctoring';
 
 const MAX_QUESTIONS = 10;
 
@@ -34,36 +33,36 @@ export default function AptitudeTest() {
     const startTimeRef = useRef(null);
     const navigate = useNavigate();
     const retryTimeoutRef = useRef(null);
-    const videoRef = useRef(null);
+    const questionCountRef = useRef(0);
 
-    // Initialize proctoring hook
-    const { 
-        initializeProctoring, 
-        enterFullscreen, 
-        cancelFullscreen,
-        showFullscreenPrompt,
-        clearWarnings,
-        mediaStream
-    } = useProctoring(
+    // Initialize advanced proctoring hook
+    const { videoRef, isMonitoring, enterFullscreen } = useAdvancedProctoring(
         sessionId,
-        (warning) => {
-            if (warning.terminate) {
+        (violation) => {
+            if (violation.terminate) {
                 setTestTerminated(true);
+                setProctoringBlocked(true);
+                setToast({
+                    type: 'error',
+                    message: 'Test terminated due to multiple proctoring violations.',
+                    duration: 5000
+                });
+                setTimeout(() => navigate('/result'), 3000);
             } else {
+                const warning = {
+                    type: violation.eventType,
+                    message: `Proctoring violation detected: ${violation.eventType}`,
+                    count: violation.violationCount,
+                    severity: 'high',
+                };
+
                 setProctoringWarnings(prev => [...prev, warning]);
-                if (warning.blocking) {
-                    setProctoringBlocked(true);
-                }
+                setTimeout(() => {
+                    setProctoringWarnings(prev => prev.filter(w => w !== warning));
+                }, 5000);
             }
         }
     );
-
-    // Attach media stream to video and manage termination
-    useEffect(() => {
-        if (videoRef.current && mediaStream) {
-            videoRef.current.srcObject = mediaStream;
-        }
-    }, [mediaStream]);
 
     useEffect(() => {
         if (testTerminated) {
@@ -82,33 +81,53 @@ export default function AptitudeTest() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [testTerminated, navigate]);
 
+    // Keep a ref so logic can read the latest count without creating effect loops.
+    useEffect(() => {
+        questionCountRef.current = questionCount;
+    }, [questionCount]);
+
     const fetchQuestion = useCallback(async () => {
+        console.log('🔍 DEBUG: fetchQuestion called, questionCount:', questionCountRef.current);
+        
         if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
 
-        if (questionCount >= MAX_QUESTIONS) {
+        if (questionCountRef.current >= MAX_QUESTIONS) {
+            console.log('🔍 DEBUG: Max questions reached, navigating to result');
             navigate('/result');
             return;
         }
 
+        console.log('🔍 DEBUG: Setting loading to true');
         setLoading(true);
         setSelectedOption(null);
+        setToast(null);
         try {
+            console.log('🔍 DEBUG: Calling getNextQuestion...');
             const data = await getNextQuestion();
+            console.log('🔍 DEBUG: Received question data:', data);
             setQuestion(data);
             startTimeRef.current = Date.now();
             setQuestionCount(prev => prev + 1);
-            setLoading(false);
+            console.log('🔍 DEBUG: Question set, new count:', questionCountRef.current + 1);
         } catch (err) {
+            console.error('🔍 DEBUG: Error in fetchQuestion:', err);
             if (err.response?.status === 404) {
                 navigate('/result');
             } else if (!err.response) {
                 setNetworkOffline(true);
+                setToast({
+                    message: "Failed to load question. Please try again.",
+                    onRetry: fetchQuestion
+                });
             } else {
                 // Auto retry every 10 seconds for GET
                 retryTimeoutRef.current = setTimeout(fetchQuestion, 10000);
             }
+        } finally {
+            console.log('🔍 DEBUG: Setting loading to false');
+            setLoading(false);
         }
-    }, [questionCount, navigate]);
+    }, [navigate]);
 
     const isInitialized = useRef(false);
 
@@ -117,20 +136,17 @@ export default function AptitudeTest() {
         isInitialized.current = true;
 
         const initSession = async () => {
-            try {
-                const status = await getSessionStatus();
-                setSessionId(status.id);
-                setTimeRemaining(status.time_remaining_seconds ?? 1800);
-                await fetchQuestion();
-            } catch (err) {
-                if (!err.response) {
-                    setNetworkOffline(true);
-                } else {
-                    console.error("Failed to restore session", err);
-                    navigate('/dashboard');
-                }
+        try {
+            const status = await getSessionStatus();
+            setSessionId(status.id);
+            setTimeRemaining(status.time_remaining_seconds ?? 1800);
+        } catch (err) {
+            if (!err.response) {
+                console.error("Failed to restore session", err);
+                navigate('/dashboard');
             }
-        };
+        }
+    };
         initSession();
         return () => {
             clearTimeout(retryTimeoutRef.current);
@@ -138,22 +154,15 @@ export default function AptitudeTest() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Initialize proctoring separately once sessionId is available
+    const didStartTestRef = useRef(false);
     useEffect(() => {
-        if (sessionId) {
-            let cleanupFn = null;
-            
-            // Add a small delay to ensure DOM is ready
-            const timer = setTimeout(async () => {
-                cleanupFn = await initializeProctoring();
-            }, 500);
-            
-            return () => {
-                clearTimeout(timer);
-                if (cleanupFn) cleanupFn();
-            };
+        console.log('🔍 DEBUG: Session effect triggered, sessionId:', sessionId);
+        if (sessionId && !didStartTestRef.current) {
+            didStartTestRef.current = true;
+            console.log('🔍 DEBUG: Calling fetchQuestion...');
+            fetchQuestion();
         }
-    }, [sessionId, initializeProctoring]);
+    }, [sessionId, fetchQuestion]);
 
     const handleSubmission = async (optionToSubmit) => {
         if (submitting || !question) return;
@@ -215,7 +224,7 @@ export default function AptitudeTest() {
     };
 
     const handleWarningRetry = async () => {
-        clearWarnings();
+        setProctoringWarnings([]);
         setProctoringBlocked(false);
         if (sessionId) {
             await enterFullscreen();
@@ -316,15 +325,8 @@ export default function AptitudeTest() {
                 </div>
             )}
 
-            {/* Fullscreen Prompt */}
-            {showFullscreenPrompt && (
-                <FullscreenPrompt
-                    onEnterFullscreen={enterFullscreen}
-                    onCancel={cancelFullscreen}
-                />
-            )}
-
-            {/* Mobile Progress Bar Header */}
+            {/* (mobile-specific top question container removed to avoid extra spacing;
+                main question card is rendered in the central panel below) */}
             <div className="md:hidden border-b border-[var(--color-border)] bg-[var(--color-bg-surface)] px-4 py-3">
                 <div className="flex justify-between text-sm text-[var(--color-text-secondary)] font-medium mb-2">
                     <span>Question {displayCount} of {MAX_QUESTIONS}</span>
@@ -481,21 +483,28 @@ export default function AptitudeTest() {
                 </div>
             )}
             {/* Camera Preview */}
-            {mediaStream && !testTerminated && (
-                <div className="fixed bottom-6 right-6 z-[90] overflow-hidden rounded-xl border border-[var(--color-border)] shadow-2xl bg-black h-36 w-48 transition-all hover:scale-105">
-                    <video 
-                        ref={videoRef} 
-                        autoPlay 
-                        playsInline 
-                        muted 
-                        className="h-full w-full object-cover scale-x-[-1]"
-                    />
+            {/* Always mount <video> so proctoring can attach stream.
+                Only show the floating preview once monitoring is active. */}
+            <div
+                className={`fixed bottom-6 right-6 z-[90] overflow-hidden rounded-xl border border-[var(--color-border)] shadow-2xl bg-black h-36 w-48 transition-all hover:scale-105 ${
+                    isMonitoring && !testTerminated ? 'opacity-100' : 'opacity-0 pointer-events-none'
+                }`}
+                aria-hidden={!isMonitoring || testTerminated}
+            >
+                <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="h-full w-full object-cover scale-x-[-1]"
+                />
+                {isMonitoring && !testTerminated && (
                     <div className="absolute top-3 right-3 flex items-center gap-2 rounded-md bg-black/60 px-2 py-1 backdrop-blur-md">
                         <div className="h-2 w-2 rounded-full bg-[var(--color-danger)] animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
                         <span className="text-[10px] font-bold tracking-wider text-white uppercase">Rec</span>
                     </div>
-                </div>
-            )}
+                )}
+            </div>
         </div>
     );
 }

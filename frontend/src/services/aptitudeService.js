@@ -1,8 +1,15 @@
 import api from './api';
 
 export const getNextQuestion = async () => {
-    const response = await api.get('/aptitude/next-question');
-    return response.data;
+    console.log('🔍 DEBUG: Calling getNextQuestion API...');
+    try {
+        const response = await api.get('/aptitude/next-question');
+        console.log('🔍 DEBUG: API Response:', response);
+        return response.data;
+    } catch (error) {
+        console.error('🔍 DEBUG: API Error:', error);
+        throw error;
+    }
 };
 
 export const submitAnswer = async (questionId, selectedOption, responseTime) => {

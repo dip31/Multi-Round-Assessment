@@ -20,8 +20,9 @@ VALID_TRANSITIONS: dict[str, list[str]] = {
 _DIFFICULTY_ORDER: list[str] = ["easy", "medium", "hard"]
 
 # Override thresholds
-_WRONG_STREAK_FORCE_DECREASE: int = 4
-_CORRECT_STREAK_FORCE_INCREASE: int = 5
+# Make the engine react faster: 2 wrong → step down, 2 correct → step up.
+_WRONG_STREAK_FORCE_DECREASE: int = 2
+_CORRECT_STREAK_FORCE_INCREASE: int = 2
 
 
 def _next_difficulty_for_action(current: str, action: Action) -> str:

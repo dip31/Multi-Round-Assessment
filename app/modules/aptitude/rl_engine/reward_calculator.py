@@ -12,7 +12,7 @@ Reward factors (applied in order):
 DIFFICULTY_MULTIPLIER: dict[str, float] = {
     "easy": 0.5,
     "medium": 1.0,
-    "hard": 1.5,
+    "hard": 1.8,  # slightly higher reward for hard to encourage challenging questions
 }
 
 _REWARD_FLOOR: float = -3.0
