@@ -10,10 +10,10 @@ import { AlertTriangle, Eye, EyeOff, Mic, MicOff, Camera, CameraOff, Activity } 
 
 const AdvancedProctoringMonitor = ({ 
   proctoringData, 
-  violations, 
-  riskScore,
+  violations = [], 
+  riskScore = 0,
   detectionResults,
-  isMonitoring,
+  isMonitoring = false,
   className = ''
 }) => {
   const [expanded, setExpanded] = useState(false);
@@ -21,6 +21,10 @@ const AdvancedProctoringMonitor = ({
 
   // Update recent violations
   useEffect(() => {
+    if (!violations || !Array.isArray(violations)) {
+      setRecentViolations([]);
+      return;
+    }
     const sortedViolations = [...violations]
       .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
       .slice(0, 5);

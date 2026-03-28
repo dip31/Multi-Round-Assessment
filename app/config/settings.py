@@ -27,7 +27,10 @@ class Settings(BaseSettings):
 
     # ── CORS ──────────────────────────────────────────────────────────
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173", "http://localhost:5174", "http://localhost:5175"]
-
+    # ── Interview Round (Groq, Sarvam, Redis) ─────────────────────────
+    GROQ_API_KEY: str = ""
+    SARVAM_API_KEY: str = ""
+    REDIS_URL: str = "redis://localhost:6379"
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

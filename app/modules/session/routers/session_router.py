@@ -33,10 +33,9 @@ def start_session(
     """
     existing = get_active_session(db, user_id=current_user.id)
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="An active session already exists",
-        )
+        # Return the existing session with 200 instead of 409
+        # This prevents console errors while maintaining idempotency
+        return existing
 
     session = create_session(db, user_id=current_user.id)
 

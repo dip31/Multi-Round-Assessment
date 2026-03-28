@@ -6,6 +6,9 @@ import Dashboard from './pages/Dashboard';
 import Instructions from './pages/Instructions';
 import AptitudeTest from './pages/AptitudeTest';
 import Result from './pages/Result';
+import ResumeUpload from './pages/ResumeUpload';
+import HumanLikeInterview from './pages/HumanLikeInterview';
+import InterviewReport from './pages/InterviewReport';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 export default function App() {
@@ -45,6 +48,30 @@ export default function App() {
           element={
             <PrivateRoute>
               <Result />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/resume-upload"
+          element={
+            <PrivateRoute>
+              <ResumeUpload />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/interview"
+          element={
+            <PrivateRoute>
+              <HumanLikeInterview />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/interview/report/:interviewId"
+          element={
+            <PrivateRoute>
+              <InterviewReport />
             </PrivateRoute>
           }
         />

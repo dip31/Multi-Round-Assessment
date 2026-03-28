@@ -7,12 +7,18 @@ and mounts the versioned API router.  Run with::
     uvicorn app.main:app --reload
 """
 
+import logging
+
 from fastapi import FastAPI
 
 from app.api.v1.router import api_router
 from app.middleware.cors import add_cors_middleware
 from app.middleware.rate_limit import add_rate_limit_middleware
 from app.middleware.request_logging import add_request_logging_middleware
+from app.modules.interview.routers import interview_router
+
+logger = logging.getLogger(__name__)
+
 
 app = FastAPI(
     title="AI Placement Platform API",

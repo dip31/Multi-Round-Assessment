@@ -901,6 +901,12 @@ export const useAdvancedProctoring = (sessionId, onViolation = null) => {
   
   // Cleanup function
   const cleanup = useCallback(() => {
+    // Don't cleanup if still monitoring
+    if (isMonitoringRef.current) {
+      console.log('⚠️ Skipping cleanup - still monitoring');
+      return;
+    }
+    
     console.log('🧹 Cleaning up proctoring system...');
     
     setIsMonitoring(false);
@@ -973,22 +979,32 @@ export const useAdvancedProctoring = (sessionId, onViolation = null) => {
   // Initialize on mount - only depends on sessionId to prevent cleanup/reinit cycles
   useEffect(() => {
     isMountedRef.current = true;
-    if (sessionId && initializeProctoringRef.current) {
-      initializeProctoringRef.current();
+    
+    // Only initialize if not already initialized
+    if (sessionId && !isInitialized && !initStartedRef.current) {
+      initializeProctoring();
     }
     
     return () => {
-      if (isMountedRef.current) {
-        cleanup();
-      }
-    };
-  }, [sessionId, cleanup]);
-
-  useEffect(() => {
-    return () => {
+      // Only cleanup on final unmount
       isMountedRef.current = false;
     };
-  }, []);
+  }, [sessionId, isInitialized, initializeProctoring]);
+
+  // Cleanup only on final unmount
+  useEffect(() => {
+    return () => {
+      cleanup();
+    };
+  }, [cleanup]);
+  
+  // Stop monitoring (call this when interview is complete)
+  const stopMonitoring = useCallback(() => {
+    console.log('🛑 Stopping proctoring monitoring...');
+    setIsMonitoring(false);
+    isMonitoringRef.current = false;
+    cleanup();
+  }, [cleanup]);
   
   return {
     // State
@@ -1004,6 +1020,7 @@ export const useAdvancedProctoring = (sessionId, onViolation = null) => {
     
     // Methods
     initializeProctoring,
+    stopMonitoring,
     cleanup,
     logProctoringEvent,
     enterFullscreen,
