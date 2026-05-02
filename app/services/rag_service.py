@@ -12,7 +12,7 @@ import logging
 from typing import Dict, List, Optional
 
 from llama_index.core import Document, VectorStoreIndex, PromptTemplate
-from llama_index.llms.groq import Groq
+from groq import Groq
 
 import fitz  # PyMuPDF
 
@@ -30,7 +30,8 @@ class RAGOrchestrator:
             groq_api_key: Groq API key for LLM
             openai_api_key: Optional OpenAI API key for embeddings (defaults to local)
         """
-        self.groq_llm = Groq(api_key=groq_api_key, model="llama-3.3-70b-versatile")
+        self.client = Groq(api_key=groq_api_key)
+        self.model = "llama-3.3-70b-versatile"
         
         # Try to use OpenAI embeddings, fall back to local if not available
         try:
@@ -62,6 +63,15 @@ class RAGOrchestrator:
         
         self.index = None
         self.query_engine = None
+
+    def _complete(self, prompt: str, temperature: float = 0.3, max_tokens: int = 2000) -> str:
+        completion = self.client.chat.completions.create(
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        return completion.choices[0].message.content
     
     def parse_resume(self, file_bytes: bytes) -> Dict[str, any]:
         """
@@ -116,13 +126,11 @@ class RAGOrchestrator:
             Return ONLY valid JSON, no additional text.
             """)
             
-            response = self.groq_llm.complete(
-                extraction_prompt.format(resume_text=full_text)
-            )
+            response_text = self._complete(extraction_prompt.format(resume_text=full_text))
             
             # Parse JSON response
             try:
-                extracted_data = json.loads(response.text)
+                extracted_data = json.loads(response_text)
             except json.JSONDecodeError:
                 # If JSON parsing fails, use fallback extraction
                 extracted_data = self._fallback_extraction(full_text)
@@ -228,10 +236,10 @@ class RAGOrchestrator:
             {{"question": "text", "difficulty": "level", "topic": "category", "type": "technical|behavioral|situational"}}
             """
             
-            response = self.groq_llm.complete(question_prompt)
+            response_text = self._complete(question_prompt)
             
             try:
-                questions = json.loads(response.text)
+                questions = json.loads(response_text)
                 # Ensure questions have required fields
                 validated_questions = []
                 for q in questions:

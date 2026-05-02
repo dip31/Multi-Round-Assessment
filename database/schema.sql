@@ -135,6 +135,28 @@ CREATE INDEX idx_aptitude_difficulty ON aptitude_questions(difficulty);
 
 
 -- ============================================
+-- ADMIN QUESTION FEEDBACK
+-- ============================================
+CREATE TABLE admin_question_feedback (
+    id SERIAL PRIMARY KEY,
+    question_id INTEGER NOT NULL,
+    admin_id INTEGER,
+    action VARCHAR(20) NOT NULL
+        CHECK (action IN ('approve','reject','review')),
+    suggestion TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (question_id)
+        REFERENCES aptitude_questions(id) ON DELETE CASCADE,
+    FOREIGN KEY (admin_id)
+        REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_admin_qf_question_id ON admin_question_feedback(question_id);
+CREATE INDEX idx_admin_qf_admin_id ON admin_question_feedback(admin_id);
+
+
+
+-- ============================================
 -- APTITUDE ATTEMPTS
 -- ============================================
 CREATE TABLE aptitude_attempts (

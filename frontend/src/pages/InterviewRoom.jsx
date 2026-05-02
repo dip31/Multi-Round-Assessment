@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     getNextQuestion,
@@ -10,6 +10,7 @@ import AdvancedProctoringMonitor from '../components/AdvancedProctoringMonitor';
 import ProctoringVideoDisplay from '../components/ProctoringVideoDisplay';
 import useAdvancedProctoring from '../hooks/useAdvancedProctoring';
 import { Toast } from '../components/Toast';
+import api from '../services/api';
 
 const STATES = {
     LOADING: 'loading',
@@ -31,6 +32,7 @@ export default function InterviewRoom() {
     const [toast, setToast] = useState(null);
     const [questionScore, setQuestionScore] = useState(null);
     const [isRecording, setIsRecording] = useState(false);
+    const [liveTip, setLiveTip] = useState(''); // Real-time feedback tip
     
     const navigate = useNavigate();
     const proctoring = useAdvancedProctoring({
@@ -45,6 +47,7 @@ export default function InterviewRoom() {
     const timerIntervalRef = useRef(null);
     const audioContextRef = useRef(null);
     const audioSourceRef = useRef(null);
+    const tipPollingRef = useRef(null); // Real-time feedback polling
 
     // Check if interview_id exists
     useEffect(() => {
@@ -104,6 +107,33 @@ export default function InterviewRoom() {
             throw error;
         }
     };
+
+    
+    /**
+     * TTS with retry logic (retry once, then fallback to text)
+     * Demo-safe: won't crash on TTS failures
+     */
+    const playTTSWithRetry = useCallback(async (text) => {
+        try {
+            const audioBytes = await synthesizeSpeech(text);
+            await playAudio(audioBytes);
+        } catch (firstError) {
+            console.warn('TTS failed, retrying once...', firstError);
+            try {
+                // Wait a moment before retry
+                await new Promise(r => setTimeout(r, 500));
+                const audioBytes = await synthesizeSpeech(text);
+                await playAudio(audioBytes);
+            } catch (secondError) {
+                console.error('TTS failed twice → fallback to text display', secondError);
+                // Fallback: just show toast, question is visible on screen
+                setToast({
+                    type: 'info',
+                    message: 'Audio unavailable. Please read the question on screen.',
+                });
+            }
+        }
+    }, []);
     
     // Startup: play intro, then fetch first question
     useEffect(() => {
@@ -117,16 +147,8 @@ export default function InterviewRoom() {
                 console.log('Starting interview room...');
                 const startupText =
                     'Welcome. I am your AI interviewer. Please introduce yourself and tell me about your background.';
-                const audioBytes = await synthesizeSpeech(startupText);
-                try {
-                    await playAudio(audioBytes);
-                } catch (audioError) {
-                    // TTS failed but interview continues
-                    setToast({
-                        type: 'warning',
-                        message: 'Audio unavailable. Read the question on screen.',
-                    });
-                }
+                // Use retry-enabled TTS
+                await playTTSWithRetry(startupText);
                 fetchNextQuestion();
             } catch (error) {
                 console.error('Startup error:', error);
@@ -142,10 +164,64 @@ export default function InterviewRoom() {
             }
             // Stop any playing audio on unmount
             if (audioSourceRef.current) {
-                audioSourceRef.current.stop();
+                try {
+                    audioSourceRef.current.stop();
+                } catch (e) {
+                    // Ignore - source may already be stopped
+                }
             }
         };
-    }, [interviewId]);
+    }, [interviewId, playTTSWithRetry]);
+    
+    // ═══════════════════════════════════════════════════════════════════════
+    // REAL-TIME FEEDBACK POLLING (every 3 seconds during recording)
+    // Uses behaviorSnapshotRef to avoid stale closure issues
+    // ═══════════════════════════════════════════════════════════════════════
+    useEffect(() => {
+        // Only poll when recording
+        if (!isRecording || !interviewId) {
+            if (tipPollingRef.current) {
+                clearInterval(tipPollingRef.current);
+                tipPollingRef.current = null;
+            }
+            return;
+        }
+        
+        // Start polling for real-time feedback
+        tipPollingRef.current = setInterval(async () => {
+            try {
+                // Get current snapshot from ref (avoids stale closure)
+                const snapshot = proctoring.getBehaviorSnapshot 
+                    ? proctoring.getBehaviorSnapshot()
+                    : {
+                        face_detected: proctoring.metrics?.faceDetected ?? true,
+                        eye_contact_pct: proctoring.metrics?.eyeContactPercent ?? 0.5,
+                        head_stability: proctoring.metrics?.headStability ?? 0.5,
+                        looking_away_count: proctoring.metrics?.lookingAwayCount ?? 0,
+                        response_time_sec: recordingSeconds,
+                    };
+                
+                const res = await api.post('/interview/realtime-feedback', {
+                    session_id: parseInt(interviewId, 10),
+                    ...snapshot,
+                });
+                
+                if (res.data?.tip) {
+                    setLiveTip(res.data.tip);
+                }
+            } catch (error) {
+                // Silent fail - feedback is non-critical
+                console.debug('Realtime feedback poll failed:', error);
+            }
+        }, 3000);
+        
+        return () => {
+            if (tipPollingRef.current) {
+                clearInterval(tipPollingRef.current);
+                tipPollingRef.current = null;
+            }
+        };
+    }, [isRecording, interviewId, proctoring, recordingSeconds]);
     
     const fetchNextQuestion = async () => {
         if (!interviewId) {
@@ -230,6 +306,7 @@ export default function InterviewRoom() {
             mediaRecorderRef.current.stop();
             clearInterval(timerIntervalRef.current);
             setIsRecording(false);
+            setLiveTip(''); // Clear live tip
             setRoomState(STATES.PROCESSING);
             
             await new Promise((resolve) => {
@@ -249,10 +326,17 @@ export default function InterviewRoom() {
             
             setTranscript(recognizedTranscript);
             
+            // ═══════════════════════════════════════════════════════════════
+            // BEHAVIORAL SNAPSHOT - Use proctoring.metrics (reactive state)
+            // Falls back to defaults if metrics unavailable
+            // ═══════════════════════════════════════════════════════════════
             const behavioralSnapshot = {
                 eye_contact_pct: proctoring.metrics?.eyeContactPercent ?? 0.5,
+                head_stability: proctoring.metrics?.headStability ?? 0.5,
+                face_detected: proctoring.metrics?.faceDetected ?? true,
+                looking_away_count: proctoring.metrics?.lookingAwayCount ?? 0,
+                response_time_sec: responseTimeSec,
                 dominant_emotion: proctoring.metrics?.dominantEmotion ?? 'neutral',
-                head_stability: proctoring.metrics?.headStability ?? 0.7,
             };
             
             const submitRes = await submitResponse(
@@ -261,6 +345,11 @@ export default function InterviewRoom() {
                 responseTimeSec,
                 behavioralSnapshot
             );
+            
+            // Reset metrics for next recording
+            if (proctoring.resetMetrics) {
+                proctoring.resetMetrics();
+            }
             
             if (submitRes.is_complete) {
                 setQuestionScore(submitRes.score);
@@ -398,30 +487,42 @@ export default function InterviewRoom() {
                             </div>
                         </div>
 
-                        {/* Engagement */}
+                        {/* Head Stability (renamed from Engagement) */}
                         <div className="mb-4">
                             <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs text-slate-400">Engagement</span>
-                                <span className="text-xs font-bold text-blue-400">85%</span>
+                                <span className="text-xs text-slate-400">Head Stability</span>
+                                <span className={`text-xs font-bold ${
+                                    (proctoring.metrics?.headStability ?? 0.5) > 0.6 ? 'text-blue-400' : 'text-amber-400'
+                                }`}>
+                                    {Math.round((proctoring.metrics?.headStability ?? 0.5) * 100)}%
+                                </span>
                             </div>
                             <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
                                 <div
-                                    className="h-full bg-blue-500 rounded-full"
-                                    style={{ width: '85%' }}
+                                    className={`h-full rounded-full transition-all ${
+                                        (proctoring.metrics?.headStability ?? 0.5) > 0.6 ? 'bg-blue-500' : 'bg-amber-500'
+                                    }`}
+                                    style={{ width: `${(proctoring.metrics?.headStability ?? 0.5) * 100}%` }}
                                 ></div>
                             </div>
                         </div>
 
-                        {/* Confidence */}
+                        {/* Face Detected Indicator */}
                         <div>
                             <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs text-slate-400">Confidence</span>
-                                <span className="text-xs font-bold text-purple-400">72%</span>
+                                <span className="text-xs text-slate-400">Face Detection</span>
+                                <span className={`text-xs font-bold ${
+                                    proctoring.metrics?.faceDetected ? 'text-green-400' : 'text-red-400'
+                                }`}>
+                                    {proctoring.metrics?.faceDetected ? 'Detected' : 'Not Found'}
+                                </span>
                             </div>
                             <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
                                 <div
-                                    className="h-full bg-purple-500 rounded-full"
-                                    style={{ width: '72%' }}
+                                    className={`h-full rounded-full transition-all ${
+                                        proctoring.metrics?.faceDetected ? 'bg-green-500' : 'bg-red-500'
+                                    }`}
+                                    style={{ width: proctoring.metrics?.faceDetected ? '100%' : '20%' }}
                                 ></div>
                             </div>
                         </div>
@@ -507,6 +608,17 @@ export default function InterviewRoom() {
                                 <div className="text-4xl font-mono font-bold text-slate-300 mb-6">
                                     {Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, '0')}
                                 </div>
+                                
+                                {/* Real-Time Feedback Tip */}
+                                {liveTip && (
+                                    <div className="mb-6 px-4 py-3 bg-blue-900/30 border border-blue-700/50 rounded-lg">
+                                        <p className="text-sm text-blue-300 flex items-center justify-center gap-2">
+                                            <span>💡</span>
+                                            {liveTip}
+                                        </p>
+                                    </div>
+                                )}
+                                
                                 <button
                                     onClick={stopAndSubmit}
                                     className="w-full bg-slate-800 hover:bg-slate-700 active:scale-[0.98] text-white font-bold py-4 rounded-xl transition-all duration-150 text-base"

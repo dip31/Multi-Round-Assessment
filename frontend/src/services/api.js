@@ -34,7 +34,11 @@ api.interceptors.response.use(
             // Do not redirect if the failure happened during login itself
             if (!error.config.url.includes('/auth/login')) {
                 localStorage.removeItem('access_token');
-                window.location.href = '/login';
+                if (window.location.pathname.startsWith('/admin')) {
+                    window.location.href = '/admin/login';
+                } else {
+                    window.location.href = '/login';
+                }
             }
         }
         return Promise.reject(error);

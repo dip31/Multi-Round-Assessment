@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { getReport } from '../services/interviewService';
 import { Toast } from '../components/Toast';
 import Navbar from '../components/Navbar';
+import PageSkeleton from '../components/shared/PageSkeleton';
 
 export default function InterviewReport() {
     const { interviewId } = useParams();
@@ -32,21 +33,7 @@ export default function InterviewReport() {
     };
 
     if (loading) {
-        return (
-            <div className="min-h-screen bg-slate-50">
-                <Navbar />
-                <div className="mx-auto max-w-5xl px-6 py-16">
-                    <div className="space-y-6">
-                        <div className="h-12 bg-slate-200 rounded-xl animate-pulse"></div>
-                        <div className="grid grid-cols-4 gap-6">
-                            {[1, 2, 3, 4].map((i) => (
-                                <div key={i} className="h-40 bg-slate-200 rounded-2xl animate-pulse"></div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
+        return <PageSkeleton variant="light" cardCount={4} />;
     }
 
     if (!report) {

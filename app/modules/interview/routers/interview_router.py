@@ -32,6 +32,7 @@ from fastapi import (
     UploadFile,
 )
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import func
 
 from app.config.settings import settings
 from app.core.auth import get_current_user
@@ -62,6 +63,8 @@ from app.modules.interview.schemas.interview_schema import (
     NextQuestionInfo,
     ScoresInfo,
     InterviewSummaryInfo,
+    RealtimeFeedbackRequest,
+    RealtimeFeedbackResponse,
 )
 from app.modules.interview.services.interview_rl_engine import InterviewRLEngine
 
@@ -94,7 +97,7 @@ async def upload_resume(
 ):
     """Upload resume (PDF) and generate personalized question pool."""
 
-    if not file.filename.lower().endswith(".pdf"):
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="File must be a PDF")
 
     if not session_id:
@@ -120,28 +123,75 @@ async def upload_resume(
             count=12,
         )
 
-        question_pool = ApprovedQuestionPool(
+        # Extract detected_role from generated pool
+        detected_role = "SDE"
+        if pool and len(pool) > 0:
+            detected_role = pool[0].get("role", "SDE")
+
+        pool_record = ApprovedQuestionPool(
             session_id=session_id,
             extracted_skills=extracted["skills"],
             extracted_projects=extracted["projects"],
             question_pool=pool,
-            admin_approved=True,
-            approved_by=current_user.id,
-            approved_at=datetime.utcnow(),
+            admin_approved=False,
+            approved_by=None,
+            approved_at=None,
+            detected_role=detected_role
         )
-        db.add(question_pool)
+        db.add(pool_record)
         db.commit()
-        db.refresh(question_pool)
-
+        db.refresh(pool_record)
         return ResumeUploadResponse(
             status="pool_generated",
-            pool_id=question_pool.id,
+            pool_id=pool_record.id,
             question_count=len(pool),
+            detected_role=detected_role,
             pending_approval=True,
         )
     finally:
         if content:
             del content
+
+
+# ── ENDPOINT 1.5: GET /interview/admin/pools ──────────────────────────
+@router.get("/admin/pools")
+async def list_pools_for_admin(
+    status: Optional[str] = Query(None, description="pending, approved, or rejected"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List all question pools for admin review."""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    query = db.query(
+        ApprovedQuestionPool.id.label("pool_id"),
+        ApprovedQuestionPool.admin_approved,
+        ApprovedQuestionPool.created_at,
+        User.name.label("candidate_name"),
+        User.email.label("candidate_email"),
+        func.jsonb_array_length(ApprovedQuestionPool.question_pool).label("question_count")
+    ).join(
+        AssessmentSession, ApprovedQuestionPool.session_id == AssessmentSession.id
+    ).join(
+        User, AssessmentSession.user_id == User.id
+    )
+
+    if status == "approved":
+        query = query.filter(ApprovedQuestionPool.admin_approved == True)
+    elif status == "pending":
+        query = query.filter(ApprovedQuestionPool.admin_approved == False)
+
+    pools = query.order_by(ApprovedQuestionPool.created_at.desc()).all()
+
+    return [{
+        "pool_id": p.pool_id,
+        "candidate_name": p.candidate_name,
+        "candidate_email": p.candidate_email,
+        "created_at": p.created_at,
+        "approved": p.admin_approved,
+        "question_count": p.question_count
+    } for p in pools]
 
 
 # ── ENDPOINT 2: GET /interview/pool/{pool_id} ────────────────────────
@@ -164,6 +214,7 @@ async def get_pool(
         questions=pool.question_pool,
         approved=pool.admin_approved,
         extracted_skills=pool.extracted_skills,
+        detected_role=pool.detected_role
     )
 
 
@@ -928,3 +979,41 @@ async def get_report(
         followup_rate=round(followup_rate, 1),
         followup_interpretation=followup_interp,
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# ENDPOINT 10: Real-Time Feedback
+# ═══════════════════════════════════════════════════════════════════════
+@router.post("/realtime-feedback", response_model=RealtimeFeedbackResponse)
+async def realtime_feedback(
+    snapshot: RealtimeFeedbackRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Returns real-time coaching tips based on behavioral metrics.
+    
+    Called by frontend polling (every 3 seconds) during interview recording.
+    Provides actionable feedback to improve candidate presentation.
+    """
+    # Face not detected - highest priority
+    if not snapshot.face_detected:
+        return RealtimeFeedbackResponse(tip="Ensure your face is visible in the camera.")
+    
+    # Poor eye contact
+    if snapshot.eye_contact_pct < 0.4:
+        return RealtimeFeedbackResponse(tip="Try to maintain eye contact with the camera.")
+    
+    # Excessive head movement / instability
+    if snapshot.head_stability < 0.4:
+        return RealtimeFeedbackResponse(tip="Try to keep your head steady while speaking.")
+    
+    # Looking away too often
+    if snapshot.looking_away_count > 5:
+        return RealtimeFeedbackResponse(tip="Focus on the camera to show engagement.")
+    
+    # Moderate eye contact - gentle nudge
+    if snapshot.eye_contact_pct < 0.6:
+        return RealtimeFeedbackResponse(tip="Good! A bit more eye contact would help.")
+    
+    # All good
+    return RealtimeFeedbackResponse(tip="Great engagement! Keep it up.")

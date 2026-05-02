@@ -18,6 +18,7 @@ export default function ResumeUpload() {
     const [interviewId, setInterviewId] = useState(null);
     const [toast, setToast] = useState(null);
     const [uploadProgress, setUploadProgress] = useState(0);
+    const [detectedRole, setDetectedRole] = useState(null);
     
     const navigate = useNavigate();
     const intervalIdRef = useRef(null);
@@ -77,6 +78,7 @@ export default function ResumeUpload() {
         try {
             const res = await uploadResume(selectedFile);
             setPoolId(res.pool_id);
+            setDetectedRole(res.detected_role || null);
             setUploadProgress(100);
             
             // Simulate processing time before showing approval state
@@ -198,16 +200,16 @@ export default function ResumeUpload() {
     ];
     
     return (
-        <div className="min-h-screen bg-slate-50">
+        <div className="min-h-screen bg-background text-on-surface font-body selection:bg-primary/30 antialiased">
             {/* Toast */}
             {toast && <Toast {...toast} onClose={() => setToast(null)} />}
 
-            <main className="mx-auto max-w-3xl px-6 py-12">
+            <main className="mx-auto max-w-3xl px-6 py-12 pt-24">
                 {/* Back link */}
                 <div className="mb-12">
                     <button
                         onClick={() => navigate('/dashboard')}
-                        className="text-slate-600 hover:text-slate-900 text-sm font-medium flex items-center gap-1 transition-colors"
+                        className="text-on-surface-variant hover:text-on-surface text-sm font-medium flex items-center gap-1 transition-colors"
                     >
                         <span>←</span> Back to Dashboard
                     </button>
@@ -215,12 +217,12 @@ export default function ResumeUpload() {
 
                 {/* Header */}
                 <div className="mb-12">
-                    <h1 className="text-4xl font-bold text-slate-900 mb-2">Resume Upload</h1>
-                    <p className="text-slate-600">Upload your resume to begin the interview process</p>
+                    <h1 className="text-4xl font-headline font-black tracking-tighter text-on-surface mb-2">Resume Upload</h1>
+                    <p className="text-on-surface-variant">Upload your resume to begin the interview process</p>
                 </div>
 
                 {/* Progress Stepper */}
-                <div className="mb-12 bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
+                <div className="mb-12 bg-surface-container border border-outline-variant/20 rounded-2xl p-8 shadow-lg shadow-primary/5">
                     <div className="flex items-center justify-between">
                         {steps.map((step, idx) => (
                             <div key={idx} className="flex flex-col items-center flex-1">
@@ -228,17 +230,17 @@ export default function ResumeUpload() {
                                 <div
                                     className={`w-12 h-12 rounded-full flex items-center justify-center mb-3 font-semibold text-sm transition-all ${
                                         step.completed
-                                            ? 'bg-green-100 text-green-700 border-2 border-green-300'
+                                            ? 'bg-emerald-500/20 text-emerald-400 border-2 border-emerald-500/30'
                                             : idx === 0 && state !== STATES.IDLE
-                                            ? 'bg-blue-100 text-blue-700 border-2 border-blue-300'
-                                            : 'bg-slate-100 text-slate-600 border-2 border-slate-300'
+                                            ? 'bg-primary/20 text-primary border-2 border-primary/30'
+                                            : 'bg-surface-container-highest text-on-surface-variant border-2 border-outline-variant/30'
                                     }`}
                                 >
                                     {step.completed ? '✓' : idx + 1}
                                 </div>
                                 {/* Step Label */}
-                                <p className={`text-xs font-medium text-center ${
-                                    step.completed ? 'text-green-700' : 'text-slate-600'
+                                <p className={`text-xs font-label uppercase tracking-widest text-center ${
+                                    step.completed ? 'text-emerald-400' : 'text-on-surface-variant'
                                 }`}>
                                     {step.label}
                                 </p>
@@ -246,7 +248,7 @@ export default function ResumeUpload() {
                                 {idx < steps.length - 1 && (
                                     <div
                                         className={`absolute w-12 h-1 -ml-6 mt-6 ${
-                                            steps[idx + 1].completed ? 'bg-green-300' : 'bg-slate-300'
+                                            steps[idx + 1].completed ? 'bg-emerald-500/30' : 'bg-outline-variant/30'
                                         }`}
                                         style={{
                                             left: `calc(${(idx + 1) * (100 / steps.length)}% - 24px)`,
@@ -265,7 +267,7 @@ export default function ResumeUpload() {
                         <div
                             onDragOver={handleDragOver}
                             onDrop={handleDrop}
-                            className="bg-white rounded-2xl border-2 border-dashed border-slate-300 hover:border-blue-400 p-12 text-center transition-colors shadow-sm"
+                            className="bg-surface-container rounded-2xl border-2 border-dashed border-outline-variant/50 hover:border-primary/50 p-12 text-center transition-colors shadow-lg shadow-primary/5"
                         >
                             <input
                                 ref={fileInputRef}
@@ -280,10 +282,10 @@ export default function ResumeUpload() {
                             <div className="text-5xl mb-4">☁️</div>
                             
                             {/* Upload Text */}
-                            <h2 className="text-xl font-bold text-slate-900 mb-2">
+                            <h2 className="text-xl font-headline font-bold text-on-surface mb-2">
                                 {selectedFile ? 'File Selected' : 'Drag & drop your resume'}
                             </h2>
-                            <p className="text-slate-600 text-sm mb-6">
+                            <p className="text-on-surface-variant text-sm mb-6">
                                 {selectedFile 
                                     ? selectedFile.name 
                                     : 'or click below to browse. PDF format, max 10MB'
@@ -294,7 +296,7 @@ export default function ResumeUpload() {
                             <button
                                 type="button"
                                 onClick={() => fileInputRef.current?.click()}
-                                className="inline-flex items-center justify-center bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-semibold py-3 px-8 rounded-xl transition-all duration-150"
+                                className="inline-flex items-center justify-center bg-primary hover:bg-primary/90 active:scale-95 text-on-primary-container font-semibold py-3 px-8 rounded-xl transition-all duration-150 shadow-lg shadow-primary/20"
                             >
                                 {selectedFile ? 'Change File' : 'Select Resume'}
                             </button>
@@ -304,7 +306,7 @@ export default function ResumeUpload() {
                                 <div className="mt-6">
                                     <button
                                         onClick={handleUpload}
-                                        className="w-full bg-slate-900 hover:bg-slate-800 active:scale-[0.98] text-white font-semibold py-3 rounded-xl transition-all duration-150"
+                                        className="w-full hero-gradient hover:shadow-lg text-on-primary-container font-semibold py-3 rounded-xl transition-all duration-150 shadow-lg shadow-primary/20 active:scale-95"
                                     >
                                         Upload & Process
                                     </button>
@@ -313,15 +315,15 @@ export default function ResumeUpload() {
                         </div>
 
                         {/* What Happens Next */}
-                        <div className="mt-12 bg-white rounded-2xl border border-slate-200 p-8 shadow-sm">
-                            <h3 className="text-lg font-bold text-slate-900 mb-6">What happens next?</h3>
+                        <div className="mt-12 bg-surface-container border border-outline-variant/20 rounded-2xl p-8 shadow-lg shadow-primary/5">
+                            <h3 className="text-lg font-headline font-bold text-on-surface mb-6">What happens next?</h3>
                             <div className="space-y-4">
                                 {whatHappensNext.map((item) => (
                                     <div key={item.num} className="flex items-start gap-4">
-                                        <div className="flex-shrink-0 w-8 h-8 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center font-bold text-sm">
+                                        <div className="flex-shrink-0 w-8 h-8 bg-primary/20 text-primary rounded-full flex items-center justify-center font-bold text-sm font-label">
                                             {item.num}
                                         </div>
-                                        <p className="text-slate-700 text-sm font-medium pt-1">{item.text}</p>
+                                        <p className="text-on-surface text-sm font-medium pt-1">{item.text}</p>
                                     </div>
                                 ))}
                             </div>
@@ -330,7 +332,7 @@ export default function ResumeUpload() {
                 )}
 
                 {state === STATES.UPLOADING && (
-                    <div className="bg-white rounded-2xl border border-slate-200 p-12 shadow-sm">
+                    <div className="bg-surface-container rounded-2xl border border-outline-variant/20 p-12 shadow-lg shadow-primary/5">
                         <div className="text-center">
                             {/* Progress Steps During Upload */}
                             <div className="space-y-6 mb-8">
@@ -342,13 +344,13 @@ export default function ResumeUpload() {
                                 ].map((step, idx) => (
                                     <div key={idx} className="flex items-center gap-3">
                                         {step.progress ? (
-                                            <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                            <div className="w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center flex-shrink-0">
                                                 <span className="text-white text-xs font-bold">✓</span>
                                             </div>
                                         ) : (
-                                            <div className="w-5 h-5 border-2 border-blue-400 border-t-blue-400 border-r-transparent rounded-full animate-spin flex-shrink-0"></div>
+                                            <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin flex-shrink-0"></div>
                                         )}
-                                        <p className={`text-sm font-medium ${step.progress ? 'text-slate-600' : 'text-slate-900'}`}>
+                                        <p className={`text-sm font-medium ${step.progress ? 'text-on-surface-variant' : 'text-on-surface'}`}>
                                             {step.label}
                                         </p>
                                     </div>
@@ -356,79 +358,93 @@ export default function ResumeUpload() {
                             </div>
                             
                             {/* Overall Progress Bar */}
-                            <div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                            <div className="w-full bg-surface-container-highest rounded-full h-2 overflow-hidden">
                                 <div
-                                    className="bg-blue-600 h-full rounded-full transition-all duration-500"
+                                    className="bg-gradient-to-r from-primary to-secondary h-full rounded-full transition-all duration-500"
                                     style={{ width: `${uploadProgress}%` }}
                                 ></div>
                             </div>
-                            <p className="mt-4 text-slate-600 text-sm">{uploadProgress}% complete</p>
+                            <p className="mt-4 text-on-surface-variant text-sm">{uploadProgress}% complete</p>
                         </div>
                     </div>
                 )}
 
                 {state === STATES.WAITING_APPROVAL && (
-                    <div className="bg-white rounded-2xl border border-slate-200 p-12 shadow-sm">
+                    <div className="bg-surface-container rounded-2xl border border-outline-variant/20 p-12 shadow-lg shadow-primary/5">
                         <div className="text-center">
                             {/* Animated Clock Icon */}
-                            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-amber-100 mb-6">
+                            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-secondary/20 mb-6">
                                 <div className="text-3xl animate-pulse">⏱️</div>
                             </div>
                             
-                            <h2 className="text-2xl font-bold text-slate-900 mb-2">
+                            <h2 className="text-2xl font-headline font-bold text-on-surface mb-2">
                                 Awaiting Admin Review
                             </h2>
-                            <p className="text-slate-600 text-base mb-8">
+                            <p className="text-on-surface-variant text-base mb-8">
                                 Your resume is being reviewed by our admin team. This typically takes a few minutes.
                             </p>
                             
                             {/* Status Indicator */}
-                            <div className="inline-flex items-center gap-2 bg-amber-50 px-4 py-2 rounded-full mb-8">
-                                <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
-                                <span className="text-sm font-medium text-amber-700">Pending approval...</span>
+                            <div className="inline-flex items-center gap-2 bg-secondary/10 px-4 py-2 rounded-full mb-8 border border-secondary/20">
+                                <div className="w-2 h-2 bg-secondary rounded-full animate-pulse"></div>
+                                <span className="text-sm font-medium text-secondary">Pending approval...</span>
                             </div>
 
                             {/* Preview Cards (Blurred) */}
                             <div className="mt-8 space-y-3 opacity-40 pointer-events-none">
-                                <div className="bg-slate-100 h-20 rounded-xl"></div>
-                                <div className="bg-slate-100 h-20 rounded-xl"></div>
+                                <div className="bg-surface-container-highest h-20 rounded-xl"></div>
+                                <div className="bg-surface-container-highest h-20 rounded-xl"></div>
                             </div>
                         </div>
                     </div>
-                )}
+                                )}
 
-                {state === STATES.APPROVED && (
-                    <div className="bg-white rounded-2xl border border-slate-200 p-12 shadow-sm">
+                                {state === STATES.WAITING_APPROVAL && detectedRole && (
+                                        <div className="mt-4 bg-blue-50 rounded-xl p-4 border border-blue-100 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4 a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002 -2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+            </div>
+            <div>
+                <p className="text-sm font-medium text-blue-900">Role Detected: {detectedRole}</p>
+                <p className="text-xs text-blue-600 mt-0.5">Questions tailored for {detectedRole} interviews</p>
+            </div>
+        </div>
+                                )}
+
+                                {state === STATES.APPROVED && (
+                    <div className="bg-surface-container rounded-2xl border border-outline-variant/20 p-12 shadow-lg shadow-primary/5">
                         <div className="text-center">
                             {/* Checkmark with Bounce */}
-                            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-green-100 mb-6 animate-bounce">
+                            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-emerald-500/20 mb-6 animate-bounce">
                                 <span className="text-4xl">✅</span>
                             </div>
                             
-                            <h2 className="text-2xl font-bold text-slate-900 mb-2">
+                            <h2 className="text-2xl font-headline font-bold text-on-surface mb-2">
                                 Resume Approved!
                             </h2>
-                            <p className="text-slate-600 text-base mb-8">
+                            <p className="text-on-surface-variant text-base mb-8">
                                 Your resume has been approved. You're ready to start the interview.
                             </p>
                             
                             {/* Status Badge */}
-                            <div className="inline-flex items-center gap-2 bg-green-50 px-4 py-2 rounded-full mb-8">
-                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                <span className="text-sm font-medium text-green-700">Ready to proceed</span>
+                            <div className="inline-flex items-center gap-2 bg-emerald-500/10 px-4 py-2 rounded-full mb-8 border border-emerald-500/20">
+                                <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
+                                <span className="text-sm font-medium text-emerald-400">Ready to proceed</span>
                             </div>
 
                             {/* CTA Button */}
                             <button
                                 onClick={handleStartInterview}
-                                className="w-full bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-semibold py-4 rounded-xl transition-all duration-150 flex items-center justify-center gap-2 text-base"
+                                className="w-full hero-gradient text-on-primary-container font-semibold py-4 rounded-xl transition-all duration-150 flex items-center justify-center gap-2 text-base shadow-lg shadow-primary/20 active:scale-95"
                             >
                                 Start Interview
                                 <span>→</span>
                             </button>
 
                             {/* Footer Text */}
-                            <p className="mt-6 text-slate-500 text-xs">
+                            <p className="mt-6 text-on-surface-variant text-xs">
                                 You have 48 hours to complete the interview
                             </p>
                         </div>

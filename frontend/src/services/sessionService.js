@@ -16,3 +16,8 @@ export const getSessionStatus = async () => {
         throw error;
     }
 };
+
+export const completeSession = async () => {
+    const response = await api.post('/session/complete');
+    return response.data;
+};

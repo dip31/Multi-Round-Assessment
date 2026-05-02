@@ -6,7 +6,7 @@ Handles all HTTP endpoints related to the Aptitude Round.
 Responsibilities:
 - Fetch next aptitude question (RL-driven difficulty)
 - Submit answer with adaptive difficulty selection
-- Return round result summary
+ - Return round result summary
 
 Each endpoint resolves the user's active aptitude round from their
 session, ensuring per-user isolation of attempts and scores.
@@ -31,7 +31,7 @@ from app.modules.aptitude.services.aptitude_service import (
     get_next_question,
     get_current_difficulty,
     submit_answer_and_adapt,
-    calculate_round_result,
+    get_latest_completed_aptitude_result,
 )
 
 router = APIRouter(
@@ -113,26 +113,20 @@ def submit_answer_endpoint(
     return result
 
 
-from app.services.session_service import end_round, complete_session
-
 @router.get("/result", response_model=RoundResultResponse)
 def get_round_result(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    Return summary statistics for the user's active aptitude round.
-    Auto-closes the round and session once the result is fetched.
+    Return summary statistics for the user's most recent completed aptitude session.
     """
-    active_round = _require_active_round(db, current_user.id)
+    result = get_latest_completed_aptitude_result(db=db, user_id=current_user.id)
 
-    result = calculate_round_result(
-        db=db,
-        round_id=active_round.id,
-    )
-
-    # Clean up so user can start a new session immediately
-    end_round(db, active_round.id)
-    complete_session(db, active_round.session_id)
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="No completed aptitude session found",
+        )
 
     return result

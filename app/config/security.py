@@ -19,12 +19,12 @@ _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def hash_password(password: str) -> str:
     """Return a bcrypt hash of *password*."""
-    return _pwd_context.hash(password)
+    return _pwd_context.hash(password[:72])
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Return ``True`` if *plain_password* matches the *hashed_password*."""
-    return _pwd_context.verify(plain_password, hashed_password)
+    return _pwd_context.verify(plain_password[:72], hashed_password)
 
 
 # ── JWT helpers ───────────────────────────────────────────────────────

@@ -1,32 +1,31 @@
 import { useNavigate } from 'react-router-dom';
 
-export default function Navbar({ onLogout, rightContent }) {
+export default function Navbar({ onLogout, rightContent, position = 'fixed' }) {
     const navigate = useNavigate();
+
+    const navPositionClass = position === 'sticky' ? 'sticky' : position === 'relative' ? 'relative' : 'fixed';
 
     const handleLogout = () => {
         localStorage.removeItem('access_token');
+        localStorage.removeItem('user');
+        localStorage.removeItem('user_name');
+        localStorage.removeItem('full_name');
+        localStorage.removeItem('user_email');
+        localStorage.removeItem('email');
         if (onLogout) onLogout();
         navigate('/login');
     };
 
     return (
-        <nav className="sticky top-0 z-50 border-b border-[var(--color-border)] bg-[var(--color-nav-bg)] shadow-sm">
-            <div className="mx-auto flex h-16 max-w-5xl items-center justify-between px-6">
-                <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-accent)] shadow-sm">
-                        <span className="text-sm font-bold text-white font-display">A</span>
-                    </div>
-                    <span className="text-xl font-bold tracking-tight text-white font-display">
-                        Adaptive Assessment
-                    </span>
-                </div>
-
-                <div className="flex items-center gap-4">
+        <nav className={`${navPositionClass} top-0 w-full z-50 bg-zinc-950/60 backdrop-blur-xl border-b border-zinc-800/20 shadow-2xl shadow-violet-900/10 font-['Inter'] antialiased tracking-tight`}>
+            <div className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto w-full">
+                <div className="text-2xl font-black tracking-tighter text-zinc-100">AIPlacement</div>
+                <div className="flex items-center gap-8">
                     {rightContent}
                     {onLogout && (
                         <button
                             onClick={handleLogout}
-                            className="rounded-lg border border-white/20 text-white px-4 py-2 text-sm transition-colors hover:border-[var(--color-danger)] hover:text-[var(--color-danger)] font-semibold"
+                            className="bg-primary text-on-primary-container px-6 py-2 rounded-full font-semibold hover:bg-primary-container active:scale-95 transition-all duration-200"
                         >
                             Logout
                         </button>

@@ -20,6 +20,11 @@ export function useAuth() {
 
     const logout = useCallback(() => {
         localStorage.removeItem('access_token');
+        localStorage.removeItem('user');
+        localStorage.removeItem('user_name');
+        localStorage.removeItem('full_name');
+        localStorage.removeItem('user_email');
+        localStorage.removeItem('email');
         setToken(null);
     }, []);
 

@@ -2,12 +2,13 @@
 SQLAlchemy ORM models for assessment sessions and rounds.
 """
 
-from datetime import datetime
-from typing import Optional
+from __future__ import annotations
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, text
+from datetime import datetime
+
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, text
 from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
 from app.models.proctoring import ProctoringEvent
@@ -23,28 +24,28 @@ class AssessmentSession(Base):
 
     __tablename__ = "assessment_sessions"
 
-    id: int = Column(Integer, primary_key=True, index=True)
-    user_id: int = Column(Integer, ForeignKey("users.id"), nullable=False)
-    status: str = Column(String(20), nullable=False, server_default=text("'not_started'"))
-    started_at: datetime = Column(DateTime, server_default=func.now())
-    completed_at: Optional[datetime] = Column(DateTime, nullable=True)
-    total_score: float = Column(Float, server_default=text("0"))
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default=text("'not_started'"))
+    started_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    total_score: Mapped[float] = mapped_column(Float, server_default=text("0"))
 
     # ── Relationships ─────────────────────────────────────────────────
-    user = relationship("User", back_populates="assessment_sessions")
-    rounds = relationship(
+    user: Mapped["User"] = relationship("User", back_populates="assessment_sessions")
+    rounds: Mapped[list["AssessmentRound"]] = relationship(
         "AssessmentRound",
         back_populates="session",
         cascade="all, delete-orphan",
         lazy="select",
     )
-    proctoring_events = relationship(
+    proctoring_events: Mapped[list["ProctoringEvent"]] = relationship(
         "ProctoringEvent",
         back_populates="session",
         cascade="all, delete-orphan",
         lazy="select",
     )
-    advanced_proctoring_events = relationship(
+    advanced_proctoring_events: Mapped[list["AdvancedProctoringEvent"]] = relationship(
         "AdvancedProctoringEvent",
         back_populates="session",
         cascade="all, delete-orphan",
@@ -74,21 +75,21 @@ class AssessmentRound(Base):
 
     __tablename__ = "assessment_rounds"
 
-    id: int = Column(Integer, primary_key=True, index=True)
-    session_id: int = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    session_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("assessment_sessions.id", ondelete="CASCADE"),
         nullable=False,
     )
-    round_type: str = Column(String(20), nullable=False)
-    status: str = Column(String(20), nullable=False, server_default=text("'pending'"))
-    score: float = Column(Float, server_default=text("0"))
-    max_questions: int = Column(Integer, nullable=False, server_default=text("20"))
-    started_at: datetime = Column(DateTime, server_default=func.now())
-    completed_at: Optional[datetime] = Column(DateTime, nullable=True)
+    round_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, server_default=text("'pending'"))
+    score: Mapped[float] = mapped_column(Float, server_default=text("0"))
+    max_questions: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("20"))
+    started_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # ── Relationships ─────────────────────────────────────────────────
-    session = relationship("AssessmentSession", back_populates="rounds")
+    session: Mapped["AssessmentSession"] = relationship("AssessmentSession", back_populates="rounds")
 
     def __repr__(self) -> str:
         return (

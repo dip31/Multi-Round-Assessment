@@ -11,15 +11,16 @@ Language: en-IN (Indian English)
 import base64
 import hashlib
 import logging
-from typing import Optional
+from typing import Any, Optional
 
 import redis
 
 try:
-    from sarvamai import SarvamAI
-    from sarvamai.core.api_error import ApiError
+    from sarvamai import SarvamAI as _SarvamAI
     SARVAM_AVAILABLE = True
 except ImportError:
+    _SarvamAI = None
+
     SARVAM_AVAILABLE = False
 
 from app.config.settings import settings
@@ -34,17 +35,18 @@ redis_client: Optional[redis.Redis] = None
 try:
     redis_client = redis.from_url(REDIS_URL, decode_responses=False)
     # Test connection
-    redis_client.ping()
-    logger.info("Redis cache connected for TTS")
+    if redis_client is not None:
+        redis_client.ping()
+        logger.info("Redis cache connected for TTS")
 except Exception as e:
     logger.warning(f"Redis TTS cache unavailable: {str(e)}")
     redis_client = None
 
 # Initialize Sarvam client
-sarvam_client: Optional[SarvamAI] = None
-if SARVAM_AVAILABLE and SARVAM_API_KEY:
+sarvam_client: Optional[Any] = None
+if SARVAM_AVAILABLE and SARVAM_API_KEY and _SarvamAI is not None:
     try:
-        sarvam_client = SarvamAI(api_subscription_key=SARVAM_API_KEY)
+        sarvam_client = _SarvamAI(api_subscription_key=SARVAM_API_KEY)
         logger.info("Sarvam AI client initialized")
     except Exception as e:
         logger.error(f"Failed to initialize Sarvam client: {str(e)}")
@@ -93,9 +95,9 @@ async def text_to_speech(text: str) -> bytes:
     if redis_client:
         try:
             cached = redis_client.get(cache_key)
-            if cached:
+            if isinstance(cached, (bytes, bytearray)):
                 logger.debug(f"TTS cache hit for text: {text[:50]}...")
-                return cached
+                return bytes(cached)
         except Exception as e:
             logger.warning(f"Redis cache get failed: {str(e)}")
     
@@ -127,16 +129,19 @@ async def text_to_speech(text: str) -> bytes:
         
         return audio_bytes
         
-    except ApiError as e:
-        if e.status_code == 429:
+    except Exception as e:
+        status_code = getattr(e, "status_code", None)
+        body = getattr(e, "body", str(e))
+
+        if status_code == 429:
             raise Exception(
                 "TTS rate limit exceeded. Please try again in a few moments."
             )
-        elif e.status_code == 403:
+        elif status_code == 403:
             raise Exception(
                 "Invalid Sarvam API key. Check SARVAM_API_KEY in .env"
             )
-        elif e.status_code == 422:
+        elif status_code == 422:
             # Text validation error — try truncating
             logger.warning(f"Sarvam returned 422 for text: {text[:100]}...")
             truncated = text[:2400]
@@ -163,11 +168,8 @@ async def text_to_speech(text: str) -> bytes:
             except Exception as retry_e:
                 raise Exception(f"TTS failed even after truncation: {str(retry_e)}")
         else:
-            raise Exception(f"Sarvam TTS error {e.status_code}: {str(e.body)}")
-    
-    except Exception as e:
-        logger.error(f"Unexpected Sarvam TTS error: {str(e)}")
-        raise Exception(f"TTS service error: {str(e)}")
+            logger.error(f"Unexpected Sarvam TTS error: {str(e)}")
+            raise Exception(f"Sarvam TTS error {status_code}: {str(body)}")
 
 
 def get_voice_options() -> dict:

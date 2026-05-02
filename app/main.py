@@ -8,6 +8,8 @@ and mounts the versioned API router.  Run with::
 """
 
 import logging
+import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
@@ -19,6 +21,42 @@ from app.modules.interview.routers import interview_router
 
 logger = logging.getLogger(__name__)
 
+# Configure RAG logging
+os.makedirs("logs", exist_ok=True)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(message)s",
+    handlers=[
+        logging.FileHandler("logs/rag_pipeline.log"),
+        logging.StreamHandler()
+    ]
+)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Warm up embedding model at startup
+    # Prevents 30s delay on first resume upload
+    try:
+        from app.services.embedding_service import (
+            get_embedding_model
+        )
+        get_embedding_model()
+        print("[Startup] Embedding model ready")
+    except Exception as e:
+        print(f"[Startup] Embedding warmup failed: {e}")
+
+    # Warm up FAISS index at startup
+    try:
+        from app.services.retriever_service import load_kb
+        load_kb()
+        print("[Startup] KB index ready")
+    except Exception as e:
+        print(f"[Startup] KB index load failed: {e}")
+        print("[Startup] Run: python scripts/build_kb_index.py")
+
+    yield
+
 
 app = FastAPI(
     title="AI Placement Platform API",
@@ -28,6 +66,7 @@ app = FastAPI(
         "RL-driven difficulty adaptation and proctoring."
     ),
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # ── Middleware (order matters: last added = first executed) ────────────

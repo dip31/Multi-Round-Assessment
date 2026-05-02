@@ -8,20 +8,24 @@ based on the candidate's skills and experience.
 
 import json
 import logging
-from typing import Dict, List
+from typing import Dict, List, TYPE_CHECKING
 
 from app.config.settings import settings
-from app.services.rag_service import RAGOrchestrator
+
+if TYPE_CHECKING:
+    from app.services.rag_service import RAGOrchestrator
 
 logger = logging.getLogger(__name__)
 
 # Initialize RAG orchestrator (singleton)
 _rag_orchestrator = None
 
-def get_rag_orchestrator() -> RAGOrchestrator:
+def get_rag_orchestrator() -> "RAGOrchestrator":
     """Get or initialize the RAG orchestrator."""
     global _rag_orchestrator
     if _rag_orchestrator is None:
+        from app.services.rag_service import RAGOrchestrator
+
         _rag_orchestrator = RAGOrchestrator(
             groq_api_key=settings.GROQ_API_KEY,
             openai_api_key=getattr(settings, 'OPENAI_API_KEY', None)

@@ -19,8 +19,8 @@ class AdvancedProctorEventRequest(BaseModel):
     confidence: Optional[float] = Field(None, ge=0.0, le=1.0, description="AI model confidence score")
     metadata: Optional[Dict[str, Any]] = Field(None, description="Detailed detection metadata")
     
-    class Config:
-        schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "example": {
                 "session_id": 101,
                 "event_type": "MULTIPLE_PERSON_DETECTED",
@@ -32,6 +32,7 @@ class AdvancedProctorEventRequest(BaseModel):
                 }
             }
         }
+    }
 
 
 class AdvancedProctorEventResponse(BaseModel):
@@ -41,14 +42,15 @@ class AdvancedProctorEventResponse(BaseModel):
     event_id: int = Field(..., description="Database ID of logged event")
     risk_score: float = Field(..., description="Calculated risk score for this event")
     
-    class Config:
-        schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "example": {
                 "success": True,
                 "event_id": 12345,
                 "risk_score": 0.9
             }
         }
+    }
 
 
 class ProctoringSessionSummary(BaseModel):
@@ -60,8 +62,8 @@ class ProctoringSessionSummary(BaseModel):
     risk_score: float
     events: list[Dict[str, Any]]
     
-    class Config:
-        schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "example": {
                 "session_id": 101,
                 "total_events": 15,
@@ -81,6 +83,7 @@ class ProctoringSessionSummary(BaseModel):
                 ]
             }
         }
+    }
 
 
 class ProctoringViolationThreshold(BaseModel):
@@ -91,8 +94,8 @@ class ProctoringViolationThreshold(BaseModel):
     risk_weight: float
     auto_fail_threshold: Optional[int] = None
     
-    class Config:
-        schema_extra = {
+    model_config = {
+        "json_schema_extra": {
             "example": {
                 "event_type": "MULTIPLE_PERSON_DETECTED",
                 "max_allowed": 0,
@@ -100,3 +103,4 @@ class ProctoringViolationThreshold(BaseModel):
                 "auto_fail_threshold": 1
             }
         }
+    }

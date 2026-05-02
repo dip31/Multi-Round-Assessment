@@ -2,7 +2,7 @@
 Pydantic schemas for aptitude round request / response payloads.
 """
 
-from typing import Dict, Optional, List
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel
 
@@ -54,3 +54,64 @@ class RoundResultResponse(BaseModel):
     difficulty_progression: List[str]
     rl_report: List[Dict]
     answer_review: List[AnswerReviewItem]
+
+
+class DifficultyBucket(BaseModel):
+    correct: int
+    total: int
+
+
+class DifficultyStatsResponse(BaseModel):
+    easy: DifficultyBucket
+    medium: DifficultyBucket
+    hard: DifficultyBucket
+
+
+class ProgressionItem(BaseModel):
+    question: int
+    difficulty: str
+    correct: bool
+
+
+class ResponseTimeItem(BaseModel):
+    question: int
+    time: float
+
+
+class RLSummaryResponse(BaseModel):
+    increases: int
+    decreases: int
+    peak_difficulty: str
+    final_difficulty: str
+
+
+class ProctoringSummaryResponse(BaseModel):
+    tab_switch: int
+    fullscreen_exit: int
+    idle_events: int
+
+
+class TopicStatResponse(BaseModel):
+    topic: str
+    correct: int
+    total: int
+    accuracy: float
+    avg_response_time: float
+
+
+class AptitudeResultResponse(BaseModel):
+    score: float
+    total_questions: int
+    accuracy: float
+    avg_response_time: float
+    percentile: float
+    has_multiple_rounds: bool
+    difficulty_stats: DifficultyStatsResponse
+    progression: List[ProgressionItem]
+    response_times: List[ResponseTimeItem]
+    rl_summary: RLSummaryResponse
+    proctoring: ProctoringSummaryResponse
+    topic_stats: List[TopicStatResponse] = []
+
+
+RoundResultResponse = AptitudeResultResponse

@@ -10,7 +10,7 @@ import {
   Users, 
   AlertTriangle, 
   Activity, 
-  Eye, 
+  Eye,
   TrendingUp,
   Calendar,
   Filter,
@@ -18,6 +18,7 @@ import {
   Search
 } from 'lucide-react';
 import advancedProctoringService from '../services/advancedProctoringService';
+import AdminLayout from '../components/AdminLayout';
 
 const AdminProctoringDashboard = () => {
   const [sessions, setSessions] = useState([]);
@@ -126,8 +127,9 @@ const AdminProctoringDashboard = () => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
+    <AdminLayout>
+      <div className="space-y-6">
+        {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Proctoring Dashboard</h1>
@@ -392,6 +394,7 @@ const AdminProctoringDashboard = () => {
         </div>
       )}
     </div>
+    </AdminLayout>
   );
 };
 

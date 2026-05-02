@@ -33,48 +33,117 @@ class GroqService:
 
         Questions are grounded in the candidate's extracted skills and projects.
         """
-        prompt = f"""You are an expert technical interviewer. Generate {count} interview questions personalized to this candidate's background.
+        from app.services.role_detection_service import detect_role
+        from app.services.retriever_service import (
+            retrieve, format_for_prompt
+        )
 
-Candidate skills: {', '.join(skills) if skills else 'Not specified'}
+        # Step 1: Detect role
+        detected_role = detect_role(skills, projects)
 
-Candidate projects: {json.dumps(projects, indent=2) if projects else 'No projects listed'}
+        # Step 2: Retrieve relevant knowledge
+        try:
+            retrieved_docs = retrieve(
+                skills=skills,
+                projects=projects,
+                detected_role=detected_role,
+                k=8,
+                final_k=5
+            )
+            context = format_for_prompt(retrieved_docs)
+        except Exception as e:
+            print(f"[RAG] Retrieval failed: {e}")
+            context = "No additional context available."
+            retrieved_docs = []
 
-Generate questions that directly reference their skills and projects. Mix HR and Technical questions.
-Return ONLY valid JSON, no markdown code fences:
-{{"questions": [{{"question": "...", "difficulty": "EASY|MEDIUM|HARD", "topic": "...", "phase": "HR|TECHNICAL"}}]}}"""
+        # Step 3: Build grounded prompt
+        prompt = f"""
+      You are an expert technical interviewer for campus 
+      placement interviews.
+
+      CANDIDATE PROFILE:
+      Technical Skills: {skills}
+      Projects: {projects}
+      Detected Role: {detected_role}
+
+      RETRIEVED KNOWLEDGE BASE:
+      {context}
+
+      INSTRUCTIONS:
+      - Generate exactly {count} interview questions
+      - PRIORITIZE retrieved knowledge above
+      - MUST reference candidate specific skills/projects
+      - If retrieved context is insufficient, minimally
+        extend using general {detected_role} domain knowledge
+      - Mix HR (4 questions) and Technical (8 questions)
+      - Distribute: 3 Easy, 5 Medium, 4 Hard
+      - Make questions personalized not generic
+
+      Return ONLY valid JSON, no markdown:
+      {{
+        "detected_role": "{detected_role}",
+        "questions": [
+          {{
+            "question": "...",
+            "difficulty": "EASY|MEDIUM|HARD",
+            "topic": "...",
+            "phase": "HR|TECHNICAL",
+            "grounded_in": "which context chunk inspired this",
+            "personalized": true
+          }}
+        ]
+      }}
+      """
 
         try:
-            completion = self.client.chat.completions.create(
-                model=GROQ_MODEL,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert technical interviewer. You generate personalized interview questions.",
-                    },
-                    {
+            result = _safe_json(
+                self.client.chat.completions.create(
+                    model=GROQ_MODEL,
+                    messages=[{
                         "role": "user",
-                        "content": prompt,
-                    },
-                ],
-                temperature=0.3,
-                max_tokens=2000,
+                        "content": prompt
+                    }],
+                    temperature=0.3,
+                    max_tokens=2000
+                ).choices[0].message.content
             )
-
-            raw_response = completion.choices[0].message.content
-            parsed = _safe_json(raw_response)
-
-            if parsed and "questions" in parsed:
-                questions = parsed["questions"]
-                for i, q in enumerate(questions):
-                    if "id" not in q:
-                        q["id"] = f"q_{i}_{hash(q['question']) % 10000}"
-                return questions
-            else:
-                logger.warning("Groq returned invalid JSON format, using fallback")
-                return _get_fallback_questions()
         except Exception as e:
-            logger.error(f"Groq question generation failed: {str(e)}, using fallback")
-            return _get_fallback_questions()
+            print(f"[RAG] Groq call failed: {e}")
+            result = None
+
+        if result and "questions" in result:
+            questions = result["questions"]
+            for q in questions:
+                q["role"] = detected_role
+            return questions
+
+        # Fallback: use retrieved docs directly
+        print("[RAG] Using fallback questions from KB")
+        fallback = []
+        for doc in retrieved_docs[:count]:
+            fallback.append({
+                "question": doc.get("text", "Tell me about yourself"),
+                "difficulty": doc.get("difficulty", "medium").upper(),
+                "topic": doc.get("topic", detected_role),
+                "phase": "TECHNICAL",
+                "grounded_in": "knowledge base fallback",
+                "personalized": False,
+                "role": detected_role
+            })
+
+        # Pad with HR questions if fallback is short
+        while len(fallback) < count:
+            fallback.append({
+                "question": "Tell me about a challenging project you worked on.",
+                "difficulty": "MEDIUM",
+                "topic": "experience",
+                "phase": "HR",
+                "grounded_in": "default HR question",
+                "personalized": False,
+                "role": detected_role
+            })
+
+        return fallback[:count]
 
     # ── Question Rephrasing (UNCHANGED) ──────────────────────────────────
 

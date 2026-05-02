@@ -1,13 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Navbar from '../components/Navbar';
 import QuestionCard from '../components/QuestionCard';
 import Timer from '../components/Timer';
 import Toast from '../components/shared/Toast';
-import LoadingSkeleton from '../components/shared/LoadingSkeleton';
 import ProctoringWarning from '../components/ProctoringWarning';
 import { getNextQuestion, submitAnswer } from '../services/aptitudeService';
-import { getSessionStatus } from '../services/sessionService';
+import { getSessionStatus, completeSession } from '../services/sessionService';
 import { useAdvancedProctoring } from '../hooks/useAdvancedProctoring';
 
 const MAX_QUESTIONS = 10;
@@ -34,9 +32,20 @@ export default function AptitudeTest() {
     const navigate = useNavigate();
     const retryTimeoutRef = useRef(null);
     const questionCountRef = useRef(0);
+    const noFaceTimeoutRef = useRef(null);
+
+    const finalizeAndGoToResult = useCallback(async () => {
+        try {
+            await completeSession();
+        } catch {
+            // Ignore session finalization errors and continue to the result page.
+        } finally {
+            navigate('/result');
+        }
+    }, [navigate]);
 
     // Initialize advanced proctoring hook
-    const { videoRef, isMonitoring, enterFullscreen } = useAdvancedProctoring(
+    const { videoRef, isMonitoring, enterFullscreen, detectionResults } = useAdvancedProctoring(
         sessionId,
         (violation) => {
             if (violation.terminate) {
@@ -47,7 +56,9 @@ export default function AptitudeTest() {
                     message: 'Test terminated due to multiple proctoring violations.',
                     duration: 5000
                 });
-                setTimeout(() => navigate('/result'), 3000);
+                setTimeout(() => {
+                    finalizeAndGoToResult();
+                }, 3000);
             } else {
                 const warning = {
                     type: violation.eventType,
@@ -56,6 +67,13 @@ export default function AptitudeTest() {
                     severity: 'high',
                 };
 
+                if (violation.eventType === 'FACE_NOT_VISIBLE') {
+                    warning.type = 'face_not_visible';
+                    warning.message = 'Face not detected. Keep your face visible in the camera to continue the test.';
+                    warning.blocking = true;
+                    setProctoringBlocked(true);
+                }
+
                 setProctoringWarnings(prev => [...prev, warning]);
                 setTimeout(() => {
                     setProctoringWarnings(prev => prev.filter(w => w !== warning));
@@ -63,6 +81,45 @@ export default function AptitudeTest() {
             }
         }
     );
+
+    useEffect(() => {
+        if (!isMonitoring || testTerminated) return;
+
+        if (detectionResults?.faceVisible) {
+            if (noFaceTimeoutRef.current) {
+                clearTimeout(noFaceTimeoutRef.current);
+                noFaceTimeoutRef.current = null;
+            }
+            if (proctoringBlocked) {
+                setProctoringBlocked(false);
+            }
+            return;
+        }
+
+        if (!noFaceTimeoutRef.current) {
+            noFaceTimeoutRef.current = setTimeout(() => {
+                setProctoringBlocked(true);
+                setProctoringWarnings(prev => {
+                    const alreadyExists = prev.some(w => w.type === 'face_not_visible' && w.blocking);
+                    if (alreadyExists) return prev;
+                    return [...prev, {
+                        type: 'face_not_visible',
+                        message: 'Face is not visible for more than 6 seconds. Please face the camera to continue.',
+                        severity: 'high',
+                        blocking: true,
+                        count: 1,
+                    }];
+                });
+            }, 6000);
+        }
+
+        return () => {
+            if (noFaceTimeoutRef.current && detectionResults?.faceVisible) {
+                clearTimeout(noFaceTimeoutRef.current);
+                noFaceTimeoutRef.current = null;
+            }
+        };
+    }, [detectionResults?.faceVisible, isMonitoring, proctoringBlocked, testTerminated]);
 
     useEffect(() => {
         if (testTerminated) {
@@ -74,12 +131,12 @@ export default function AptitudeTest() {
             }
             // Navigate after 5 seconds to let user read the warning
             const tm = setTimeout(() => {
-                navigate('/result');
+                finalizeAndGoToResult();
             }, 5000);
             return () => clearTimeout(tm);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [testTerminated, navigate]);
+    }, [testTerminated, finalizeAndGoToResult]);
 
     // Keep a ref so logic can read the latest count without creating effect loops.
     useEffect(() => {
@@ -93,7 +150,7 @@ export default function AptitudeTest() {
 
         if (questionCountRef.current >= MAX_QUESTIONS) {
             console.log('🔍 DEBUG: Max questions reached, navigating to result');
-            navigate('/result');
+            await finalizeAndGoToResult();
             return;
         }
 
@@ -112,7 +169,7 @@ export default function AptitudeTest() {
         } catch (err) {
             console.error('🔍 DEBUG: Error in fetchQuestion:', err);
             if (err.response?.status === 404) {
-                navigate('/result');
+                await finalizeAndGoToResult();
             } else if (!err.response) {
                 setNetworkOffline(true);
                 setToast({
@@ -127,7 +184,7 @@ export default function AptitudeTest() {
             console.log('🔍 DEBUG: Setting loading to false');
             setLoading(false);
         }
-    }, [navigate]);
+    }, [navigate, finalizeAndGoToResult]);
 
     const isInitialized = useRef(false);
 
@@ -150,6 +207,9 @@ export default function AptitudeTest() {
         initSession();
         return () => {
             clearTimeout(retryTimeoutRef.current);
+            if (noFaceTimeoutRef.current) {
+                clearTimeout(noFaceTimeoutRef.current);
+            }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -186,7 +246,7 @@ export default function AptitudeTest() {
             await fetchQuestion();
         } catch (err) {
             if (err.response?.status === 404) {
-                navigate('/result');
+                await finalizeAndGoToResult();
             } else if (!err.response) {
                 setNetworkOffline(true);
             } else {
@@ -204,27 +264,22 @@ export default function AptitudeTest() {
         handleSubmission(selectedOption || null);
     }, [selectedOption, question]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const headerControls = timeRemaining !== null && (
-        <div className="flex items-center gap-4">
-            <Timer
-                initialSeconds={timeRemaining}
-                onExpire={handleTimerExpire}
-            />
-            <button
-                onClick={() => setShowSubmitModal(true)}
-                className="hidden md:block rounded-lg px-5 py-2.5 text-sm font-semibold tracking-wide text-white transition bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 shadow-sm"
-            >
-                Submit Test
-            </button>
-        </div>
-    );
-
     const handleWarningDismiss = (warningIndex) => {
         setProctoringWarnings(prev => prev.filter((_, index) => index !== warningIndex));
     };
 
     const handleWarningRetry = async () => {
-        setProctoringWarnings([]);
+        if (!detectionResults?.faceVisible) {
+            setToast({
+                type: 'error',
+                message: 'Face is still not visible. Please face the camera clearly and try again.',
+                duration: 3000,
+            });
+            setProctoringBlocked(true);
+            return;
+        }
+
+        setProctoringWarnings(prev => prev.filter(w => !w.blocking));
         setProctoringBlocked(false);
         if (sessionId) {
             await enterFullscreen();
@@ -262,7 +317,25 @@ export default function AptitudeTest() {
     }
 
     if (loading && timeRemaining === null) {
-        return <LoadingSkeleton />;
+        return (
+            <div className="flex h-screen flex-col overflow-hidden bg-[var(--color-bg-primary)]">
+                <div className="mx-auto w-full max-w-6xl px-4 pt-6 sm:px-6 animate-pulse">
+                    <div className="h-16 rounded-xl border border-[var(--color-border)] bg-white" />
+                </div>
+                <div className="mx-auto flex w-full max-w-6xl flex-1 items-start justify-center gap-8 overflow-hidden px-4 py-8 sm:px-6">
+                    <div className="flex h-full w-full md:w-[70%] max-w-3xl flex-col overflow-hidden rounded-[12px] border border-[var(--color-border)] bg-white shadow-sm">
+                        <div className="flex-1 p-6 sm:p-8 animate-pulse">
+                            <div className="h-6 w-32 bg-[var(--color-border)] rounded mb-8"></div>
+                            <div className="h-4 w-3/4 bg-[var(--color-border)] rounded mb-4"></div>
+                            <div className="h-4 w-1/2 bg-[var(--color-border)] rounded mb-8"></div>
+                            <div className="space-y-4">
+                                {[1, 2, 3, 4].map(i => <div key={i} className="h-14 bg-[var(--color-bg-primary)] rounded-xl border border-[var(--color-border)]"></div>)}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     const answeredCount = answersHistory.filter(s => s === 'answered').length;
@@ -271,7 +344,28 @@ export default function AptitudeTest() {
 
     return (
         <div className="flex h-screen flex-col overflow-hidden bg-[var(--color-bg-primary)]">
-            <Navbar rightContent={headerControls} />
+            <div className="mx-auto w-full max-w-6xl px-4 pt-4 sm:px-6">
+                <div className="rounded-xl border border-[var(--color-border)] bg-white px-4 py-3 shadow-sm flex items-center justify-between">
+                    <div>
+                        <p className="text-xs uppercase tracking-wider text-[var(--color-text-secondary)] font-semibold">Assessment In Progress</p>
+                        <p className="text-sm font-bold text-[var(--color-text-primary)]">Aptitude Test</p>
+                    </div>
+                    {timeRemaining !== null && (
+                        <div className="flex items-center gap-3">
+                            <Timer
+                                initialSeconds={timeRemaining}
+                                onExpire={handleTimerExpire}
+                            />
+                            <button
+                                onClick={() => setShowSubmitModal(true)}
+                                className="hidden md:block rounded-lg px-5 py-2.5 text-sm font-semibold tracking-wide text-white transition bg-[var(--color-accent)] hover:bg-[var(--color-accent)]/90 shadow-sm"
+                            >
+                                Submit Test
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
 
             {/* Proctoring Warnings */}
             {proctoringWarnings.length > 0 && !testTerminated && (
@@ -372,7 +466,7 @@ export default function AptitudeTest() {
                     <div className="shrink-0 border-t border-[var(--color-border)] bg-white p-6 flex items-center justify-end rounded-b-[12px]">
                         <button
                             onClick={() => handleSubmission(selectedOption)}
-                            disabled={submitting || loading}
+                            disabled={submitting || loading || proctoringBlocked || testTerminated}
                             className={`flex items-center gap-2 rounded-lg px-8 py-3 text-sm font-semibold transition disabled:opacity-40 shadow-sm ${selectedOption ? 'bg-[var(--color-accent)] text-white hover:bg-[var(--color-accent)]/90' : 'bg-[#E5E7EB] text-[var(--color-text-secondary)] hover:bg-[#D1D5DB]'}`}
                         >
                             {selectedOption ? 'Next Question →' : 'Skip Question →'}
@@ -475,7 +569,7 @@ export default function AptitudeTest() {
                             <button onClick={() => setShowSubmitModal(false)} className="flex-1 rounded-xl bg-[var(--color-bg-elevated)] py-3.5 font-bold text-[var(--color-text-primary)] hover:bg-[var(--color-border)] transition-colors">
                                 Cancel
                             </button>
-                            <button onClick={() => navigate('/result')} className="flex-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] py-3.5 font-bold text-white hover:bg-[var(--color-bg-elevated)] transition-colors">
+                            <button onClick={finalizeAndGoToResult} className="flex-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] py-3.5 font-bold text-white hover:bg-[var(--color-bg-elevated)] transition-colors">
                                 Submit Test
                             </button>
                         </div>
@@ -502,6 +596,19 @@ export default function AptitudeTest() {
                     <div className="absolute top-3 right-3 flex items-center gap-2 rounded-md bg-black/60 px-2 py-1 backdrop-blur-md">
                         <div className="h-2 w-2 rounded-full bg-[var(--color-danger)] animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
                         <span className="text-[10px] font-bold tracking-wider text-white uppercase">Rec</span>
+                    </div>
+                )}
+
+                {isMonitoring && !testTerminated && (
+                    <div className="absolute bottom-3 left-3 rounded-md bg-black/65 px-2 py-1 backdrop-blur-md">
+                        <p className="text-[10px] font-semibold text-white tracking-wide">DEBUG</p>
+                        <p className="text-[10px] text-white/90">Face: {detectionResults?.faceCount ?? 0}</p>
+                        <p className="text-[10px] text-white/90">
+                            Visibility: {Math.round((detectionResults?.visibilityRatio ?? 0) * 100)}%
+                        </p>
+                        <p className={`text-[10px] font-semibold ${detectionResults?.faceVisible ? 'text-emerald-300' : 'text-amber-300'}`}>
+                            {detectionResults?.faceVisible ? 'Visible' : 'Not Visible'}
+                        </p>
                     </div>
                 )}
             </div>

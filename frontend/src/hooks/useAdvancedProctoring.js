@@ -24,6 +24,24 @@ const MEDIAPIPE_FACE_MESH_VERSION = '0.4.1633559619';
 const mediapipeCdn = (pkg, version, file) =>
   `https://cdn.jsdelivr.net/npm/${pkg}@${version}/${file}`;
 
+const toUniqueLandmarkIndices = (connections) => {
+  const indices = new Set();
+  (connections || []).forEach((connection) => {
+    if (Array.isArray(connection) && connection.length === 2) {
+      indices.add(connection[0]);
+      indices.add(connection[1]);
+    }
+  });
+  return [...indices];
+};
+
+const CRITICAL_FACE_INDICES = toUniqueLandmarkIndices([
+  ...FACEMESH_FACE_OVAL,
+  ...FACEMESH_LEFT_EYE,
+  ...FACEMESH_RIGHT_EYE,
+  ...FACEMESH_LIPS,
+]);
+
 const toJsonSafe = (value) => {
   try {
     return JSON.parse(
@@ -125,11 +143,37 @@ export const useAdvancedProctoring = (sessionId, onViolation = null) => {
   const [detectionResults, setDetectionResults] = useState({
     faceCount: 0,
     faceVisible: false,
+    visibilityRatio: 0,
     mouthMovement: false,
     gazeDirection: 'center',
     headPose: { pitch: 0, yaw: 0, roll: 0 },
     voiceActivity: false,
   });
+  
+  // ═══════════════════════════════════════════════════════════════════
+  // METRICS TRACKING - Real-time behavioral metrics (no stale closure)
+  // ═══════════════════════════════════════════════════════════════════
+  const behaviorSnapshotRef = useRef({
+    face_detected: false,
+    eye_contact_pct: 0.5,
+    head_stability: 0.5,
+    looking_away_count: 0,
+    response_time_sec: 0,
+    dominant_emotion: 'neutral',
+  });
+  
+  // Computed metrics state (for components that need reactive updates)
+  const [metrics, setMetrics] = useState({
+    eyeContactPercent: 0.5,
+    headStability: 0.5,
+    dominantEmotion: 'neutral',
+    faceDetected: false,
+    lookingAwayCount: 0,
+  });
+  
+  // Track eye contact samples for averaging
+  const eyeContactSamplesRef = useRef([]);
+  const lookingAwayCountRef = useRef(0);
   
   // Refs for MediaPipe and streams
   const videoRef = useRef(null);
@@ -142,6 +186,14 @@ export const useAdvancedProctoring = (sessionId, onViolation = null) => {
   const frameCountRef = useRef(0);
   const lastMouthStateRef = useRef({ open: false, time: 0 });
   const violationCountsRef = useRef({});
+  const consecutiveNoFaceFramesRef = useRef(0);
+  const consecutiveFaceFramesRef = useRef(0);
+  const headYawBaselineRef = useRef({
+    ready: false,
+    samples: [],
+    value: 0,
+  });
+  const consecutiveHeadTurnFramesRef = useRef(0);
   const isMountedRef = useRef(true);
   const initStartedRef = useRef(false);
   const lastEventSentAtRef = useRef({});
@@ -251,7 +303,7 @@ export const useAdvancedProctoring = (sessionId, onViolation = null) => {
         violationCountsRef.current[eventType] = (violationCountsRef.current[eventType] || 0) + 1;
         const violationCount = violationCountsRef.current[eventType];
         const threshold = PROCTORING_CONFIG.VIOLATION_THRESHOLDS[eventType];
-        const shouldTerminate = threshold ? violationCount > threshold.max : false;
+        const shouldTerminate = threshold ? violationCount >= threshold.max : false;
         
         // Calculate overall risk score
         updateRiskScore();
@@ -439,10 +491,25 @@ export const useAdvancedProctoring = (sessionId, onViolation = null) => {
   // Face detection results handler
   const onFaceDetectionResults = useCallback((results) => {
     if (results.detections.length === 0) {
-      // No faces detected
-      setDetectionResults(prev => ({ ...prev, faceCount: 0, faceVisible: false }));
+      consecutiveFaceFramesRef.current = 0;
+      consecutiveNoFaceFramesRef.current += 1;
+
+      // Require consecutive missing frames to avoid flicker-based false warnings.
+      if (consecutiveNoFaceFramesRef.current >= 3) {
+        setDetectionResults(prev => ({ ...prev, faceCount: 0, faceVisible: false, visibilityRatio: 0 }));
+        logProctoringEventRef.current(EVENT_TYPES.FACE_NOT_VISIBLE, {
+          faceCount: 0,
+          timestamp: Date.now(),
+          confidence: 1.0,
+          source: 'face_detection',
+          missingFrames: consecutiveNoFaceFramesRef.current,
+        });
+      }
       return;
     }
+
+    consecutiveNoFaceFramesRef.current = 0;
+    consecutiveFaceFramesRef.current += 1;
     
     const faceCount = results.detections.length;
     
@@ -474,32 +541,37 @@ export const useAdvancedProctoring = (sessionId, onViolation = null) => {
   
   // Analyze face visibility using critical landmarks
   const analyzeFaceVisibility = useCallback((landmarks) => {
-    // Check for critical facial features
-    const criticalLandmarks = [
-      ...FACEMESH_FACE_OVAL,
-      ...FACEMESH_LEFT_EYE,
-      ...FACEMESH_RIGHT_EYE,
-      ...FACEMESH_LIPS,
-    ];
-    
-    const visibleLandmarks = criticalLandmarks.filter(index => {
-      const landmark = landmarks[index];
-      return landmark && landmark.visibility > 0.5;
+    const visibleLandmarks = CRITICAL_FACE_INDICES.filter((index) => {
+      const landmark = landmarks?.[index];
+      if (!landmark) return false;
+      // MediaPipe face mesh landmarks typically expose x/y/z, not visibility.
+      // Treat a landmark as visible if it is in normalized frame bounds.
+      return (
+        Number.isFinite(landmark.x) &&
+        Number.isFinite(landmark.y) &&
+        landmark.x >= -0.1 &&
+        landmark.x <= 1.1 &&
+        landmark.y >= -0.1 &&
+        landmark.y <= 1.1
+      );
     });
-    
-    const visibilityRatio = visibleLandmarks.length / criticalLandmarks.length;
-    
-    if (visibilityRatio < 0.7) {
+
+    const totalCritical = CRITICAL_FACE_INDICES.length || 1;
+    const visibilityRatio = visibleLandmarks.length / totalCritical;
+
+    // Slightly relaxed threshold to reduce false negatives in low light/camera noise.
+    if (visibilityRatio < 0.45) {
       logProctoringEventRef.current(EVENT_TYPES.FACE_NOT_VISIBLE, {
         visibilityRatio,
         timestamp: Date.now(),
         confidence: 1 - visibilityRatio,
       });
     }
-    
+
     setDetectionResults(prev => ({
       ...prev,
-      faceVisible: visibilityRatio > 0.7,
+      faceVisible: visibilityRatio >= 0.45,
+      visibilityRatio,
     }));
   }, []);
   
@@ -581,27 +653,48 @@ export const useAdvancedProctoring = (sessionId, onViolation = null) => {
     }));
   }, []);
   
-  // Estimate head pose using facial landmarks
+  // Estimate head pose using facial landmarks with baseline calibration
   const estimateHeadPose = useCallback((landmarks) => {
-    // Simplified head pose estimation using key facial points
-    const noseTip = landmarks[1]; // Nose tip
-    const chin = landmarks[175]; // Chin center
-    
-    if (!noseTip || !chin) return;
-    
-    // Calculate head rotation (simplified)
-    const faceAngle = Math.atan2(chin.y - noseTip.y, chin.x - noseTip.x);
-    const headYaw = (faceAngle * 180) / Math.PI;
-    
-    // Check for excessive head turning
-    if (Math.abs(headYaw) > PROCTORING_CONFIG.HEAD_TURN_THRESHOLD) {
+    const noseTip = landmarks?.[1];
+    const leftOuterEye = landmarks?.[33];
+    const rightOuterEye = landmarks?.[263];
+
+    if (!noseTip || !leftOuterEye || !rightOuterEye) return;
+
+    const eyeCenterX = (leftOuterEye.x + rightOuterEye.x) / 2;
+    const rawYawNorm = noseTip.x - eyeCenterX;
+
+    // Build a short per-user baseline so natural posture/camera angle doesn't trigger violations.
+    if (!headYawBaselineRef.current.ready) {
+      headYawBaselineRef.current.samples.push(rawYawNorm);
+      if (headYawBaselineRef.current.samples.length >= 20) {
+        const sum = headYawBaselineRef.current.samples.reduce((a, b) => a + b, 0);
+        headYawBaselineRef.current.value = sum / headYawBaselineRef.current.samples.length;
+        headYawBaselineRef.current.ready = true;
+      }
+    }
+
+    const calibratedYawNorm = rawYawNorm - headYawBaselineRef.current.value;
+    const headYaw = calibratedYawNorm * 120;
+
+    // Require sustained deviation to avoid one-frame spikes.
+    const yawThresholdNorm = 0.12;
+    if (Math.abs(calibratedYawNorm) > yawThresholdNorm) {
+      consecutiveHeadTurnFramesRef.current += 1;
+    } else {
+      consecutiveHeadTurnFramesRef.current = 0;
+    }
+
+    if (consecutiveHeadTurnFramesRef.current >= 5) {
       logProctoringEventRef.current(EVENT_TYPES.HEAD_TURN_DETECTED, {
         headYaw,
+        calibratedYawNorm,
         timestamp: Date.now(),
-        confidence: Math.min(Math.abs(headYaw) / 45, 1.0),
+        confidence: Math.min(Math.abs(calibratedYawNorm) / 0.2, 1.0),
       });
+      consecutiveHeadTurnFramesRef.current = 0;
     }
-    
+
     setDetectionResults(prev => ({
       ...prev,
       headPose: {
@@ -628,9 +721,85 @@ export const useAdvancedProctoring = (sessionId, onViolation = null) => {
       
       // Estimate head pose
       estimateHeadPose(landmarks);
+      
+      // ═══════════════════════════════════════════════════════════════
+      // COMPUTE REAL BEHAVIORAL METRICS (not mocked)
+      // ═══════════════════════════════════════════════════════════════
+      
+      // Head stability: Based on nose tip deviation from center (0.5)
+      const nose = landmarks[1]; // Nose tip
+      const headStability = nose ? Math.max(0, Math.min(1, 1 - Math.abs(nose.x - 0.5) * 2)) : 0.5;
+      
+      // Eye contact: Check if eyes are roughly centered (looking at camera)
+      const leftEyeCenter = landmarks[33];  // Left eye inner corner
+      const rightEyeCenter = landmarks[263]; // Right eye inner corner
+      
+      let eyeContact = 0.5; // Default
+      if (leftEyeCenter && rightEyeCenter) {
+        const eyeMidX = (leftEyeCenter.x + rightEyeCenter.x) / 2;
+        const eyeMidY = (leftEyeCenter.y + rightEyeCenter.y) / 2;
+        
+        // Check if looking roughly at camera (within tolerance)
+        const isLookingAtCamera = 
+          Math.abs(eyeMidX - 0.5) < 0.15 && 
+          Math.abs(eyeMidY - 0.4) < 0.15; // Eyes typically in upper portion
+        
+        eyeContact = isLookingAtCamera ? 1.0 : 0.0;
+        
+        // Track looking away count
+        if (!isLookingAtCamera) {
+          lookingAwayCountRef.current += 1;
+        }
+      }
+      
+      // Update eye contact samples for averaging (rolling window of 30 samples)
+      eyeContactSamplesRef.current.push(eyeContact);
+      if (eyeContactSamplesRef.current.length > 30) {
+        eyeContactSamplesRef.current.shift();
+      }
+      
+      // Calculate average eye contact percentage
+      const avgEyeContact = eyeContactSamplesRef.current.length > 0
+        ? eyeContactSamplesRef.current.reduce((a, b) => a + b, 0) / eyeContactSamplesRef.current.length
+        : 0.5;
+      
+      // Update behavioral snapshot ref (for interval access - no stale closure)
+      behaviorSnapshotRef.current = {
+        face_detected: true,
+        eye_contact_pct: avgEyeContact,
+        head_stability: headStability,
+        looking_away_count: lookingAwayCountRef.current,
+        response_time_sec: behaviorSnapshotRef.current.response_time_sec,
+        dominant_emotion: 'neutral', // Simplified - would need emotion model
+      };
+      
+      // Update reactive metrics state (for component updates)
+      setMetrics({
+        eyeContactPercent: avgEyeContact,
+        headStability: headStability,
+        dominantEmotion: 'neutral',
+        faceDetected: true,
+        lookingAwayCount: lookingAwayCountRef.current,
+      });
+      
     } else {
-      // No face landmarks detected
-      setDetectionResults(prev => ({ ...prev, faceVisible: false }));
+      consecutiveFaceFramesRef.current = 0;
+      consecutiveNoFaceFramesRef.current += 1;
+      consecutiveHeadTurnFramesRef.current = 0;
+
+      if (consecutiveNoFaceFramesRef.current >= 3) {
+        setDetectionResults(prev => ({ ...prev, faceVisible: false, visibilityRatio: 0 }));
+        logProctoringEventRef.current(EVENT_TYPES.FACE_NOT_VISIBLE, {
+          timestamp: Date.now(),
+          confidence: 0.95,
+          source: 'face_mesh',
+          missingFrames: consecutiveNoFaceFramesRef.current,
+        });
+      }
+      
+      // Update metrics to reflect no face detected
+      behaviorSnapshotRef.current.face_detected = false;
+      setMetrics(prev => ({ ...prev, faceDetected: false }));
     }
   }, [analyzeFaceVisibility, analyzeMouthMovement, analyzeEyeGaze, estimateHeadPose]);
   
@@ -1006,6 +1175,32 @@ export const useAdvancedProctoring = (sessionId, onViolation = null) => {
     cleanup();
   }, [cleanup]);
   
+  // Helper to reset metrics (call when starting new recording)
+  const resetMetrics = useCallback(() => {
+    eyeContactSamplesRef.current = [];
+    lookingAwayCountRef.current = 0;
+    behaviorSnapshotRef.current = {
+      face_detected: false,
+      eye_contact_pct: 0.5,
+      head_stability: 0.5,
+      looking_away_count: 0,
+      response_time_sec: 0,
+      dominant_emotion: 'neutral',
+    };
+    setMetrics({
+      eyeContactPercent: 0.5,
+      headStability: 0.5,
+      dominantEmotion: 'neutral',
+      faceDetected: false,
+      lookingAwayCount: 0,
+    });
+  }, []);
+  
+  // Get current snapshot (for interval polling - avoids stale closure)
+  const getBehaviorSnapshot = useCallback(() => {
+    return { ...behaviorSnapshotRef.current };
+  }, []);
+  
   return {
     // State
     isInitialized,
@@ -1013,6 +1208,14 @@ export const useAdvancedProctoring = (sessionId, onViolation = null) => {
     violations,
     riskScore,
     detectionResults,
+    
+    // ═══════════════════════════════════════════════════════════════════
+    // COMPUTED METRICS (what InterviewRoom expects)
+    // ═══════════════════════════════════════════════════════════════════
+    metrics,                    // Reactive state for component renders
+    behaviorSnapshotRef,        // Ref for interval polling (no stale closure)
+    getBehaviorSnapshot,        // Function to get current snapshot
+    resetMetrics,               // Reset when starting new recording
     
     // Refs for video elements
     videoRef,

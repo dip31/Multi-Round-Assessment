@@ -14,6 +14,7 @@ class ResumeUploadResponse(BaseModel):
     pool_id: int
     question_count: int
     pending_approval: bool
+    detected_role: Optional[str] = None
 
 
 # ── Question Pool ──────────────────────────────────────────────────────
@@ -31,6 +32,7 @@ class QuestionPoolResponse(BaseModel):
     questions: List[QuestionItem]
     approved: bool
     extracted_skills: List[str]
+    detected_role: Optional[str] = None
 
 
 class ApprovePoolRequest(BaseModel):
@@ -66,6 +68,26 @@ class BehavioralSnapshot(BaseModel):
     """Behavioral metrics from proctoring."""
     eye_contact_pct: Optional[float] = 0.5
     head_stability: Optional[float] = 0.5
+    face_detected: Optional[bool] = True
+    looking_away_count: Optional[int] = 0
+    response_time_sec: Optional[float] = 0.0
+    dominant_emotion: Optional[str] = "neutral"
+
+
+# ── Real-Time Feedback ─────────────────────────────────────────────────
+class RealtimeFeedbackRequest(BaseModel):
+    """Request for real-time behavioral feedback during interview."""
+    session_id: int
+    eye_contact_pct: float = 0.5
+    head_stability: float = 0.5
+    face_detected: bool = True
+    looking_away_count: int = 0
+    response_time_sec: float = 0.0
+
+
+class RealtimeFeedbackResponse(BaseModel):
+    """Response with real-time coaching tip."""
+    tip: str
 
 
 class SubmitResponseRequest(BaseModel):
