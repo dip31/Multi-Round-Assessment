@@ -1,0 +1,562 @@
+[
+  {
+    "title": "Sum of Array Elements",
+    "difficulty": "easy",
+    "description": "Given an array of integers, compute the sum of all its elements and print the result.\n\nRead the number of elements followed by the elements themselves. Print the total sum.",
+    "input_format": "First line: integer n (number of elements)\nSecond line: n space-separated integers",
+    "output_format": "A single integer representing the sum of all elements.",
+    "constraints": "1 ≤ n ≤ 10^5\n-10^9 ≤ array[i] ≤ 10^9\nTime Limit: 1 second\nMemory Limit: 256 MB",
+    "tags": ["arrays", "math"],
+    "examples": [
+      {
+        "input": "5\n1 2 3 4 5",
+        "output": "15"
+      },
+      {
+        "input": "3\n10 20 30",
+        "output": "60"
+      }
+    ],
+    "test_cases": [
+      {"input_data": "5\n1 2 3 4 5", "expected_output": "15", "is_hidden": false},
+      {"input_data": "3\n10 20 30", "expected_output": "60", "is_hidden": false},
+      {"input_data": "1\n0", "expected_output": "0", "is_hidden": true},
+      {"input_data": "4\n-1 -2 -3 -4", "expected_output": "-10", "is_hidden": true},
+      {"input_data": "6\n100 200 300 400 500 600", "expected_output": "2100", "is_hidden": true},
+      {"input_data": "2\n999999999 1", "expected_output": "1000000000", "is_hidden": true},
+      {"input_data": "5\n0 0 0 0 0", "expected_output": "0", "is_hidden": true}
+    ]
+  },
+  {
+    "title": "Reverse a String",
+    "difficulty": "easy",
+    "description": "Given a string, print it in reverse order.\n\nRead a single line string and output its characters reversed. The input will consist only of printable ASCII characters without leading/trailing spaces.",
+    "input_format": "A single line containing the string to reverse.",
+    "output_format": "A single line containing the reversed string.",
+    "constraints": "1 ≤ length of string ≤ 10^5\nTime Limit: 1 second\nMemory Limit: 256 MB",
+    "tags": ["strings"],
+    "examples": [
+      {
+        "input": "hello",
+        "output": "olleh"
+      },
+      {
+        "input": "abcde",
+        "output": "edcba"
+      }
+    ],
+    "test_cases": [
+      {"input_data": "hello", "expected_output": "olleh", "is_hidden": false},
+      {"input_data": "abcde", "expected_output": "edcba", "is_hidden": false},
+      {"input_data": "a", "expected_output": "a", "is_hidden": true},
+      {"input_data": "racecar", "expected_output": "racecar", "is_hidden": true},
+      {"input_data": "aabbcc", "expected_output": "ccbbaa", "is_hidden": true},
+      {"input_data": "zyxwvutsrqponmlkjihgfedcba", "expected_output": "abcdefghijklmnopqrstuvwxyz", "is_hidden": true},
+      {"input_data": "abababab", "expected_output": "babababa", "is_hidden": true}
+    ]
+  },
+  {
+    "title": "Find Maximum Element",
+    "difficulty": "easy",
+    "description": "Given an array of integers, find and print the maximum element.\n\nRead the number of elements followed by the elements themselves. Print the largest value in the array.",
+    "input_format": "First line: integer n (number of elements)\nSecond line: n space-separated integers",
+    "output_format": "A single integer representing the maximum element.",
+    "constraints": "1 ≤ n ≤ 10^5\n-10^9 ≤ array[i] ≤ 10^9\nTime Limit: 1 second\nMemory Limit: 256 MB",
+    "tags": ["arrays", "loops"],
+    "examples": [
+      {
+        "input": "5\n3 1 4 1 5",
+        "output": "5"
+      },
+      {
+        "input": "4\n-3 -1 -4 -2",
+        "output": "-1"
+      }
+    ],
+    "test_cases": [
+      {"input_data": "5\n3 1 4 1 5", "expected_output": "5", "is_hidden": false},
+      {"input_data": "4\n-3 -1 -4 -2", "expected_output": "-1", "is_hidden": false},
+      {"input_data": "1\n42", "expected_output": "42", "is_hidden": true},
+      {"input_data": "5\n5 5 5 5 5", "expected_output": "5", "is_hidden": true},
+      {"input_data": "6\n1 2 3 4 5 6", "expected_output": "6", "is_hidden": true},
+      {"input_data": "6\n6 5 4 3 2 1", "expected_output": "6", "is_hidden": true},
+      {"input_data": "3\n-1000000000 0 1000000000", "expected_output": "1000000000", "is_hidden": true}
+    ]
+  },
+  {
+    "title": "Count Even and Odd Numbers",
+    "difficulty": "easy",
+    "description": "Given an array of integers, count the number of even and odd numbers in the array.\n\nRead the array and print two space-separated integers: the count of even numbers followed by the count of odd numbers.",
+    "input_format": "First line: integer n (number of elements)\nSecond line: n space-separated integers",
+    "output_format": "Two space-separated integers on a single line: count of even numbers followed by count of odd numbers.",
+    "constraints": "1 ≤ n ≤ 10^5\n-10^9 ≤ array[i] ≤ 10^9\nTime Limit: 1 second\nMemory Limit: 256 MB",
+    "tags": ["arrays", "math", "loops"],
+    "examples": [
+      {
+        "input": "5\n1 2 3 4 5",
+        "output": "2 3"
+      },
+      {
+        "input": "4\n2 4 6 8",
+        "output": "4 0"
+      }
+    ],
+    "test_cases": [
+      {"input_data": "5\n1 2 3 4 5", "expected_output": "2 3", "is_hidden": false},
+      {"input_data": "4\n2 4 6 8", "expected_output": "4 0", "is_hidden": false},
+      {"input_data": "1\n0", "expected_output": "1 0", "is_hidden": true},
+      {"input_data": "4\n-1 -2 -3 -4", "expected_output": "2 2", "is_hidden": true},
+      {"input_data": "3\n1 3 5", "expected_output": "0 3", "is_hidden": true},
+      {"input_data": "5\n10 20 30 40 50", "expected_output": "5 0", "is_hidden": true},
+      {"input_data": "6\n-6 -5 -4 -3 -2 -1", "expected_output": "3 3", "is_hidden": true}
+    ]
+  },
+  {
+    "title": "Check Palindrome Number",
+    "difficulty": "easy",
+    "description": "Given an integer, determine if it is a palindrome. A number is a palindrome if its digit sequence reads the same forwards and backwards.\n\nPrint Yes if it is a palindrome, otherwise print No.",
+    "input_format": "A single line containing an integer n.",
+    "output_format": "Print Yes if n is a palindrome, otherwise print No.",
+    "constraints": "0 ≤ n ≤ 10^9\nTime Limit: 1 second\nMemory Limit: 256 MB",
+    "tags": ["math", "strings"],
+    "examples": [
+      {
+        "input": "121",
+        "output": "Yes"
+      },
+      {
+        "input": "123",
+        "output": "No"
+      }
+    ],
+    "test_cases": [
+      {"input_data": "121", "expected_output": "Yes", "is_hidden": false},
+      {"input_data": "123", "expected_output": "No", "is_hidden": false},
+      {"input_data": "0", "expected_output": "Yes", "is_hidden": true},
+      {"input_data": "1", "expected_output": "Yes", "is_hidden": true},
+      {"input_data": "1221", "expected_output": "Yes", "is_hidden": true},
+      {"input_data": "12321", "expected_output": "Yes", "is_hidden": true},
+      {"input_data": "1000000001", "expected_output": "Yes", "is_hidden": true}
+    ]
+  },
+  {
+    "title": "Factorial of a Number",
+    "difficulty": "easy",
+    "description": "Given a non-negative integer n, compute its factorial.\n\nThe factorial of n (denoted n!) is the product of all positive integers from 1 to n. By definition, 0! = 1.",
+    "input_format": "A single line containing a non-negative integer n.",
+    "output_format": "A single integer representing n!.",
+    "constraints": "0 ≤ n ≤ 20\nTime Limit: 1 second\nMemory Limit: 256 MB",
+    "tags": ["math", "loops"],
+    "examples": [
+      {
+        "input": "5",
+        "output": "120"
+      },
+      {
+        "input": "0",
+        "output": "1"
+      }
+    ],
+    "test_cases": [
+      {"input_data": "5", "expected_output": "120", "is_hidden": false},
+      {"input_data": "0", "expected_output": "1", "is_hidden": false},
+      {"input_data": "1", "expected_output": "1", "is_hidden": true},
+      {"input_data": "10", "expected_output": "3628800", "is_hidden": true},
+      {"input_data": "15", "expected_output": "1307674368000", "is_hidden": true},
+      {"input_data": "20", "expected_output": "2432902008176640000", "is_hidden": true},
+      {"input_data": "7", "expected_output": "5040", "is_hidden": true}
+    ]
+  },
+  {
+    "title": "Linear Search",
+    "difficulty": "easy",
+    "description": "Given an array of integers and a target value, find the index (0-based) of the first occurrence of the target in the array.\n\nIf the target is not present, print -1.",
+    "input_format": "First line: integer n (number of elements)\nSecond line: n space-separated integers\nThird line: integer target",
+    "output_format": "A single integer: the 0-based index of the first occurrence of target, or -1 if not found.",
+    "constraints": "1 ≤ n ≤ 10^5\n-10^9 ≤ array[i] ≤ 10^9\n-10^9 ≤ target ≤ 10^9\nTime Limit: 1 second\nMemory Limit: 256 MB",
+    "tags": ["arrays", "loops"],
+    "examples": [
+      {
+        "input": "5\n3 1 4 1 5\n4",
+        "output": "2"
+      },
+      {
+        "input": "4\n10 20 30 40\n50",
+        "output": "-1"
+      }
+    ],
+    "test_cases": [
+      {"input_data": "5\n3 1 4 1 5\n4", "expected_output": "2", "is_hidden": false},
+      {"input_data": "4\n10 20 30 40\n50", "expected_output": "-1", "is_hidden": false},
+      {"input_data": "1\n7\n7", "expected_output": "0", "is_hidden": true},
+      {"input_data": "5\n5 5 5 5 5\n5", "expected_output": "0", "is_hidden": true},
+      {"input_data": "6\n1 2 3 4 5 6\n6", "expected_output": "5", "is_hidden": true},
+      {"input_data": "5\n-3 -2 -1 0 1\n-1", "expected_output": "2", "is_hidden": true},
+      {"input_data": "3\n1000000000 -1000000000 0\n0", "expected_output": "2", "is_hidden": true}
+    ]
+  },
+  {
+    "title": "Count Vowels in a String",
+    "difficulty": "easy",
+    "description": "Given a string, count the number of vowels (a, e, i, o, u) in it. The check should be case-insensitive.\n\nPrint the total count of vowel characters.",
+    "input_format": "A single line containing the string.",
+    "output_format": "A single integer representing the count of vowels.",
+    "constraints": "1 ≤ length of string ≤ 10^5\nString contains only printable ASCII characters\nTime Limit: 1 second\nMemory Limit: 256 MB",
+    "tags": ["strings", "loops"],
+    "examples": [
+      {
+        "input": "Hello World",
+        "output": "3"
+      },
+      {
+        "input": "aeiou",
+        "output": "5"
+      }
+    ],
+    "test_cases": [
+      {"input_data": "Hello World", "expected_output": "3", "is_hidden": false},
+      {"input_data": "aeiou", "expected_output": "5", "is_hidden": false},
+      {"input_data": "AEIOU", "expected_output": "5", "is_hidden": true},
+      {"input_data": "bcdfg", "expected_output": "0", "is_hidden": true},
+      {"input_data": "programming", "expected_output": "3", "is_hidden": true},
+      {"input_data": "aAbBcC", "expected_output": "2", "is_hidden": true},
+      {"input_data": "aaaaa", "expected_output": "5", "is_hidden": true}
+    ]
+  },
+  {
+    "title": "Fibonacci Sequence",
+    "difficulty": "easy",
+    "description": "Given a non-negative integer n, print the first n+1 terms of the Fibonacci sequence (from index 0 to n) separated by spaces.\n\nThe Fibonacci sequence is defined as: F(0)=0, F(1)=1, F(k)=F(k-1)+F(k-2) for k≥2.",
+    "input_format": "A single line containing a non-negative integer n.",
+    "output_format": "A single line of n+1 space-separated integers representing F(0) through F(n).",
+    "constraints": "0 ≤ n ≤ 40\nTime Limit: 1 second\nMemory Limit: 256 MB",
+    "tags": ["math", "loops"],
+    "examples": [
+      {
+        "input": "6",
+        "output": "0 1 1 2 3 5 8"
+      },
+      {
+        "input": "0",
+        "output": "0"
+      }
+    ],
+    "test_cases": [
+      {"input_data": "6", "expected_output": "0 1 1 2 3 5 8", "is_hidden": false},
+      {"input_data": "0", "expected_output": "0", "is_hidden": false},
+      {"input_data": "1", "expected_output": "0 1", "is_hidden": true},
+      {"input_data": "2", "expected_output": "0 1 1", "is_hidden": true},
+      {"input_data": "10", "expected_output": "0 1 1 2 3 5 8 13 21 34 55", "is_hidden": true},
+      {"input_data": "15", "expected_output": "0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610", "is_hidden": true},
+      {"input_data": "20", "expected_output": "0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181 6765", "is_hidden": true}
+    ]
+  },
+  {
+    "title": "Sort Array in Ascending Order",
+    "difficulty": "easy",
+    "description": "Given an array of integers, sort it in ascending (non-decreasing) order and print the sorted array.\n\nRead the array, sort its elements from smallest to largest, and print them space-separated on a single line.",
+    "input_format": "First line: integer n (number of elements)\nSecond line: n space-separated integers",
+    "output_format": "A single line of n space-separated integers in non-decreasing order.",
+    "constraints": "1 ≤ n ≤ 10^5\n-10^9 ≤ array[i] ≤ 10^9\nTime Limit: 1 second\nMemory Limit: 256 MB",
+    "tags": ["arrays", "sorting"],
+    "examples": [
+      {
+        "input": "5\n5 3 1 4 2",
+        "output": "1 2 3 4 5"
+      },
+      {
+        "input": "4\n8 2 6 4",
+        "output": "2 4 6 8"
+      }
+    ],
+    "test_cases": [
+      {"input_data": "5\n5 3 1 4 2", "expected_output": "1 2 3 4 5", "is_hidden": false},
+      {"input_data": "4\n8 2 6 4", "expected_output": "2 4 6 8", "is_hidden": false},
+      {"input_data": "1\n42", "expected_output": "42", "is_hidden": true},
+      {"input_data": "5\n-3 -1 -2 -5 -4", "expected_output": "-5 -4 -3 -2 -1", "is_hidden": true},
+      {"input_data": "5\n5 4 3 2 1", "expected_output": "1 2 3 4 5", "is_hidden": true},
+      {"input_data": "5\n1 2 3 4 5", "expected_output": "1 2 3 4 5", "is_hidden": true},
+      {"input_data": "6\n3 3 1 1 2 2", "expected_output": "1 1 2 2 3 3", "is_hidden": true}
+    ]
+  },
+  {
+    "title": "Two Sum",
+    "difficulty": "medium",
+    "description": "Given an array of integers and a target sum, find two distinct indices i and j (i < j) such that array[i] + array[j] == target. Print the two indices separated by a space.\n\nIt is guaranteed that exactly one valid solution exists. Use 0-based indexing.",
+    "input_format": "First line: integer n (number of elements)\nSecond line: n space-separated integers\nThird line: integer target",
+    "output_format": "Two space-separated integers i and j (i < j) such that array[i] + array[j] equals target.",
+    "constraints": "2 ≤ n ≤ 10^5\n-10^9 ≤ array[i] ≤ 10^9\n-10^9 ≤ target ≤ 10^9\nExactly one valid pair exists\nTime Limit: 1 second\nMemory Limit: 256 MB",
+    "tags": ["arrays", "hash maps"],
+    "examples": [
+      {
+        "input": "4\n2 7 11 15\n9",
+        "output": "0 1"
+      },
+      {
+        "input": "5\n3 2 4 6 1\n6",
+        "output": "1 2"
+      }
+    ],
+    "test_cases": [
+      {"input_data": "4\n2 7 11 15\n9", "expected_output": "0 1", "is_hidden": false},
+      {"input_data": "5\n3 2 4 6 1\n6", "expected_output": "1 2", "is_hidden": false},
+      {"input_data": "2\n1 2\n3", "expected_output": "0 1", "is_hidden": true},
+      {"input_data": "4\n-1 -2 -3 -4\n-7", "expected_output": "2 3", "is_hidden": true},
+      {"input_data": "5\n1 3 5 7 9\n10", "expected_output": "1 3", "is_hidden": true},
+      {"input_data": "4\n0 4 3 0\n0", "expected_output": "0 3", "is_hidden": true},
+      {"input_data": "6\n100 200 300 400 500 600\n900", "expected_output": "2 5", "is_hidden": true}
+    ]
+  },
+  {
+    "title": "Longest Common Prefix",
+    "difficulty": "medium",
+    "description": "Given n strings, find the longest common prefix shared by all of them.\n\nA common prefix is a string that is a prefix of every input string. If no common prefix exists, print an empty line.\n\nPrint the longest such prefix.",
+    "input_format": "First line: integer n (number of strings)\nNext n lines: one string per line",
+    "output_format": "A single line containing the longest common prefix. If no common prefix exists, print an empty line.",
+    "constraints": "1 ≤ n ≤ 200\n1 ≤ length of each string ≤ 200\nStrings contain only lowercase English letters\nTime Limit: 1 second\nMemory Limit: 256 MB",
+    "tags": ["strings"],
+    "examples": [
+      {
+        "input": "3\nflower\nflow\nflight",
+        "output": "fl"
+      },
+      {
+        "input": "3\ndog\ncar\nrace",
+        "output": ""
+      }
+    ],
+    "test_cases": [
+      {"input_data": "3\nflower\nflow\nflight", "expected_output": "fl", "is_hidden": false},
+      {"input_data": "3\ndog\ncar\nrace", "expected_output": "", "is_hidden": false},
+      {"input_data": "1\nabc", "expected_output": "abc", "is_hidden": true},
+      {"input_data": "3\nabc\nabc\nabc", "expected_output": "abc", "is_hidden": true},
+      {"input_data": "2\nab\nabc", "expected_output": "ab", "is_hidden": true},
+      {"input_data": "4\nprefix\npresent\npreview\nprestige", "expected_output": "pre", "is_hidden": true},
+      {"input_data": "3\na\nab\nabc", "expected_output": "a", "is_hidden": true}
+    ]
+  },
+  {
+    "title": "Binary Search",
+    "difficulty": "medium",
+    "description": "Given a sorted array of distinct integers and a target, find the index of the target using binary search. If not found, print -1.\n\nThe array is guaranteed to be sorted in strictly ascending order.",
+    "input_format": "First line: integer n (number of elements)\nSecond line: n space-separated integers in strictly ascending order\nThird line: integer target",
+    "output_format": "A single integer: the 0-based index of target in the array, or -1 if not present.",
+    "constraints": "1 ≤ n ≤ 10^5\n-10^9 ≤ array[i] ≤ 10^9\nAll array elements are distinct and in strictly ascending order\nTime Limit: 1 second\nMemory Limit: 256 MB",
+    "tags": ["arrays", "binary search"],
+    "examples": [
+      {
+        "input": "7\n1 3 5 7 9 11 13\n7",
+        "output": "3"
+      },
+      {
+        "input": "5\n2 4 6 8 10\n5",
+        "output": "-1"
+      }
+    ],
+    "test_cases": [
+      {"input_data": "7\n1 3 5 7 9 11 13\n7", "expected_output": "3", "is_hidden": false},
+      {"input_data": "5\n2 4 6 8 10\n5", "expected_output": "-1", "is_hidden": false},
+      {"input_data": "1\n42\n42", "expected_output": "0", "is_hidden": true},
+      {"input_data": "1\n42\n0", "expected_output": "-1", "is_hidden": true},
+      {"input_data": "6\n-10 -5 0 5 10 15\n-10", "expected_output": "0", "is_hidden": true},
+      {"input_data": "6\n-10 -5 0 5 10 15\n15", "expected_output": "5", "is_hidden": true},
+      {"input_data": "5\n1 2 3 4 5\n3", "expected_output": "2", "is_hidden": true}
+    ]
+  },
+  {
+    "title": "Valid Parentheses",
+    "difficulty": "medium",
+    "description": "Given a string containing only the characters '(', ')', '{', '}', '[' and ']', determine if the input string has valid bracket matching.\n\nA string is valid if every opening bracket has a corresponding closing bracket in the correct order. Print Yes if valid, otherwise No.",
+    "input_format": "A single line containing the bracket string.",
+    "output_format": "Print Yes if the bracket sequence is valid, otherwise print No.",
+    "constraints": "1 ≤ length of string ≤ 10^5\nString contains only characters from: ( ) { } [ ]\nTime Limit: 1 second\nMemory Limit: 256 MB",
+    "tags": ["strings", "stack"],
+    "examples": [
+      {
+        "input": "()[]{}", 
+        "output": "Yes"
+      },
+      {
+        "input": "(]",
+        "output": "No"
+      }
+    ],
+    "test_cases": [
+      {"input_data": "()[]{}", "expected_output": "Yes", "is_hidden": false},
+      {"input_data": "(]", "expected_output": "No", "is_hidden": false},
+      {"input_data": "()", "expected_output": "Yes", "is_hidden": true},
+      {"input_data": "(((", "expected_output": "No", "is_hidden": true},
+      {"input_data": "{[]}", "expected_output": "Yes", "is_hidden": true},
+      {"input_data": "([)]", "expected_output": "No", "is_hidden": true},
+      {"input_data": "{[()]}", "expected_output": "Yes", "is_hidden": true}
+    ]
+  },
+  {
+    "title": "Find Duplicate in Array",
+    "difficulty": "medium",
+    "description": "Given an array of n+1 integers where each integer is between 1 and n inclusive, find and print the one duplicate number.\n\nThere is exactly one duplicate number in the array. The duplicate may appear more than twice.",
+    "input_format": "First line: integer n\nSecond line: n+1 space-separated integers, each between 1 and n inclusive",
+    "output_format": "A single integer representing the duplicate number.",
+    "constraints": "1 ≤ n ≤ 10^5\n1 ≤ array[i] ≤ n\nExactly one number is duplicated\nTime Limit: 1 second\nMemory Limit: 256 MB",
+    "tags": ["arrays", "hash maps"],
+    "examples": [
+      {
+        "input": "4\n1 3 4 2 2",
+        "output": "2"
+      },
+      {
+        "input": "3\n3 1 3 4 2",
+        "output": "3"
+      }
+    ],
+    "test_cases": [
+      {"input_data": "4\n1 3 4 2 2", "expected_output": "2", "is_hidden": false},
+      {"input_data": "4\n3 1 3 4 2", "expected_output": "3", "is_hidden": false},
+      {"input_data": "1\n1 1", "expected_output": "1", "is_hidden": true},
+      {"input_data": "5\n5 4 3 2 1 5", "expected_output": "5", "is_hidden": true},
+      {"input_data": "5\n1 1 2 3 4 5", "expected_output": "1", "is_hidden": true},
+      {"input_data": "5\n1 2 3 4 5 4", "expected_output": "4", "is_hidden": true},
+      {"input_data": "6\n2 6 4 1 3 1 5", "expected_output": "1", "is_hidden": true}
+    ]
+  },
+  {
+    "title": "Anagram Check",
+    "difficulty": "medium",
+    "description": "Given two strings, determine if they are anagrams of each other. Two strings are anagrams if one can be rearranged to form the other (same characters with same frequencies, case-sensitive).\n\nPrint Yes if they are anagrams, otherwise print No.",
+    "input_format": "First line: string s1\nSecond line: string s2",
+    "output_format": "Print Yes if s1 and s2 are anagrams, otherwise print No.",
+    "constraints": "1 ≤ length of s1, s2 ≤ 10^5\nStrings contain only printable ASCII characters\nTime Limit: 1 second\nMemory Limit: 256 MB",
+    "tags": ["strings", "hash maps"],
+    "examples": [
+      {
+        "input": "listen\nsilent",
+        "output": "Yes"
+      },
+      {
+        "input": "hello\nworld",
+        "output": "No"
+      }
+    ],
+    "test_cases": [
+      {"input_data": "listen\nsilent", "expected_output": "Yes", "is_hidden": false},
+      {"input_data": "hello\nworld", "expected_output": "No", "is_hidden": false},
+      {"input_data": "a\na", "expected_output": "Yes", "is_hidden": true},
+      {"input_data": "ab\nba", "expected_output": "Yes", "is_hidden": true},
+      {"input_data": "abc\nabc", "expected_output": "Yes", "is_hidden": true},
+      {"input_data": "aab\nabb", "expected_output": "No", "is_hidden": true},
+      {"input_data": "abc\nABC", "expected_output": "No", "is_hidden": true}
+    ]
+  },
+  {
+    "title": "Maximum Subarray Sum",
+    "difficulty": "medium",
+    "description": "Given an array of integers (which may contain negative numbers), find the contiguous subarray with the largest sum and print that sum.\n\nA subarray is a contiguous portion of the array. The array contains at least one element.",
+    "input_format": "First line: integer n (number of elements)\nSecond line: n space-separated integers",
+    "output_format": "A single integer representing the maximum subarray sum.",
+    "constraints": "1 ≤ n ≤ 10^5\n-10^4 ≤ array[i] ≤ 10^4\nTime Limit: 1 second\nMemory Limit: 256 MB",
+    "tags": ["arrays", "dynamic programming"],
+    "examples": [
+      {
+        "input": "9\n-2 1 -3 4 -1 2 1 -5 4",
+        "output": "6"
+      },
+      {
+        "input": "4\n1 2 3 4",
+        "output": "10"
+      }
+    ],
+    "test_cases": [
+      {"input_data": "9\n-2 1 -3 4 -1 2 1 -5 4", "expected_output": "6", "is_hidden": false},
+      {"input_data": "4\n1 2 3 4", "expected_output": "10", "is_hidden": false},
+      {"input_data": "1\n-5", "expected_output": "-5", "is_hidden": true},
+      {"input_data": "4\n-1 -2 -3 -4", "expected_output": "-1", "is_hidden": true},
+      {"input_data": "5\n5 4 3 2 1", "expected_output": "15", "is_hidden": true},
+      {"input_data": "6\n-5 10 -5 10 -5 10", "expected_output": "20", "is_hidden": true},
+      {"input_data": "5\n0 0 0 0 0", "expected_output": "0", "is_hidden": true}
+    ]
+  },
+  {
+    "title": "Longest Increasing Subsequence",
+    "difficulty": "hard",
+    "description": "Given an array of integers, find the length of the longest strictly increasing subsequence.\n\nA subsequence is a sequence derived from the array by deleting some or no elements without changing the order of the remaining elements. A strictly increasing subsequence has each element strictly greater than the previous one.",
+    "input_format": "First line: integer n (number of elements)\nSecond line: n space-separated integers",
+    "output_format": "A single integer representing the length of the longest strictly increasing subsequence.",
+    "constraints": "1 ≤ n ≤ 2500\n-10^4 ≤ array[i] ≤ 10^4\nTime Limit: 2 seconds\nMemory Limit: 256 MB",
+    "tags": ["dynamic programming", "arrays"],
+    "examples": [
+      {
+        "input": "8\n10 9 2 5 3 7 101 18",
+        "output": "4"
+      },
+      {
+        "input": "6\n0 1 0 3 2 3",
+        "output": "4"
+      }
+    ],
+    "test_cases": [
+      {"input_data": "8\n10 9 2 5 3 7 101 18", "expected_output": "4", "is_hidden": false},
+      {"input_data": "6\n0 1 0 3 2 3", "expected_output": "4", "is_hidden": false},
+      {"input_data": "1\n5", "expected_output": "1", "is_hidden": true},
+      {"input_data": "5\n5 4 3 2 1", "expected_output": "1", "is_hidden": true},
+      {"input_data": "5\n1 2 3 4 5", "expected_output": "5", "is_hidden": true},
+      {"input_data": "7\n3 3 3 3 3 3 3", "expected_output": "1", "is_hidden": true},
+      {"input_data": "9\n2 1 5 3 6 4 8 9 7", "expected_output": "5", "is_hidden": true}
+    ]
+  },
+  {
+    "title": "Number of Islands",
+    "difficulty": "hard",
+    "description": "Given a grid of characters where '1' represents land and '0' represents water, count the number of islands. An island is a group of horizontally or vertically adjacent land cells ('1') surrounded by water.\n\nRead the grid dimensions, then read the grid rows. Print the total count of distinct islands.",
+    "input_format": "First line: two space-separated integers r and c (rows and columns of grid)\nNext r lines: each line contains c characters ('0' or '1') separated by spaces",
+    "output_format": "A single integer representing the number of islands.",
+    "constraints": "1 ≤ r, c ≤ 50\nEach cell is either '0' or '1'\nTime Limit: 2 seconds\nMemory Limit: 256 MB",
+    "tags": ["graph traversal", "BFS", "DFS", "arrays"],
+    "examples": [
+      {
+        "input": "4 5\n1 1 1 1 0\n1 1 0 1 0\n1 1 0 0 0\n0 0 0 0 0",
+        "output": "1"
+      },
+      {
+        "input": "4 5\n1 1 0 0 0\n1 1 0 0 0\n0 0 1 0 0\n0 0 0 1 1",
+        "output": "3"
+      }
+    ],
+    "test_cases": [
+      {"input_data": "4 5\n1 1 1 1 0\n1 1 0 1 0\n1 1 0 0 0\n0 0 0 0 0", "expected_output": "1", "is_hidden": false},
+      {"input_data": "4 5\n1 1 0 0 0\n1 1 0 0 0\n0 0 1 0 0\n0 0 0 1 1", "expected_output": "3", "is_hidden": false},
+      {"input_data": "1 1\n0", "expected_output": "0", "is_hidden": true},
+      {"input_data": "1 1\n1", "expected_output": "1", "is_hidden": true},
+      {"input_data": "3 3\n1 0 1\n0 1 0\n1 0 1", "expected_output": "5", "is_hidden": true},
+      {"input_data": "3 3\n1 1 1\n1 1 1\n1 1 1", "expected_output": "1", "is_hidden": true},
+      {"input_data": "3 3\n0 0 0\n0 0 0\n0 0 0", "expected_output": "0", "is_hidden": true}
+    ]
+  },
+  {
+    "title": "Coin Change Minimum Coins",
+    "difficulty": "hard",
+    "description": "Given a list of coin denominations and a target amount, find the minimum number of coins needed to make up that amount. Each coin can be used an unlimited number of times.\n\nIf the amount cannot be made up by any combination of the given coins, print -1.",
+    "input_format": "First line: integer n (number of coin denominations)\nSecond line: n space-separated integers representing coin values\nThird line: integer amount (target sum)",
+    "output_format": "A single integer representing the minimum number of coins required, or -1 if not possible.",
+    "constraints": "1 ≤ n ≤ 20\n1 ≤ coin[i] ≤ 10^4\n0 ≤ amount ≤ 10^4\nTime Limit: 2 seconds\nMemory Limit: 256 MB",
+    "tags": ["dynamic programming", "greedy"],
+    "examples": [
+      {
+        "input": "3\n1 5 6\n11",
+        "output": "2"
+      },
+      {
+        "input": "2\n2 5\n3",
+        "output": "-1"
+      }
+    ],
+    "test_cases": [
+      {"input_data": "3\n1 5 6\n11", "expected_output": "2", "is_hidden": false},
+      {"input_data": "2\n2 5\n3", "expected_output": "-1", "is_hidden": false},
+      {"input_data": "1\n1\n0", "expected_output": "0", "is_hidden": true},
+      {"input_data": "1\n2\n1", "expected_output": "-1", "is_hidden": true},
+      {"input_data": "3\n1 2 5\n11", "expected_output": "3", "is_hidden": true},
+      {"input_data": "1\n1\n100", "expected_output": "100", "is_hidden": true},
+      {"input_data": "4\n1 5 10 25\n36", "expected_output": "3", "is_hidden": true}
+    ]
+  }
+]

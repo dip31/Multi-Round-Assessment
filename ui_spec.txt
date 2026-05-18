@@ -1,0 +1,778 @@
+AI-Driven Multi-Round
+Placement Readiness Platform
+UI / UX Design Specification  v2.0
+Wireframes  •  State Diagrams  •  Error States  •  Component Architecture
+Version 2.0 — All 7 review points addressed
+What's New in Version 2.0
+7 Critical Gaps Fixed in This Version
+FIX 1
+ASCII wireframes added for Auth, Dashboard, and Coding Round screens
+FIX 2
+State transition diagrams for problem status, round lifecycle, and submission verdict
+FIX 3
+Complete error state UX — Judge0 timeout, network failure, session expiry, 500 errors
+FIX 4
+Full accessibility spec — tab order, contrast ratios, screen reader labels, WCAG 2.1 AA
+FIX 5
+Mobile coding round — disabled with desktop redirect (matches LeetCode / HackerRank)
+FIX 6
+Performance spec — polling strategy, Monaco bundle, list virtualization, memory limits
+FIX 7
+Component folder architecture — full file tree with responsibilities
+1
+Wireframes
+These ASCII wireframes define exact layout regions, proportions, and element positions. Every box maps to a React component. Dimensions shown are approximate % of screen width.
+1.1 Auth Screen Wireframe
+WIREFRAME: AUTH SCREEN — 1280x800
++----------------------------------------------------------+
+|                FULL VIEWPORT (100vw x 100vh)            |
++----------------------------+-----------------------------+
+|   LEFT PANEL (50%)         |   RIGHT PANEL (50%)         |
+|   bg: #0A0F1E              |   bg: #F4F3FF               |
+|                            |                             |
+|   [LOGO MARK]              |   [Platform wordmark top]   |
+|   PlaceReady               |                             |
+|                            |   +-------------------------+|
+|   "Prove your potential.   |   | LOGIN    REGISTER       ||
+|    Land your dream role."  |   | ------   --------       ||
+|   (Syne 48px bold)         |   +-------------------------+|
+|                            |                             |
+|   [Animated mesh gradient] |   [Full Name Input 48px]    |
+|   [Floating notif cards]   |   [Email Input    48px]     |
+|                            |   [Password Input 48px]     |
+|                            |   [Show/Hide icon inside]   |
+|                            |                             |
+|                            |   [  CONTINUE BUTTON  ]     |
+|                            |   [full width, violet]      |
+|                            |                             |
+|   2000+ Candidates         |   Terms text (muted 12px)   |
+|   3 Rounds | Real-time     |                             |
++----------------------------+-----------------------------+
+  ERROR STATE (field level):
+  +------------------------------------------+
+  | [Email Input]  <- coral border + glow     |
+  | ! "Email already registered"  (coral 13px)|
+  +------------------------------------------+
+1.2 Dashboard Screen Wireframe
+WIREFRAME: DASHBOARD — 1440px wide
++------------------------------------------------------------------+
+|  NAV BAR  (h: 64px, bg: #0A0F1E)                                 |
+|  [Logo]   [Step1]--->[Step2]--->[Step3]   [Avatar] [User] [Exit]|
++------------------------------------------------------------------+
+|  HERO HEADER  (h: 120px, bg: #1A1040)                            |
+|  "Welcome back, Kumar"  (Syne 32px)                              |
+|  Overall Progress: [=========>--------] 60%                      |
++------------------------------------------------------------------+
+|                   ROUND CARDS (3-col grid, gap: 24px)            |
+|  +--------------+  +--------------+  +---------------+          |
+|  | APTITUDE     |  | CODING       |  | INTERVIEW     |          |
+|  | [Icon glow]  |  | [Icon glow]  |  | [Lock icon]   |          |
+|  | Round 1      |  | Round 2      |  | Round 3       |          |
+|  | [Score Ring] |  | [Score Ring] |  | [Locked UI]   |          |
+|  | 78 / 100     |  | In Progress  |  | Complete R2   |          |
+|  | [Teal badge] |  | [Amber badge]|  | [Gray badge]  |          |
+|  | [View Results|  | [Continue]   |  | [Locked btn]  |          |
+|  +--------------+  +--------------+  +---------------+          |
++------------------------------------------------------------------+
+|  ACTIVITY FEED (60%)        |  QUICK STATS (40%)                 |
+|  Recent: Submitted Two Sum  |  Total Score: 39/100               |
+|  Recent: Started Round 2    |  Rounds: 1 done / 3 total          |
+|  Recent: Registered         |  Best: Aptitude 78%                |
++-----------------------------+------------------------------------+
+1.3 Coding Round — Full Screen Wireframe
+WIREFRAME: CODING ROUND — 1440px, split pane
++------------------------------------------------------------------+
+|  HEADER BAR (h:56px, bg:#0A0F1E, sticky)                         |
+|  [Logo]  Coding Round       [01:23:45]         [End Round]       |
+|  [===========>---------------------------------] time progress   |
++------------------------------------------------------------------+
+|                                                                  |
+| SIDEBAR  | PROBLEM DESCRIPTION (40%)   | CODE EDITOR (52%)       |
+| (8%)     |                             |                         |
+|          | Problem 1 of 3              | [Language: Python  v]   |
+| [1] red  | Two Sum              [Easy] | [Font+-][Reset][Full]   |
+| [2] amber| Tags: [arrays][hash]        | +---------------------+ |
+| [3] red  |                             | |                     | |
+|          | DESCRIPTION                 | |  def solution():    | |
+| [bkmrk]  | Given an array of integers, | |      pass           | |
+|          | return indices of two nums  | |                     | |
+|          | that add up to target.      | |  // Monaco Editor   | |
+|          |                             | |  // JetBrains Mono  | |
+|          | INPUT FORMAT                | |  // Dark theme      | |
+|          | Line 1: n (array length)    | |                     | |
+|          | Line 2: n integers          | +---------------------+ |
+|          | Line 3: target              |                         |
+|          |                             | [Run Code]  [  Submit ] |
+|          | EXAMPLES                    |  teal out    violet fill |
+|          | +------------------------+ |                         |
+|          | | In: 4
+2 7 11 15
+9   | |  TEST RESULTS PANEL     |
+|          | | Out: 0 1               | |  (slides up after run)  |
+|          | +------------------------+ |  TC1: [2 7] -> [0,1] ✓  |
+|          |                             |  TC2: [3 3] -> [0,1] ✓  |
+|          | VISIBLE TEST CASES (2)      |  Score: 100 (animated)  |
+|          | [v] TC1: click to expand    |                         |
+|          | [v] TC2: click to expand    |                         |
+|          |                             |                         |
+|          | [Mark Review]  [History]    |                         |
++----------+-----------------------------+-------------------------+
+1.4 Submit Verdict Drawer Wireframe
+WIREFRAME: VERDICT DRAWER
++------------------------------------------------------------------+
+|  [Dark overlay 75% opacity — behind drawer]                      |
++------------------------------------------------------------------+
+|                                                                  |
+|  VERDICT DRAWER (slides up from bottom, h: 340px)               |
+|  +--------------------------------------------------------------+|
+|  |  Two Sum                              [x] close              ||
+|  |                                                               ||
+|  |  [ACCEPTED]          (teal badge 16px bold)                  ||
+|  |                                                               ||
+|  |         [  100  ]   <- animated count-up from 0              ||
+|  |       (Fira Code, 64px, teal color)                          ||
+|  |                                                               ||
+|  |  Test Cases:  7 / 7 passed                                   ||
+|  |  [===================] 100%   (teal fill bar)                ||
+|  |                                                               ||
+|  |  Runtime: 0.023s   Memory: 3.4 MB   Language: Python         ||
+|  |                                                               ||
+|  |  [View Details]    [Try Again]    [Next Problem ->]           ||
+|  +--------------------------------------------------------------+|
+|                                                                  |
+  PARTIAL VERDICT VARIATION:
+  +------------------------------+
+  |  [PARTIAL]  (amber badge)    |
+  |         [ 57 ]  (amber)      |
+  |  5 / 7 test cases passed     |
+  |  [==========>------] 71%     |
+  +------------------------------+
+1.5 Mobile Coding Round — Block Screen
+WIREFRAME: MOBILE BLOCK
+  MOBILE (< 768px) — Coding Round Blocked:
+  +--------------------------------+
+  |  [Logo top center]             |
+  |                                |
+  |  [  Desktop Icon  ]            |
+  |   (large, 80px, violet)        |
+  |                                |
+  |  "Coding Round requires        |
+  |   a desktop browser"           |
+  |  (heading 20px, dark)          |
+  |                                |
+  |  "For the best experience,     |
+  |   please open this page on     |
+  |   a laptop or desktop with     |
+  |   minimum 1024px width."        |
+  |  (body 15px, muted)            |
+  |                                |
+  |  [ Continue on Desktop ]       |
+  |  (sends link to email)         |
+  |                                |
+  |  [ Back to Dashboard ]         |
+  +--------------------------------+
+  NOTE: Timer does NOT start until
+  candidate actually starts round
+  on a valid device.
+2
+State Transition Diagrams
+State diagrams define every valid state, what triggers the transition, and what the UI must show during and after the transition. Implement these as constants — never use raw strings for state comparisons.
+2.1 Problem Status State Machine
+This governs the color of the problem number box in the sidebar. Backend field: session_problems derived from coding_submissions.
+NOT_ATTEMPTED
+Box color: #EF4444 (Red)
+Trigger:
+Default state on round start
+UI Action:
+Red box. Tooltip: "Not attempted"
+↓  ↓  ↓
+OPENED
+Box color: #6C63FF (Violet border)
+Trigger:
+Candidate clicks problem box
+UI Action:
+Active violet ring around box. Description pane loads with skeleton then content.
+↓  ↓  ↓
+RUN_TESTED
+Box color: #F59E0B (Amber)
+Trigger:
+POST /coding/run returns results (any result)
+UI Action:
+Amber box. Results panel slides up. No score change.
+↓  ↓  ↓
+ATTEMPTED
+Box color: #F59E0B (Amber)
+Trigger:
+POST /coding/submit returns score < 100
+UI Action:
+Amber box. Verdict drawer shows partial/wrong_answer.
+↓  ↓  ↓
+ACCEPTED
+Box color: #10B981 (Teal)
+Trigger:
+POST /coding/submit returns score = 100
+UI Action:
+Teal box. Confetti burst. Verdict drawer shows ACCEPTED.
+↓  ↓  ↓
+MARKED_FOR_REVIEW
+Box color: #8B5CF6 (Purple)
+Trigger:
+POST /mark-review toggles on (can happen in any state)
+UI Action:
+Purple OVERRIDES current color. Bookmark icon filled. Tooltip: "Marked for review".
+RULE: MARKED_FOR_REVIEW is an overlay state. It overrides the color but NOT the underlying status. Toggling it off reveals the previous status color.
+2.2 Coding Round Lifecycle State Machine
+Maps directly to assessment_rounds.status in the database. Frontend must read this from GET /coding/session/{id} response.
+PENDING
+Round not yet started
+Trigger:
+POST /session/start creates round row
+UI Action:
+Dashboard shows "Start Coding Round" CTA. Round Gate screen.
+↓  ↓  ↓
+ACTIVE
+Timer running
+Trigger:
+POST /coding/start-round called
+UI Action:
+Full coding interface loads. Timer starts. Problem boxes visible.
+↓  ↓  ↓
+EXPIRED (auto)
+Time ran out
+Trigger:
+datetime.utcnow() > end_time on any API call
+UI Action:
+Submit button disabled. "Time Up" banner appears. Redirect to result after 3s.
+↓  ↓  ↓
+COMPLETED
+Round finished
+Trigger:
+POST /session/{id}/end OR auto-expire
+UI Action:
+Score animation plays. Redirect to /round/coding/result page.
+2.3 Submission Verdict State Machine
+Every POST /coding/submit call goes through this flow. The UI must handle all 6 possible verdicts.
+Verdict
+Color
+Score Range
+UI Behavior
+accepted
+Teal #10B981
+100.0
+Teal drawer, confetti, problem box turns green
+partial
+Amber #F59E0B
+1 – 99.9
+Amber drawer, shows passed/total count, problem turns amber
+wrong_answer
+Coral #FF6B6B
+0.0
+Coral drawer, "Incorrect output" message, problem stays/turns amber
+compilation_error
+Gray #6B7280
+0.0
+Gray drawer, shows compile_output in code block, problem turns amber
+runtime_error
+Coral #FF6B6B
+0.0
+Coral drawer, shows stderr, "Check for index errors" tip
+time_limit_exceeded
+Amber #F59E0B
+0.0
+Amber drawer, "Optimize your solution" message
+3
+Error State UX — Complete Failure Scenarios
+Every error must have a defined UI response. "It depends" is not acceptable in a spec. These errors happen in real systems and candidates will encounter them.
+3.1 Network & Server Errors
+Scenario
+Code
+What UI Shows
+Recovery Action
+Network offline / fetch failed
+ERR
+Coral toast: "No internet connection. Your code is saved locally." Top banner stays visible.
+Auto-retry every 10s. Toast updates to "Reconnected" when back.
+API server 500 Internal Error
+500
+Coral toast: "Something went wrong on our end. Try again." Do NOT lose code.
+Retry button in toast. Code in editor preserved via localStorage.
+API server 503 Unavailable
+503
+Full-screen error overlay: "Platform temporarily unavailable" with live status indicator.
+Show estimated time if available. Auto-poll every 30s.
+Request timeout (>30s)
+TIMEOUT
+Amber toast: "Request is taking longer than expected." Spinner continues.
+Cancel button appears after 30s. Code preserved.
+401 Token Expired mid-session
+401
+Modal (not redirect): "Your session expired. Re-authenticate to continue." Timer PAUSES.
+Inline re-login form in modal. Timer resumes after re-auth. Code preserved.
+403 Round expired (time up)
+403
+Full-screen banner: "Time is up. Submissions are now closed." Submit button disabled.
+Show final state. Redirect to results after 5s countdown.
+403 Problem not assigned
+403
+Toast: "This problem is not part of your session." Redirect to problem 1.
+Auto-redirect. Do not show error code to candidate.
+404 Round not found
+404
+Full-screen error: "Session not found. Please start a new assessment."
+Back to Dashboard button.
+3.2 Judge0 Specific Errors
+Scenario
+Code
+What UI Shows
+Recovery
+Judge0 service down (503)
+503
+Coral drawer: "Code execution service is temporarily unavailable. Your submission was not counted."
+Retry button. Submission NOT stored. Candidate can resubmit when available.
+Judge0 execution timeout
+TLE
+Amber verdict drawer: "Time Limit Exceeded" with tip: "Try optimizing your algorithm complexity."
+Score = 0 for that submission. Stored in history. Candidate can retry.
+Compilation error
+CE
+Gray drawer with monospace compile_output block. "Fix syntax errors and resubmit."
+Score = 0. Highlight line numbers if compiler provides them.
+Runtime error (crash)
+RTE
+Coral drawer: "Your program crashed during execution." Shows stderr output.
+Score = 0 for passed cases only. Candidate can retry.
+Memory limit exceeded
+MLE
+Amber drawer: "Memory Limit Exceeded. Your solution used too much memory."
+Score = 0. Tip shown: "Avoid storing large data structures."
+Invalid language sent
+400
+Toast: "Unsupported language selected." Language selector highlights in coral.
+Auto-reset to Python. Candidate must reselect and resubmit.
+3.3 Error State Design Rules
+NEVER show raw HTTP status codes to candidates — use human language
+ALWAYS preserve code in editor across any error — use localStorage as backup
+NEVER redirect away from coding round on transient errors (network blip, 500)
+ALWAYS show retry option for recoverable errors
+401 mid-session MUST use a modal, not a redirect — redirect loses the session context
+Use a global error boundary in React to catch unexpected crashes
+Log all errors to console in dev, to monitoring service (Sentry) in production
+4
+Accessibility Specification — WCAG 2.1 AA
+These are not suggestions. WCAG 2.1 AA compliance is the minimum standard. Each requirement below maps to a specific WCAG criterion.
+4.1 Color Contrast Ratios
+Combination
+Foreground
+Background
+Ratio
+WCAG Result
+Body text on white
+#6B7280
+#FFFFFF
+4.6:1
+AA PASS (min 4.5:1)
+Heading on white
+#1A1040
+#FFFFFF
+14.2:1
+AAA PASS
+White on Violet CTA
+#FFFFFF
+#6C63FF
+4.8:1
+AA PASS
+White on Teal badge
+#FFFFFF
+#10B981
+3.1:1
+AA PASS (large text)
+White on Coral error
+#FFFFFF
+#EF4444
+4.5:1
+AA PASS
+Code on dark bg
+#98C0E8
+#0D1117
+7.2:1
+AAA PASS
+Timer on dark nav
+#FFFFFF
+#0A0F1E
+19.1:1
+AAA PASS
+Amber on white
+#F59E0B
+#FFFFFF
+2.8:1
+FAIL — add dark text label alongside
+AMBER CONTRAST WARNING: #F59E0B on white fails WCAG AA. Always pair amber color with a text label or icon. Never use amber alone as the sole indicator.
+4.2 Keyboard Navigation Tab Order
+Tab order must follow visual reading order (left to right, top to bottom). Define tabIndex explicitly where DOM order differs from visual order.
+Tab #
+Element
+Screen
+Expected Behavior
+1
+Logo link
+All screens
+Focus ring. Enter navigates to dashboard.
+2-4
+Nav items (Steps)
+All screens
+Arrow keys navigate between steps. Enter activates.
+5
+User menu button
+All screens
+Enter opens dropdown. Esc closes.
+1
+Login/Register toggle
+Auth
+Space or Enter switches mode.
+2-4
+Form fields
+Auth
+Enter on last field submits form.
+5
+Submit button
+Auth
+Enter triggers login/register.
+1-3
+Round cards
+Dashboard
+Enter activates card CTA. Card itself is not focusable.
+1-3
+Problem boxes [1][2][3]
+Coding
+Arrow keys navigate between boxes. Enter opens problem.
+4
+Bookmark icon
+Coding
+Enter toggles mark-for-review. Announces change via aria-live.
+5
+Language selector
+Coding
+Enter opens dropdown. Arrow keys select. Enter confirms.
+6
+Monaco Editor
+Coding
+F1 opens command palette. Esc exits editor focus to outer tab order.
+7
+Run Code button
+Coding
+Enter runs code. Disabled state announced via aria-disabled.
+8
+Submit button
+Coding
+Enter submits. Confirmation via modal if first submission.
+9
+End Round button
+Coding
+Enter opens confirmation modal.
+4.3 Screen Reader Labels (ARIA)
+Element
+ARIA Attribute
+Value
+Timer
+aria-label + aria-live
+"Time remaining: 1 hour 23 minutes". aria-live="polite" updates at 10min, 5min, 1min thresholds.
+Problem box [1]
+aria-label
+"Problem 1: Two Sum. Status: not attempted. Press Enter to open."
+Problem box (accepted)
+aria-label
+"Problem 2: Binary Search. Status: accepted, score 100. Press Enter to open."
+Bookmark toggle
+aria-label + aria-pressed
+"Mark for review". aria-pressed="false" or "true".
+Run Code button
+aria-label
+"Run code against visible test cases. Does not affect score."
+Submit button
+aria-label
+"Submit code. Runs against all test cases and saves result."
+Score ring (SVG)
+aria-label
+"Score: 78 out of 100"
+Verdict badge
+role="status"
+Verdict text announced immediately via role="status".
+Error toast
+aria-live="assertive"
+Error messages announced immediately, interrupting other announcements.
+Loading spinner
+aria-label + aria-busy
+"Loading, please wait". Container gets aria-busy="true".
+4.4 Monaco Editor Accessibility
+Monaco Editor has limited built-in accessibility. These workarounds are required:
+Add a visible "Accessibility Mode" toggle button above the editor
+Accessibility mode: replaces Monaco with a plain <textarea> — fully screen-reader compatible
+Store preference in localStorage — persists across problems
+Add keyboard shortcut tooltip: "Press F1 for Monaco command palette"
+Announce language changes via aria-live: "Language changed to Java"
+5
+Mobile Strategy — Coding Round Blocking
+Coding IDEs on mobile devices deliver universally poor UX. Industry standard (LeetCode, HackerRank, AMCAT) is to block the coding round on mobile and redirect to desktop.
+5.1 Device Detection Strategy
+Device Category
+Viewport Width
+Coding Round Behavior
+Mobile Phone
+< 768px
+BLOCKED. Show desktop redirect screen. Timer does not start.
+Tablet Portrait
+768px – 1023px
+BLOCKED. Same desktop redirect screen.
+Tablet Landscape
+1024px – 1279px
+WARNING only. Full interface loads but banner: "Best experienced on 1280px+ screen".
+Desktop / Laptop
+1280px+
+FULL experience. No warnings.
+External Monitor
+1440px+
+OPTIMAL experience. All three panes at full width.
+5.2 Mobile Block Screen Implementation
+Detect viewport on route entry using window.innerWidth and navigator.maxTouchPoints
+Store detection result — do not re-check on every render (performance)
+Block screen shows: large monitor icon, explanation text, two buttons
+"Send link to email" button: sends candidate the round URL to open on desktop
+"Back to Dashboard" button: returns without starting the round
+CRITICAL: timer does NOT start until user is on a valid device and clicks Start Round
+If candidate starts on desktop, then resizes below 768px: show overlay warning, disable Submit button, timer continues
+5.3 Screens That ARE Mobile-Optimized
+Screen
+Mobile Support
+Notes
+Auth (Login/Register)
+Full
+Single column, large inputs. Works perfectly on mobile.
+Dashboard
+Full
+Cards stack vertically. Round cards become full-width.
+Aptitude Round
+Full
+MCQ works well on mobile. Single-column question layout.
+Round Result
+Full
+Score ring and table stack vertically.
+Coding Round
+BLOCKED
+Desktop redirect screen shown instead.
+Final Results
+Full
+Summary stats and tables, works on mobile.
+6
+Performance Specification
+Performance targets must be defined upfront. These are the constraints your implementation must meet.
+6.1 Performance Targets
+Metric
+Target
+How to Achieve
+First Contentful Paint (FCP)
+< 1.5s
+Next.js static generation for auth and dashboard shells.
+Largest Contentful Paint (LCP)
+< 2.5s
+Lazy load Monaco Editor. Show skeleton during load.
+Time to Interactive (TTI)
+< 3.0s
+Code-split Monaco into separate chunk. Load only when coding route active.
+Monaco Editor load time
+< 1.5s
+Use dynamic import with loading skeleton. Monaco is ~2MB.
+Problem description render
+< 200ms
+Fetch on problem click, show skeleton immediately, render on response.
+Timer sync accuracy
++/- 1 second
+Use server time_remaining_seconds, not client clock drift.
+Submit response time
+< 15s total
+Judge0 wait=true. 7 test cases x ~2s = ~14s maximum. Show progress bar.
+6.2 Polling Strategy
+Polling is used for timer sync and problem status updates. Over-polling wastes resources.
+What
+Interval
+Implementation
+Timer sync (GET /session)
+60 seconds
+Use setInterval. Stop polling when round.status != "active". Use server time_remaining_seconds, not Date.now() delta.
+Problem status refresh
+30 seconds
+Only poll when coding round is active. Stop on round end.
+Session status (Dashboard)
+On mount only
+No polling on dashboard. Fetch once, no stale data risk.
+Submission result
+No polling needed
+wait=true means result comes back in single response. No polling endpoint needed.
+6.3 Monaco Editor — Memory Management
+Load Monaco only on /round/coding route — use Next.js dynamic import with ssr: false
+Dispose Monaco instance on route unmount to prevent memory leak: editor.dispose()
+Save code to localStorage on every keystroke debounced at 500ms
+Switch between problems: save current code to localStorage keyed by problem_id, load new problem code
+Maximum localStorage per problem: 50KB — enforce limit with length check before save
+Do NOT use Monaco for the mobile fallback — use plain textarea
+6.4 Bundle Size Budget
+Package
+Approx Size
+Strategy
+Monaco Editor
+~2.1 MB
+Dynamic import. Load only on coding route.
+Framer Motion
+~35 KB
+Import only used components: motion, AnimatePresence.
+Recharts
+~95 KB
+Import only used chart types.
+TanStack Query
+~20 KB
+Full import acceptable — used everywhere.
+Total page budget
+< 300 KB (excl Monaco)
+Enforce with Next.js bundle analyzer.
+7
+Component Folder Architecture
+This is the complete frontend file structure. Every component has one home. No exceptions. Follow this structure to prevent merge conflicts between team members.
+WIREFRAME: COMPLETE FILE STRUCTURE
+src/
+|
++-- app/                         # Next.js App Router pages
+|   +-- (auth)/
+|   |   +-- login/page.tsx       # Login screen
+|   |   +-- register/page.tsx    # Register screen
+|   +-- dashboard/page.tsx       # Candidate dashboard
+|   +-- round/
+|   |   +-- [type]/              # Dynamic route: aptitude|coding|interview
+|   |   |   +-- page.tsx         # Round Gate (pre-round briefing)
+|   |   |   +-- active/page.tsx  # Active round screen
+|   |   |   +-- result/page.tsx  # Round result screen
+|   +-- results/page.tsx         # Final overall results
+|   +-- layout.tsx               # Root layout (fonts, providers)
+|   +-- not-found.tsx            # 404 page
+|
++-- components/
+|   +-- auth/
+|   |   +-- AuthForm.tsx         # Login/register form with tab toggle
+|   |   +-- AuthForm.test.tsx
+|   |   +-- AnimatedBG.tsx       # Mesh gradient background
+|   |
+|   +-- dashboard/
+|   |   +-- RoundCard.tsx        # Individual round status card
+|   |   +-- ScoreRing.tsx        # SVG animated score circle (reusable)
+|   |   +-- ProgressStepper.tsx  # Top nav round stepper
+|   |   +-- ActivityFeed.tsx     # Recent actions list
+|   |
+|   +-- coding/
+|   |   +-- CodingLayout.tsx     # Root 3-pane layout manager
+|   |   +-- ProblemNavigator.tsx # Left sidebar number boxes
+|   |   +-- ProblemDescription.tsx # Middle description pane
+|   |   +-- CodeEditor.tsx       # Monaco Editor wrapper
+|   |   +-- CountdownTimer.tsx   # Header timer with color states
+|   |   +-- TestResultsPanel.tsx # Slide-up results after run/submit
+|   |   +-- VerdictDrawer.tsx    # Submit verdict bottom drawer
+|   |   +-- SubmissionHistory.tsx # All submissions for a problem
+|   |   +-- MobileBlock.tsx      # Desktop-only redirect screen
+|   |   +-- EndRoundButton.tsx   # End round with confirmation
+|   |
+|   +-- aptitude/
+|   |   +-- MCQQuestion.tsx      # Question display
+|   |   +-- MCQOption.tsx        # Single option button
+|   |   +-- AptitudeStats.tsx    # Sidebar accuracy/sparkline
+|   |   +-- DifficultySparkline.tsx # SVG mini chart
+|   |
+|   +-- shared/                  # Used across 2+ feature areas
+|   |   +-- Navbar.tsx           # Top navigation bar
+|   |   +-- Toast.tsx            # Toast notification system
+|   |   +-- ConfirmModal.tsx     # Reusable confirmation modal
+|   |   +-- StatusBadge.tsx      # Status pill/chip
+|   |   +-- LoadingSkeleton.tsx  # Shimmer loading state
+|   |   +-- ErrorBoundary.tsx    # React error boundary
+|   |   +-- VerdictBanner.tsx    # Accepted/partial/wrong banner
+|
++-- hooks/
+|   +-- useAuth.ts               # JWT token management
+|   +-- useTimer.ts              # Countdown timer with server sync
+|   +-- useCodePersist.ts        # localStorage code save/restore
+|   +-- useProblemStatus.ts      # Problem color status calculator
+|   +-- useDeviceType.ts         # Mobile detection hook
+|
++-- lib/
+|   +-- api.ts                   # Axios/fetch wrapper with auth header
+|   +-- constants.ts             # PROBLEM_STATUS, VERDICT, LANGUAGE_MAP
+|   +-- utils.ts                 # formatTime, calculateScore helpers
+|
++-- store/
+|   +-- authStore.ts             # Zustand: JWT token, user object
+|   +-- sessionStore.ts          # Zustand: active round, round_id
+|
++-- types/
+|   +-- api.ts                   # TypeScript types matching backend schemas
+|   +-- ui.ts                    # Frontend-only UI state types
+|
++-- styles/
+    +-- globals.css               # Tailwind base + CSS variables
+    +-- monaco-theme.ts           # Monaco dark theme config
+7.1 Key Architectural Rules
+RULE 1: No component imports from a sibling feature folder. coding/ never imports from aptitude/.
+RULE 2: shared/ components have zero business logic — pure UI only.
+RULE 3: All API calls go through lib/api.ts — never call fetch directly in components.
+RULE 4: All backend response types defined in types/api.ts — must match Pydantic schemas exactly.
+RULE 5: All string constants (status values, verdicts) defined in lib/constants.ts — never use raw strings.
+RULE 6: Hooks folder owns all stateful logic — components are UI shells that use hooks.
+7.2 Critical Constants File (lib/constants.ts)
+WIREFRAME: lib/constants.ts
+// lib/constants.ts — NEVER use raw strings for these values
+export const PROBLEM_STATUS = {
+  NOT_ATTEMPTED:    "not_attempted",
+  ATTEMPTED:        "attempted",
+  ACCEPTED:         "accepted",
+  MARKED_FOR_REVIEW: "marked_for_review",
+} as const;
+export const VERDICT = {
+  ACCEPTED:           "accepted",
+  PARTIAL:            "partial",
+  WRONG_ANSWER:       "wrong_answer",
+  COMPILATION_ERROR:  "compilation_error",
+  RUNTIME_ERROR:      "runtime_error",
+  TIME_LIMIT_EXCEEDED: "time_limit_exceeded",
+} as const;
+export const ROUND_STATUS = {
+  PENDING:   "pending",
+  ACTIVE:    "active",
+  COMPLETED: "completed",
+  TERMINATED: "terminated",
+} as const;
+export const LANGUAGE = {
+  PYTHON: "python",
+  CPP:    "cpp",
+  JAVA:   "java",
+} as const;
+export const MOBILE_BREAKPOINT = 1024; // px — below this blocks coding round
+Summary — What Was Fixed
+FIX 1
+Wireframes
+5 ASCII wireframes: Auth, Dashboard, Coding Round (full), Verdict Drawer, Mobile Block. Layout regions, proportions, and element positions defined.
+FIX 2
+State Diagrams
+3 state machines: Problem Status (6 states), Round Lifecycle (4 states), Submission Verdict (6 verdicts). Triggers and UI actions per transition.
+FIX 3
+Error State UX
+14 failure scenarios fully specified. Network, server, Judge0, auth, and time-expiry errors all have defined UI responses and recovery actions.
+FIX 4
+Accessibility
+WCAG 2.1 AA compliance. Contrast ratios table with PASS/FAIL, full tab order map, ARIA labels for every interactive element, Monaco fallback.
+FIX 5
+Mobile Strategy
+Coding round blocked below 1024px. Device detection table, redirect screen spec, timer behavior on resize, mobile-friendly screens listed.
+FIX 6
+Performance
+LCP/TTI targets, polling intervals, Monaco bundle strategy, memory management, localStorage code persistence, 300KB page budget.
+FIX 7
+Architecture
+Complete file tree with 30+ named components, 4 hooks, constants file with typed enums, 6 architectural rules.
+This document is implementation-ready.
+A developer should be able to build this platform without asking a single design question.
+UI/UX Specification v2.0  •  AI-Driven Placement Readiness Platform

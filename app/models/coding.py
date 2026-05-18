@@ -1,116 +1,101 @@
 """
-SQLAlchemy ORM models for coding round tables.
+ORM Models — Coding Round
 
-Maps to the following PostgreSQL tables:
-- coding_problems
-- coding_test_cases
-- coding_submissions
+Maps to PostgreSQL tables: coding_problems, coding_test_cases,
+coding_submissions, session_problems.
+
+Schema changes must go through Alembic migrations — never edit columns here
+directly without a corresponding migration.
 """
 
 from datetime import datetime
-from typing import List, Optional
-
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, text
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy import (Column, Integer, String, Text, Float, Boolean,
+                        DateTime, ForeignKey, ARRAY, UniqueConstraint)
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
 
 from app.database.base import Base
 
 
 class CodingProblem(Base):
-    """Represents a coding challenge problem.
-
-    Columns mirror the ``coding_problems`` table in ``database/schema.sql``.
-    """
-
     __tablename__ = "coding_problems"
 
-    id: int = Column(Integer, primary_key=True, index=True)
-    title: str = Column(String(200), nullable=False)
-    description: str = Column(Text, nullable=False)
-    difficulty: Optional[str] = Column(String(10), nullable=True)
-    tags: Optional[List[str]] = Column(ARRAY(Text), nullable=True)
-    input_format: Optional[str] = Column(Text, nullable=True)
-    output_format: Optional[str] = Column(Text, nullable=True)
-    constraints: Optional[str] = Column(Text, nullable=True)
-    created_by: Optional[int] = Column(Integer, ForeignKey("users.id"), nullable=True)
-    created_at: datetime = Column(DateTime, server_default=func.now())
+    id            = Column(Integer, primary_key=True, index=True)
+    title         = Column(String(200), nullable=False)
+    description   = Column(Text, nullable=False)
+    difficulty    = Column(String(10), nullable=False)   # easy | medium | hard
+    tags          = Column(ARRAY(String), default=[])
+    input_format  = Column(Text)
+    output_format = Column(Text)
+    constraints   = Column(Text)
+    created_by    = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at    = Column(DateTime, default=datetime.utcnow)
 
-    # ── Relationships ─────────────────────────────────────────────────
-    test_cases = relationship(
-        "CodingTestCase",
-        back_populates="problem",
-        lazy="select",
-        cascade="all, delete-orphan",
-    )
-    submissions = relationship(
-        "CodingSubmission",
-        back_populates="problem",
-        lazy="select",
-    )
-
-    def __repr__(self) -> str:
-        return f"<CodingProblem id={self.id} title={self.title!r}>"
+    test_cases          = relationship("CodingTestCase",
+                                       back_populates="problem",
+                                       cascade="all, delete-orphan")
+    submissions         = relationship("CodingSubmission",
+                                       back_populates="problem")
+    session_assignments = relationship("SessionProblem",
+                                       back_populates="problem")
 
 
 class CodingTestCase(Base):
-    """Represents a test case for validating code submissions.
-
-    Columns mirror the ``coding_test_cases`` table in ``database/schema.sql``.
-    """
-
     __tablename__ = "coding_test_cases"
 
-    id: int = Column(Integer, primary_key=True, index=True)
-    problem_id: int = Column(
-        Integer,
-        ForeignKey("coding_problems.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    input_data: str = Column(Text, nullable=False)
-    expected_output: str = Column(Text, nullable=False)
-    is_hidden: bool = Column(Boolean, nullable=False, server_default=text("1"))
-    case_order: int = Column(Integer, nullable=False, server_default=text("0"))
-    explanation: Optional[str] = Column(Text, nullable=True)
+    id              = Column(Integer, primary_key=True, index=True)
+    problem_id      = Column(Integer, ForeignKey("coding_problems.id"),
+                             nullable=False)
+    input_data      = Column(Text, nullable=False)
+    expected_output = Column(Text, nullable=False)
+    is_hidden       = Column(Boolean, default=True)
+    case_order      = Column(Integer, default=0)
+    explanation     = Column(Text)
 
-    # ── Relationships ─────────────────────────────────────────────────
     problem = relationship("CodingProblem", back_populates="test_cases")
-
-    def __repr__(self) -> str:
-        return f"<CodingTestCase id={self.id} problem_id={self.problem_id}>"
 
 
 class CodingSubmission(Base):
-    """Records a code submission with Judge0 execution results.
-
-    Columns mirror the ``coding_submissions`` table in ``database/schema.sql``.
-    """
-
     __tablename__ = "coding_submissions"
 
-    id: int = Column(Integer, primary_key=True, index=True)
-    round_id: int = Column(
-        Integer,
-        ForeignKey("assessment_rounds.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    problem_id: int = Column(Integer, ForeignKey("coding_problems.id"), nullable=False)
-    code: str = Column(Text, nullable=False)
-    language: Optional[str] = Column(String(50), nullable=True)
-    judge0_token: Optional[str] = Column(String(100), nullable=True, index=True)
-    status: Optional[str] = Column(String(30), nullable=True)
-    score: Optional[float] = Column(Float, nullable=True)
-    execution_time: Optional[float] = Column(Float, nullable=True)
-    memory_used: Optional[int] = Column(Integer, nullable=True)
-    submitted_at: datetime = Column(DateTime, server_default=func.now())
+    id             = Column(Integer, primary_key=True, index=True)
+    round_id       = Column(Integer, ForeignKey("assessment_rounds.id"),
+                            nullable=False)
+    problem_id     = Column(Integer, ForeignKey("coding_problems.id"),
+                            nullable=False)
+    code           = Column(Text, nullable=False)
+    language       = Column(String(50), nullable=False)
+    judge0_token   = Column(String(100), nullable=True)
+    status         = Column(String(30), default="running")
+    # status values: running | accepted | wrong_answer |
+    #                runtime_error | time_limit_exceeded | compilation_error
+    score          = Column(Float, default=0.0)
+    execution_time = Column(Float, nullable=True)
+    memory_used    = Column(Integer, nullable=True)
+    submitted_at   = Column(DateTime, default=datetime.utcnow)
 
-    # ── Relationships ─────────────────────────────────────────────────
     problem = relationship("CodingProblem", back_populates="submissions")
 
-    def __repr__(self) -> str:
-        return (
-            f"<CodingSubmission id={self.id} problem_id={self.problem_id} "
-            f"status={self.status!r}>"
-        )
+
+class SessionProblem(Base):
+    """
+    Assigns specific problems to a candidate's coding round.
+    Created when candidate calls POST /coding/start-round.
+    Enforces AMCAT-style problem isolation — candidates only see
+    and can submit problems listed in their session_problems rows.
+    """
+    __tablename__ = "session_problems"
+
+    id               = Column(Integer, primary_key=True, index=True)
+    round_id         = Column(Integer, ForeignKey("assessment_rounds.id",
+                                                   ondelete="CASCADE"), nullable=False)
+    problem_id       = Column(Integer, ForeignKey("coding_problems.id"),
+                               nullable=False)
+    problem_order    = Column(Integer, default=0)
+    marked_for_review = Column(Boolean, default=False)
+    assigned_at      = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint('round_id', 'problem_id', name='uq_session_problem'),
+    )
+
+    problem = relationship("CodingProblem", back_populates="session_assignments")

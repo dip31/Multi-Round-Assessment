@@ -11,7 +11,7 @@ from app.core.auth import get_current_user
 from app.database.db import get_db
 from app.models.user import User
 from app.schemas.assessment import SessionResponse
-from app.services.assessment_service import create_session, get_active_session
+from app.services.session_service import create_session, get_active_session
 
 router = APIRouter(prefix="/session", tags=["Assessment Sessions"])
 
@@ -27,17 +27,17 @@ def start_session(
     current_user: User = Depends(get_current_user),
 ) -> SessionResponse:
     """Create a new assessment session for the authenticated user.
-
-    Raises:
-        HTTPException (409): If the user already has an active session.
+    
+    If an active session exists, returns it.
+    If no active session exists, creates a new one.
+    This allows users to continue their session or start fresh after completion.
     """
     existing = get_active_session(db, user_id=current_user.id)
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="An active session already exists",
-        )
+        # Return existing active session
+        return existing
 
+    # Create new session
     session = create_session(db, user_id=current_user.id)
     return session
 
@@ -63,4 +63,36 @@ def session_status(
             detail="No active session found",
         )
 
+    return session
+
+
+@router.post(
+    "/restart",
+    response_model=SessionResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Restart assessment - terminate old session and create new one",
+)
+def restart_session(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> SessionResponse:
+    """Terminate any existing active session and create a fresh new one.
+    
+    This allows users to start completely fresh rounds.
+    The old session will be marked as 'terminated'.
+    """
+    # Terminate any existing active session
+    existing = get_active_session(db, user_id=current_user.id)
+    if existing:
+        existing.status = "terminated"
+        existing.completed_at = datetime.now(timezone.utc)
+        # Also terminate all active rounds
+        for round in existing.rounds:
+            if round.status in ["pending", "active"]:
+                round.status = "terminated"
+                round.completed_at = datetime.now(timezone.utc)
+        db.commit()
+
+    # Create new session
+    session = create_session(db, user_id=current_user.id)
     return session

@@ -12,6 +12,13 @@ from app.database.base import Base
 import app.models.user  # noqa: F401
 import app.models.assessment  # noqa: F401
 
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy import ARRAY
+
+@compiles(ARRAY, "sqlite")
+def compile_array(element, compiler, **kw):
+    return "TEXT"
+
 # Import the FastAPI instance as `application` to avoid shadowing `app` package
 from app.main import app as application
 

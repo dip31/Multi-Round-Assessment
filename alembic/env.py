@@ -5,7 +5,14 @@ Imports the application ``Base`` and all model modules so that
 ``--autogenerate`` can detect schema changes.
 """
 
+import os
+import sys
 from logging.config import fileConfig
+
+# Add project root to sys.path so 'app' module can be imported
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
@@ -16,12 +23,16 @@ from app.database.base import Base
 # Import every model module so that Base.metadata is fully populated.
 import app.models.user  # noqa: F401
 import app.models.assessment  # noqa: F401
+import app.models.coding  # noqa: F401
+import app.models.aptitude  # noqa: F401
 
 # ── Alembic Config ────────────────────────────────────────────────────
 config = context.config
 
 # Override sqlalchemy.url with the value from our Settings.
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# Escape % characters for ConfigParser by doubling them
+database_url = settings.DATABASE_URL.replace('%', '%%')
+config.set_main_option("sqlalchemy.url", database_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

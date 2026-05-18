@@ -5,7 +5,7 @@ SQLAlchemy ORM models for assessment sessions and rounds.
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, text
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, text
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -62,6 +62,8 @@ class AssessmentRound(Base):
     max_questions: int = Column(Integer, nullable=False, server_default=text("20"))
     started_at: datetime = Column(DateTime, server_default=func.now())
     completed_at: Optional[datetime] = Column(DateTime, nullable=True)
+    time_limit_minutes: Optional[int] = Column(Integer, nullable=True)
+    end_time: Optional[datetime] = Column(DateTime, nullable=True)
 
     # ── Relationships ─────────────────────────────────────────────────
     session = relationship("AssessmentSession", back_populates="rounds")

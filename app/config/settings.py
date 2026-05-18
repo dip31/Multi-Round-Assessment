@@ -26,7 +26,23 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     # ── CORS ──────────────────────────────────────────────────────────
-    ALLOWED_ORIGINS: List[str] = ["http://localhost:3000"]
+    ALLOWED_ORIGINS: List[str] = [
+        "http://localhost:3000",
+        "http://localhost:4000",
+        "http://192.168.56.1:3000",
+        "http://192.168.56.1:4000",
+    ]
+
+    # ── Judge0 Code Execution ─────────────────────────────────────────
+    JUDGE0_API_URL: str = "http://localhost:2358"
+    JUDGE0_API_KEY: str = ""
+    JUDGE0_MAX_POLL_ATTEMPTS: int = 30
+    JUDGE0_POLL_INTERVAL_SECONDS: float = 1.0
+    USE_MOCK_JUDGE0: bool = False
+
+    # ── Coding Round Configuration ────────────────────────────────────
+    CODING_ROUND_TIME_LIMIT_MINUTES: int = 90
+    CODING_ROUND_PROBLEMS_COUNT: int = 3
 
     model_config = {
         "env_file": ".env",

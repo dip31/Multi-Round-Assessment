@@ -32,6 +32,30 @@ def create_session(db: Session, user_id: int) -> AssessmentSession:
     db.add(session)
     db.commit()
     db.refresh(session)
+
+    # Initialise the three assessment rounds for this session:
+    # aptitude, coding, interview — all start as "pending".
+    rounds = [
+        AssessmentRound(
+            session_id=session.id,
+            round_type="aptitude",
+            status="pending",
+        ),
+        AssessmentRound(
+            session_id=session.id,
+            round_type="coding",
+            status="pending",
+        ),
+        AssessmentRound(
+            session_id=session.id,
+            round_type="interview",
+            status="pending",
+        ),
+    ]
+    db.add_all(rounds)
+    db.commit()
+    db.refresh(session)
+
     return session
 
 
@@ -41,7 +65,7 @@ def get_active_session(db: Session, user_id: int) -> Optional[AssessmentSession]
     Returns:
         The ``AssessmentSession`` if one is active, otherwise ``None``.
     """
-    return (
+    session = (
         db.query(AssessmentSession)
         .filter(
             AssessmentSession.user_id == user_id,
@@ -49,6 +73,26 @@ def get_active_session(db: Session, user_id: int) -> Optional[AssessmentSession]
         )
         .first()
     )
+
+    if session is None:
+        return None
+
+    # Backfill rounds for legacy sessions that were created without them.
+    if not session.rounds:
+        round_types = ["aptitude", "coding", "interview"]
+        new_rounds = [
+            AssessmentRound(
+                session_id=session.id,
+                round_type=rt,
+                status="pending",
+            )
+            for rt in round_types
+        ]
+        db.add_all(new_rounds)
+        db.commit()
+        db.refresh(session)
+
+    return session
 
 
 def complete_session(db: Session, session_id: int) -> Optional[AssessmentSession]:
