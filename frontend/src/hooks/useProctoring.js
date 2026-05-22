@@ -31,22 +31,7 @@ export const useProctoring = (sessionId, onWarning) => {
     const idleCountRef = useRef(0);
     const isActiveRef = useRef(true);
 
-    // Reset idle timer
-    const resetIdleTimer = useCallback(() => {
-        if (idleTimerRef.current) {
-            clearTimeout(idleTimerRef.current);
-        }
-        
-        isActiveRef.current = true;
-        
-        idleTimerRef.current = setTimeout(() => {
-            if (isActiveRef.current) {
-                handleIdleActivity();
-            }
-        }, 60000); // 60 seconds
-    }, []);
-
-    // Handle idle activity detection
+    // Handle idle activity detection (MOVED UP - declared before use)
     const handleIdleActivity = useCallback(async () => {
         idleCountRef.current += 1;
         const count = idleCountRef.current;
@@ -78,8 +63,23 @@ export const useProctoring = (sessionId, onWarning) => {
         }
 
         // Reset timer for next detection
-        resetIdleTimer();
-    }, [sessionId, onWarning, resetIdleTimer]);
+        isActiveRef.current = false;
+    }, [sessionId, onWarning]);
+
+    // Reset idle timer
+    const resetIdleTimer = useCallback(() => {
+        if (idleTimerRef.current) {
+            clearTimeout(idleTimerRef.current);
+        }
+        
+        isActiveRef.current = true;
+        
+        idleTimerRef.current = setTimeout(() => {
+            if (isActiveRef.current) {
+                handleIdleActivity();
+            }
+        }, 60000); // 60 seconds
+    }, [handleIdleActivity]);
 
     // Handle tab switching and loss of window focus (e.g. popups)
     const handleFocusLoss = useCallback(async () => {

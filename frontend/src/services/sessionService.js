@@ -21,3 +21,8 @@ export const completeSession = async () => {
     const response = await api.post('/session/complete');
     return response.data;
 };
+
+export const startCodingAfterAptitude = async () => {
+    const response = await api.post('/coding/start-after-aptitude');
+    return response.data;
+};

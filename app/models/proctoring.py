@@ -8,7 +8,10 @@ from datetime import datetime
 from typing import Optional
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, text
-from sqlalchemy.dialects.postgresql import JSONB
+try:
+    from sqlalchemy.dialects.postgresql import JSONB
+except Exception:
+    from sqlalchemy import JSON as JSONB
 from sqlalchemy.orm import relationship
 
 from app.database.base import Base

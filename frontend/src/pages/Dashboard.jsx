@@ -15,7 +15,7 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(true);
     const [roundStatus, setRoundStatus] = useState({
         aptitude: 'pending',
-        coding: 'locked',
+        coding: 'pending',
         interview: 'pending'
     });
     const navigate = useNavigate();
@@ -46,22 +46,24 @@ export default function Dashboard() {
         return 'Candidate';
     };
 
-    const getRoundCompletionMap = (sessionData) => {
-        const roundMap = {
-            aptitude: false,
-            coding: false,
-            interview: false,
+    const getRoundStatusMap = (sessionData) => {
+        const roundStatusMap = {
+            aptitude: 'pending',
+            coding: 'pending',
+            interview: 'pending',
         };
 
         const rounds = Array.isArray(sessionData?.rounds) ? sessionData.rounds : [];
         rounds.forEach((round) => {
             const roundType = round?.round_type;
-            if (Object.prototype.hasOwnProperty.call(roundMap, roundType)) {
-                roundMap[roundType] = round?.status === 'completed';
-            }
+            if (!Object.prototype.hasOwnProperty.call(roundStatusMap, roundType)) return;
+            const s = (round?.status || '').toLowerCase();
+            if (s === 'completed') roundStatusMap[roundType] = 'completed';
+            else if (s === 'active') roundStatusMap[roundType] = 'active';
+            else if (s === 'pending') roundStatusMap[roundType] = 'pending';
         });
 
-        return roundMap;
+        return roundStatusMap;
     };
 
     useEffect(() => {
@@ -71,37 +73,38 @@ export default function Dashboard() {
         return () => clearInterval(interval);
     }, []);
 
-    useEffect(() => {
-        const fetchProgress = async () => {
-            setLoading(true);
-            try {
-                const res = await api.get('/session/status');
-                const data = res.data;
+    const fetchProgress = async () => {
+        setLoading(true);
+        try {
+            const res = await api.get('/session/status');
+            const data = res.data;
 
-                const completionMap = getRoundCompletionMap(data);
-                const completed = Object.values(completionMap).filter(Boolean).length;
-                const newStatus = {
-                    aptitude: completionMap.aptitude ? 'completed' : 'pending',
-                    coding: completionMap.coding ? 'completed' : 'pending',
-                    interview: completionMap.interview ? 'completed' : 'pending',
-                };
-                
-                setCompletedRounds(completed);
-                setRoundStatus(newStatus);
-                setProgress((completed / 3) * 100);
-            } catch (err) {
-                setCompletedRounds(0);
-                setRoundStatus({
-                    aptitude: 'pending',
-                    coding: 'pending',
-                    interview: 'pending',
-                });
-                setProgress(0);
-            } finally {
-                setLoading(false);
-            }
-        };
-        
+            const statusMap = getRoundStatusMap(data);
+            const completed = Object.values(statusMap).filter((v) => v === 'completed').length;
+            // Translate to the UI's expected status values (completed, pending, locked)
+            const newStatus = {
+                aptitude: statusMap.aptitude === 'completed' ? 'completed' : 'pending',
+                coding: statusMap.coding === 'completed' ? 'completed' : 'pending',
+                interview: statusMap.interview === 'completed' ? 'completed' : 'pending',
+            };
+
+            setCompletedRounds(completed);
+            setRoundStatus(newStatus);
+            setProgress((completed / 3) * 100);
+        } catch (err) {
+            setCompletedRounds(0);
+            setRoundStatus({
+                aptitude: 'pending',
+                coding: 'pending',
+                interview: 'pending',
+            });
+            setProgress(0);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
         fetchProgress();
     }, []);
 
@@ -114,8 +117,18 @@ export default function Dashboard() {
         }
     };
 
-    const handleStartCoding = () => {
-        setComingSoonModal('Coding Challenge');
+    const handleStartCoding = async () => {
+        try {
+            // Start coding round (server will create/assign if not already present)
+            await api.post('/coding/start');
+            // Refresh dashboard state so UI reflects new active round immediately
+            await fetchProgress();
+            setToast({ type: 'success', message: 'Coding round started — good luck!' });
+            // small delay so the user sees the toast before navigation
+            setTimeout(() => navigate('/coding'), 350);
+        } catch (err) {
+            setToast({ type: 'error', message: 'Unable to start coding round right now.' });
+        }
     };
 
     const handleResumeUpload = async () => {
@@ -139,9 +152,8 @@ export default function Dashboard() {
             case 'completed':
                 return '✓';
             case 'pending':
+            case 'active':
                 return '→';
-            case 'locked':
-                return '🔒';
             default:
                 return '○';
         }
@@ -152,9 +164,8 @@ export default function Dashboard() {
             case 'completed':
                 return 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400';
             case 'pending':
+            case 'active':
                 return 'bg-primary/20 border-primary/30 text-primary';
-            case 'locked':
-                return 'bg-gray-500/20 border-gray-500/30 text-gray-400';
             default:
                 return 'bg-gray-500/20 border-gray-500/30 text-gray-400';
         }
@@ -262,7 +273,7 @@ export default function Dashboard() {
                                     <span className="text-xl">💻</span>
                                 </div>
                                 <span className={`text-xs font-label uppercase tracking-widest px-3 py-1 rounded-full border ${getStatusColor(roundStatus.coding)}`}>
-                                    {roundStatus.coding === 'completed' ? 'Completed' : 'Pending'}
+                                    {roundStatus.coding === 'completed' ? 'Completed' : 'Ready'}
                                 </span>
                             </div>
                             <h3 className="text-xl font-headline font-bold text-on-surface mb-2">Coding Challenge</h3>
@@ -287,10 +298,10 @@ export default function Dashboard() {
                                 className={`w-full py-3 px-4 rounded-lg font-semibold transition-all active:scale-95 ${
                                     roundStatus.coding === 'completed'
                                         ? 'bg-emerald-500/20 text-emerald-400 cursor-default'
-                                        : 'bg-gray-500/20 text-gray-300 hover:bg-gray-500/30'
+                                        : 'hero-gradient text-on-primary-container shadow-lg shadow-primary/20 hover:shadow-lg hover:shadow-primary/30'
                                 }`}
                             >
-                                {roundStatus.coding === 'completed' ? 'Completed' : 'Coming Soon'} {getStatusIcon(roundStatus.coding)}
+                                {roundStatus.coding === 'completed' ? 'Completed' : 'Start Challenge'} {getStatusIcon(roundStatus.coding)}
                             </button>
                         </div>
 
@@ -354,20 +365,6 @@ export default function Dashboard() {
                 ) : null}
 
                 {/* Coming Soon Modal */}
-                {comingSoonModal && (
-                    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-                        <div className="bg-surface-container border border-outline-variant/20 rounded-2xl p-8 max-w-sm shadow-2xl">
-                            <h2 className="text-2xl font-headline font-bold text-on-surface mb-2">{comingSoonModal}</h2>
-                            <p className="text-on-surface-variant mb-6 text-sm">This round is coming soon. Please check back later or contact support for updates.</p>
-                            <button
-                                onClick={() => setComingSoonModal(null)}
-                                className="w-full hero-gradient text-on-primary-container font-semibold py-3 rounded-lg transition-all active:scale-95"
-                            >
-                                Got it
-                            </button>
-                        </div>
-                    </div>
-                )}
             </main>
         </div>
     );

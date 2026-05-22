@@ -21,9 +21,10 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://postgres:password@localhost/ai_placement_platform"
 
     # ── JWT / Auth ────────────────────────────────────────────────────
-    SECRET_KEY: str = "change-me-in-production"
+    # CRITICAL: Secure random key generated - DO NOT share or commit to public repos
+    SECRET_KEY: str  # REQUIRED: Must be set in .env file
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 120  # 2 hours for long interviews
 
     # ── CORS ──────────────────────────────────────────────────────────
     ALLOWED_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173", "http://localhost:5174", "http://localhost:5175"]
@@ -31,6 +32,13 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
     SARVAM_API_KEY: str = ""
     REDIS_URL: str = "redis://localhost:6379"
+    # Skip expensive model warmups during local development so auth/session
+    # endpoints become available immediately after startup.
+    SKIP_HEAVY_STARTUP: bool = True
+    # ── Coding Round
+    CODING_ROUND_TIME_LIMIT_MINUTES: int = 30
+    # Maximum test cases evaluated per problem to avoid long sync runs
+    CODING_MAX_TEST_CASES_PER_PROBLEM: int = 20
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

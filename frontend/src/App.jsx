@@ -9,6 +9,7 @@ import AptitudeTest from './pages/AptitudeTest';
 import ResultPage from './pages/ResultPage';
 import ResumeUpload from './pages/ResumeUpload';
 import HumanLikeInterview from './pages/HumanLikeInterview';
+import CodingRound from './pages/CodingRound';
 import InterviewReport from './pages/InterviewReport';
 import LandingPage from './pages/LandingPage';
 import Analytics from './pages/Analytics';
@@ -108,6 +109,14 @@ export default function App() {
               <ErrorBoundary>
                 <AptitudeTest />
               </ErrorBoundary>
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/coding"
+          element={
+            <PrivateRoute>
+              <CodingRound />
             </PrivateRoute>
           }
         />

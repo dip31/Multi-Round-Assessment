@@ -238,6 +238,23 @@ CREATE TABLE coding_test_cases (
 );
 
 
+    -- ============================================
+    -- SESSION PROBLEMS (assigned coding problems per round)
+    -- ============================================
+    CREATE TABLE session_problems (
+        id SERIAL PRIMARY KEY,
+        round_id INTEGER NOT NULL,
+        problem_id INTEGER NOT NULL,
+        problem_order INTEGER NOT NULL DEFAULT 0,
+        marked_for_review BOOLEAN NOT NULL DEFAULT FALSE,
+        assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (round_id) REFERENCES assessment_rounds(id) ON DELETE CASCADE,
+        FOREIGN KEY (problem_id) REFERENCES coding_problems(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX idx_session_problems_round ON session_problems(round_id);
+
+
 
 -- ============================================
 -- CODING SUBMISSIONS

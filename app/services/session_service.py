@@ -29,14 +29,15 @@ def _expire_stale_session(db: Session, user_id: int) -> None:
     This ensures stale sessions (e.g. user left without completing) are
     cleaned up automatically so a new session can be started.
     """
-    cutoff = text(f"NOW() - INTERVAL '{SESSION_TIMEOUT_MINUTES} minutes'")
+    # Use a DB-agnostic datetime cutoff instead of SQL-specific INTERVAL
+    cutoff_dt = datetime.now(timezone.utc) - timedelta(minutes=SESSION_TIMEOUT_MINUTES)
 
     stale = (
         db.query(AssessmentSession)
         .filter(
             AssessmentSession.user_id == user_id,
             AssessmentSession.status == "in_progress",
-            AssessmentSession.started_at < cutoff,
+            AssessmentSession.started_at < cutoff_dt,
         )
         .all()
     )

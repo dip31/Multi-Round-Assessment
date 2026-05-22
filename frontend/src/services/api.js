@@ -31,8 +31,11 @@ api.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response?.status === 401) {
-            // Do not redirect if the failure happened during login itself
-            if (!error.config.url.includes('/auth/login')) {
+            const requestUrl = error.config?.url || '';
+            const skipAuthRedirect = error.config?.skipAuthRedirect === true;
+
+            // Allow auth flows to handle their own error states without global logout.
+            if (!skipAuthRedirect && !requestUrl.includes('/auth/login') && !requestUrl.includes('/auth/me') && !requestUrl.includes('/auth/register')) {
                 localStorage.removeItem('access_token');
                 if (window.location.pathname.startsWith('/admin')) {
                     window.location.href = '/admin/login';

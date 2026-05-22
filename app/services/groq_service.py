@@ -5,6 +5,7 @@ Uses the Groq API (llama-3.3-70b-versatile model) with fallback responses
 to ensure robustness against API failures.
 """
 
+import hashlib
 import json
 import logging
 import re
@@ -113,16 +114,21 @@ class GroqService:
 
         if result and "questions" in result:
             questions = result["questions"]
-            for q in questions:
+            # Add unique IDs and role to each question
+            for idx, q in enumerate(questions, 1):
                 q["role"] = detected_role
+                # Generate unique ID based on question content
+                q["id"] = hashlib.md5(q["question"].encode()).hexdigest()[:12]
             return questions
 
         # Fallback: use retrieved docs directly
         print("[RAG] Using fallback questions from KB")
         fallback = []
-        for doc in retrieved_docs[:count]:
+        for idx, doc in enumerate(retrieved_docs[:count], 1):
+            question_text = doc.get("text", "Tell me about yourself")
             fallback.append({
-                "question": doc.get("text", "Tell me about yourself"),
+                "id": hashlib.md5(question_text.encode()).hexdigest()[:12],
+                "question": question_text,
                 "difficulty": doc.get("difficulty", "medium").upper(),
                 "topic": doc.get("topic", detected_role),
                 "phase": "TECHNICAL",
@@ -132,9 +138,12 @@ class GroqService:
             })
 
         # Pad with HR questions if fallback is short
+        hr_idx = len(fallback) + 1
         while len(fallback) < count:
+            question_text = "Tell me about a challenging project you worked on."
             fallback.append({
-                "question": "Tell me about a challenging project you worked on.",
+                "id": f"hr_fallback_{hr_idx}",
+                "question": question_text,
                 "difficulty": "MEDIUM",
                 "topic": "experience",
                 "phase": "HR",
@@ -142,6 +151,7 @@ class GroqService:
                 "personalized": False,
                 "role": detected_role
             })
+            hr_idx += 1
 
         return fallback[:count]
 

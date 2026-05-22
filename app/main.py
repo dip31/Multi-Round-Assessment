@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app.api.v1.router import api_router
+from app.config.settings import settings
 from app.middleware.cors import add_cors_middleware
 from app.middleware.rate_limit import add_rate_limit_middleware
 from app.middleware.request_logging import add_request_logging_middleware
@@ -35,25 +36,39 @@ logging.basicConfig(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Warm up embedding model at startup
-    # Prevents 30s delay on first resume upload
-    try:
-        from app.services.embedding_service import (
-            get_embedding_model
-        )
-        get_embedding_model()
-        print("[Startup] Embedding model ready")
-    except Exception as e:
-        print(f"[Startup] Embedding warmup failed: {e}")
+    if not settings.SKIP_HEAVY_STARTUP:
+        # Warm up embedding model at startup
+        # Prevents 30s delay on first resume upload
+        try:
+            from app.services.embedding_service import (
+                get_embedding_model
+            )
+            get_embedding_model()
+            print("[Startup] Embedding model ready")
+        except Exception as e:
+            print(f"[Startup] Embedding warmup failed: {e}")
 
-    # Warm up FAISS index at startup
-    try:
-        from app.services.retriever_service import load_kb
-        load_kb()
-        print("[Startup] KB index ready")
-    except Exception as e:
-        print(f"[Startup] KB index load failed: {e}")
-        print("[Startup] Run: python scripts/build_kb_index.py")
+        # Warm up FAISS index at startup
+        try:
+            from app.services.retriever_service import load_kb
+            load_kb()
+            print("[Startup] KB index ready")
+        except Exception as e:
+            print(f"[Startup] KB index load failed: {e}")
+            print("[Startup] Run: python scripts/build_kb_index.py")
+
+        # Warm up YOLO phone detection model
+        try:
+            from app.services.phone_detection_service import get_yolo_model
+            model = get_yolo_model()
+            if model is not None:
+                print("[Startup] YOLOv8n model ready")
+            else:
+                print("[Startup] YOLOv8n model not available")
+        except Exception as e:
+            print(f"[Startup] YOLO warmup failed: {e}")
+    else:
+        print("[Startup] Heavy model warmups skipped for fast local auth/login startup")
 
     yield
 

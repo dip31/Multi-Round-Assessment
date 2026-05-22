@@ -4,7 +4,7 @@ Pydantic schemas for aptitude round request / response payloads.
 
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class NextQuestionResponse(BaseModel):
@@ -18,7 +18,7 @@ class NextQuestionResponse(BaseModel):
 class SubmitAnswerRequest(BaseModel):
     """Request payload for submitting an answer."""
     question_id: int
-    selected_option: str
+    selected_option: Optional[str] = Field(None, pattern="^[A-D]$", examples=["A"])
     response_time: float
 
 

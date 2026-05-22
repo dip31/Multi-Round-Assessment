@@ -4,7 +4,7 @@ from .assessment import AssessmentSession
 from .aptitude import AptitudeQuestion, AptitudeAttempt, RLSession
 from .proctoring import ProctoringEvent
 from .advanced_proctoring import AdvancedProctoringEvent
-from .interview import InterviewSession, ApprovedQuestionPool, InterviewTurn
+from .interview import InterviewSession, ApprovedQuestionPool, InterviewTurn, ProctoringViolation
 from .admin_question_feedback import AdminQuestionFeedback
 
 __all__ = [
@@ -18,5 +18,6 @@ __all__ = [
     "InterviewSession",
     "ApprovedQuestionPool",
     "InterviewTurn",
+    "ProctoringViolation",
     "AdminQuestionFeedback",
 ]

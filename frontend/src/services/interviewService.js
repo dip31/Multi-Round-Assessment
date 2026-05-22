@@ -103,3 +103,27 @@ export const getReport = async (interviewId) => {
     const response = await api.get(`/interview/session/${interviewId}/report`);
     return response.data;
 };
+
+/**
+ * Analyze a frame for proctoring (phone detection)
+ */
+export const analyzeFrame = async (sessionId, frameBlob) => {
+    const formData = new FormData();
+    formData.append('frame', frameBlob, 'frame.jpg');
+    const response = await api.post(`/interview/advanced-proctoring/analyze-frame?session_id=${sessionId}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+};
+
+export const logProctoringEvent = async (sessionId, eventType, options = {}) => {
+    const body = {
+        session_id: sessionId,
+        event_type: eventType,
+        confidence_score: options.confidence_score,
+        face_count: options.face_count,
+        metadata: options.metadata || {},
+    };
+    const response = await api.post(`/interview/advanced-proctoring/log-event`, body);
+    return response.data;
+};

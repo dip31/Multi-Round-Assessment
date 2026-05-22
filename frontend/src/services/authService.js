@@ -30,38 +30,38 @@ export const registerUser = async (name, email, password) => {
 export const loginUser = async (email, password) => {
     const response = await api.post('/auth/login', { email, password });
     
-    // Store the access token first so /auth/me can use it via interceptor.
     if (response.data.access_token) {
         const normalizedEmail = email.trim().toLowerCase();
         const userNameMap = readUserNameMap();
         const resolvedName = userNameMap[normalizedEmail] || email.split('@')[0] || 'Candidate';
 
         localStorage.setItem('access_token', response.data.access_token);
+        localStorage.setItem('user_email', normalizedEmail);
+        localStorage.setItem('email', normalizedEmail);
+        localStorage.setItem('user_name', resolvedName);
+        localStorage.setItem('full_name', resolvedName);
+        localStorage.setItem('user', JSON.stringify({ name: resolvedName, email: normalizedEmail }));
 
-        try {
-            const meResponse = await api.get('/auth/me');
-            const me = meResponse.data;
+        // Resolve the profile in the background so login is never blocked by /auth/me.
+        api.get('/auth/me', { skipAuthRedirect: true })
+            .then((meResponse) => {
+                const me = meResponse.data;
+                const finalName = me?.name || resolvedName;
+                const finalEmail = (me?.email || normalizedEmail).toLowerCase();
 
-            const finalName = me?.name || resolvedName;
-            const finalEmail = (me?.email || normalizedEmail).toLowerCase();
+                localStorage.setItem('user_email', finalEmail);
+                localStorage.setItem('email', finalEmail);
+                localStorage.setItem('user_name', finalName);
+                localStorage.setItem('full_name', finalName);
+                localStorage.setItem('user', JSON.stringify(me));
 
-            localStorage.setItem('user_email', finalEmail);
-            localStorage.setItem('email', finalEmail);
-            localStorage.setItem('user_name', finalName);
-            localStorage.setItem('full_name', finalName);
-            localStorage.setItem('user', JSON.stringify(me));
-
-            const existingMap = readUserNameMap();
-            existingMap[finalEmail] = finalName;
-            writeUserNameMap(existingMap);
-        } catch {
-            // Fallback when /auth/me is temporarily unavailable.
-            localStorage.setItem('user_email', normalizedEmail);
-            localStorage.setItem('email', normalizedEmail);
-            localStorage.setItem('user_name', resolvedName);
-            localStorage.setItem('full_name', resolvedName);
-            localStorage.setItem('user', JSON.stringify({ name: resolvedName, email: normalizedEmail }));
-        }
+                const existingMap = readUserNameMap();
+                existingMap[finalEmail] = finalName;
+                writeUserNameMap(existingMap);
+            })
+            .catch(() => {
+                // Keep the fallback identity from login so the UI can proceed.
+            });
     }
     
     return response.data;

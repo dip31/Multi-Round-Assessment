@@ -50,51 +50,25 @@ export const useBasicAdvancedProctoring = (sessionId, onViolation = null) => {
   
   const violationCountsRef = useRef({});
   
-  // Browser monitoring event handlers
-  const handleVisibilityChange = useCallback(() => {
-    if (document.hidden) {
-      logProctoringEvent(BASIC_EVENT_TYPES.TAB_SWITCH, {
-        timestamp: Date.now(),
-        userAgent: navigator.userAgent,
-      });
-    }
-  }, []);
-  
-  const handleFullscreenChange = useCallback(() => {
-    if (!document.fullscreenElement) {
-      logProctoringEvent(BASIC_EVENT_TYPES.FULLSCREEN_EXIT, {
-        timestamp: Date.now(),
-        wasFullscreen: true,
-      });
-    }
-  }, []);
-  
-  const handleBeforeUnload = useCallback((event) => {
-    logProctoringEvent(BASIC_EVENT_TYPES.PAGE_RELOAD, {
-      timestamp: Date.now(),
-      userAgent: navigator.userAgent,
+  // Update overall risk score (MOVED UP - declared before use)
+  const updateRiskScore = useCallback(() => {
+    const counts = violationCountsRef.current;
+    let totalRisk = 0;
+    let totalEvents = 0;
+    
+    Object.entries(counts).forEach(([eventType, count]) => {
+      const threshold = BASIC_PROCTORING_CONFIG.VIOLATION_THRESHOLDS[eventType];
+      if (threshold) {
+        totalRisk += (count * threshold.riskWeight);
+        totalEvents += count;
+      }
     });
     
-    // Show warning to user
-    event.preventDefault();
-    event.returnValue = 'Are you sure you want to leave? Your session will be flagged.';
+    const averageRisk = totalEvents > 0 ? totalRisk / totalEvents : 0;
+    setRiskScore(Math.min(averageRisk, 1.0));
   }, []);
   
-  const handleUserActivity = useCallback(() => {
-    // Reset idle timer
-    if (window.idleTimer) {
-      clearTimeout(window.idleTimer);
-    }
-    
-    window.idleTimer = setTimeout(() => {
-      logProctoringEvent(BASIC_EVENT_TYPES.IDLE_ACTIVITY, {
-        timestamp: Date.now(),
-        idleDuration: BASIC_PROCTORING_CONFIG.IDLE_TIMEOUT,
-      });
-    }, BASIC_PROCTORING_CONFIG.IDLE_TIMEOUT);
-  }, []);
-  
-  // Log proctoring event to backend
+  // Log proctoring event to backend (MOVED UP - declared before use)
   const logProctoringEvent = useCallback(async (eventType, metadata = {}) => {
     try {
       const eventData = {
@@ -141,25 +115,52 @@ export const useBasicAdvancedProctoring = (sessionId, onViolation = null) => {
     } catch (error) {
       console.error('Error logging proctoring event:', error);
     }
-  }, [sessionId, onViolation]);
+  }, [sessionId, onViolation, updateRiskScore]);
   
-  // Update overall risk score
-  const updateRiskScore = useCallback(() => {
-    const counts = violationCountsRef.current;
-    let totalRisk = 0;
-    let totalEvents = 0;
-    
-    Object.entries(counts).forEach(([eventType, count]) => {
-      const threshold = BASIC_PROCTORING_CONFIG.VIOLATION_THRESHOLDS[eventType];
-      if (threshold) {
-        totalRisk += (count * threshold.riskWeight);
-        totalEvents += count;
-      }
+  // Browser monitoring event handlers
+  const handleVisibilityChange = useCallback(() => {
+    if (document.hidden) {
+      logProctoringEvent(BASIC_EVENT_TYPES.TAB_SWITCH, {
+        timestamp: Date.now(),
+        userAgent: navigator.userAgent,
+      });
+    }
+  }, [logProctoringEvent]);
+  
+  const handleFullscreenChange = useCallback(() => {
+    if (!document.fullscreenElement) {
+      logProctoringEvent(BASIC_EVENT_TYPES.FULLSCREEN_EXIT, {
+        timestamp: Date.now(),
+        wasFullscreen: true,
+      });
+    }
+  }, [logProctoringEvent]);
+  
+  const handleBeforeUnload = useCallback((event) => {
+    logProctoringEvent(BASIC_EVENT_TYPES.PAGE_RELOAD, {
+      timestamp: Date.now(),
+      userAgent: navigator.userAgent,
     });
     
-    const averageRisk = totalEvents > 0 ? totalRisk / totalEvents : 0;
-    setRiskScore(Math.min(averageRisk, 1.0));
-  }, []);
+    // Show warning to user
+    event.preventDefault();
+    event.returnValue = 'Are you sure you want to leave? Your session will be flagged.';
+  }, [logProctoringEvent]);
+  
+  const handleUserActivity = useCallback(() => {
+    // Reset idle timer
+    if (window.idleTimer) {
+      clearTimeout(window.idleTimer);
+    }
+    
+    window.idleTimer = setTimeout(() => {
+      logProctoringEvent(BASIC_EVENT_TYPES.IDLE_ACTIVITY, {
+        timestamp: Date.now(),
+        idleDuration: BASIC_PROCTORING_CONFIG.IDLE_TIMEOUT,
+      });
+    }, BASIC_PROCTORING_CONFIG.IDLE_TIMEOUT);
+  }, [logProctoringEvent]);
+    
   
   // Initialize all monitoring systems
   const initializeProctoring = useCallback(async () => {

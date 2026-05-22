@@ -400,6 +400,76 @@ export const useAdvancedProctoring = (sessionId, onViolation = null) => {
     }, 60000);
   }, []);
 
+  // --- Frame capture and phone detection extension ---
+  const frameIntervalRef = useRef(2000); // default 2s
+  const lastPhoneViolationAtRef = useRef(0);
+
+  const captureAndAnalyzeFrame = useCallback(async () => {
+    try {
+      if (!videoRef.current || !canvasRef.current) return;
+      const canvas = canvasRef.current;
+      const video = videoRef.current;
+      const ctx = canvas.getContext('2d');
+      canvas.width = 320;
+      canvas.height = 240;
+      ctx.drawImage(video, 0, 0, 320, 240);
+      const blob = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', 0.7));
+      if (!blob) return;
+
+      const start = performance.now();
+      const formData = new FormData();
+      formData.append('frame', blob, 'frame.jpg');
+      const resp = await api.post(`/interview/advanced-proctoring/analyze-frame?session_id=${sessionId}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      const data = resp.data;
+      const elapsed = performance.now() - start;
+
+      // Adaptive rate
+      if (elapsed > 400) {
+        frameIntervalRef.current = 5000;
+      } else {
+        // restore after 3 consecutive fast frames
+        // maintain a simple counter on detectionResults
+      }
+
+      if (data && data.phone_count > 0) {
+        const now = Date.now();
+        if (now - lastPhoneViolationAtRef.current > 10000) {
+          lastPhoneViolationAtRef.current = now;
+          // Trigger violation callback
+          const violation = {
+            event_type: 'phone_detected',
+            metadata: { phone_count: data.phone_count },
+          };
+          onViolationRef.current && onViolationRef.current(violation);
+          // Log via backend wrapper
+          logProctoringEventRef.current('MULTIPLE_PERSON_DETECTED', { phone_count: data.phone_count });
+        }
+      }
+    } catch (err) {
+      console.error('Error captureAndAnalyzeFrame', err);
+    }
+  }, [sessionId]);
+
+  // Frame capture loop
+  useEffect(() => {
+    let timer = null;
+    let consecutiveFast = 0;
+    const loop = async () => {
+      const before = performance.now();
+      await captureAndAnalyzeFrame();
+      const elapsed = performance.now() - before;
+      if (elapsed < 200) consecutiveFast += 1; else consecutiveFast = 0;
+      if (consecutiveFast >= 3) frameIntervalRef.current = 2000;
+      timer = setTimeout(loop, frameIntervalRef.current);
+    };
+    if (isMonitoringRef.current) {
+      timer = setTimeout(loop, frameIntervalRef.current);
+    }
+    return () => clearTimeout(timer);
+  }, [captureAndAnalyzeFrame]);
+
   const handleCopyPaste = useCallback((e) => {
     logProctoringEventRef.current(EVENT_TYPES.COPY_PASTE, {
       timestamp: Date.now(),

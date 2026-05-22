@@ -67,6 +67,9 @@ from app.modules.interview.schemas.interview_schema import (
     RealtimeFeedbackResponse,
 )
 from app.modules.interview.services.interview_rl_engine import InterviewRLEngine
+from app.services.phone_detection_service import detect_phones
+from app.services.proctoring_logger import log_violation
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -75,16 +78,43 @@ router = APIRouter(
     tags=["Interview Round"],
 )
 
+
+class LogEventRequest(BaseModel):
+    session_id: int
+    event_type: str
+    confidence_score: float | None = None
+    face_count: int | None = None
+    metadata: dict | None = None
+
 # Global instances (will be set by app lifespan)
 ml_models = {}  # To be populated by app/main.py
 groq_service = GroqService(settings.GROQ_API_KEY)
 
-# Redis client for caching questions and TTS
-try:
-    redis_client = redis.from_url(settings.REDIS_URL, decode_responses=False)
-except Exception as e:
-    logger.warning(f"Redis connection failed: {str(e)} - caching disabled")
-    redis_client = None
+redis_client: Optional[redis.Redis] = None
+
+
+def _get_redis_client() -> Optional[redis.Redis]:
+    """Lazily initialize Redis so the interview flow still works without Docker."""
+    global redis_client
+
+    if redis_client is not None:
+        return redis_client
+
+    redis_url = settings.REDIS_URL
+    if not redis_url:
+        logger.info("Redis cache disabled: REDIS_URL not configured")
+        return None
+
+    try:
+        client = redis.from_url(redis_url, decode_responses=False)
+        client.ping()
+        redis_client = client
+        logger.info("Redis cache connected for interview question caching")
+        return redis_client
+    except Exception as e:
+        logger.info(f"Redis cache unavailable; continuing without cache: {str(e)}")
+        redis_client = None
+        return None
 
 
 # ── ENDPOINT 1: POST /interview/resume/upload ──────────────────────────
@@ -133,9 +163,9 @@ async def upload_resume(
             extracted_skills=extracted["skills"],
             extracted_projects=extracted["projects"],
             question_pool=pool,
-            admin_approved=False,
+            admin_approved=True,
             approved_by=None,
-            approved_at=None,
+            approved_at=datetime.utcnow(),
             detected_role=detected_role
         )
         db.add(pool_record)
@@ -216,6 +246,50 @@ async def get_pool(
         extracted_skills=pool.extracted_skills,
         detected_role=pool.detected_role
     )
+
+
+@router.post("/advanced-proctoring/analyze-frame")
+async def analyze_frame(
+    frame: UploadFile = File(...),
+    session_id: int = Query(..., description="Interview session id"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Validate session ownership
+    interview = db.query(InterviewSession).filter(InterviewSession.id == session_id).first()
+    if not interview:
+        raise HTTPException(status_code=400, detail="Invalid session_id")
+    # Ensure current_user owns the session or is admin
+    if interview.session_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized for this session")
+
+    content = await frame.read()
+    detections = detect_phones(content)
+    phone_count = len(detections)
+
+    # Log detections as separate violations
+    for det in detections:
+        await log_violation(db, session_id, event_type="phone_detected", confidence_score=det.get("confidence"), face_count=None, metadata={"bbox": det.get("bbox")})
+
+    return {"violations": detections, "phone_count": phone_count}
+
+
+@router.post("/advanced-proctoring/log-event")
+async def log_event(
+    req: LogEventRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Verify session ownership
+    interview = db.query(InterviewSession).filter(InterviewSession.id == req.session_id).first()
+    if not interview:
+        raise HTTPException(status_code=400, detail="Invalid session_id")
+    if interview.session_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized for this session")
+
+    success = await log_violation(db, req.session_id, req.event_type, req.confidence_score, req.face_count, req.metadata)
+
+    return {"status": "logged" if success else "queued", "event_type": req.event_type}
 
 
 # ── ENDPOINT 3: PUT /interview/pool/{pool_id}/approve ────────────────
@@ -372,6 +446,21 @@ async def get_next_question(
     question_text = selected["question"]
     question_id = selected.get("id", hashlib.md5(question_text.encode()).hexdigest()[:8])
 
+    # CRITICAL: Check if this question was already asked
+    if question_id in asked_ids:
+        logger.warning(f"Question {question_id} was already asked! This should not happen.")
+        # Try to find a different question
+        for q in available:
+            alt_id = q.get("id", hashlib.md5(q["question"].encode()).hexdigest()[:8])
+            if alt_id not in asked_ids:
+                selected = q
+                question_text = selected["question"]
+                question_id = alt_id
+                logger.info(f"Switched to alternative question {question_id}")
+                break
+
+    logger.info(f"Selected question {question_id}: {question_text[:50]}... (asked_ids: {len(asked_ids)})")
+
     # Save question to rl_state (question ownership)
     rl_engine.current_question_text = question_text
     rl_engine.current_question_difficulty = selected.get("difficulty", difficulty)
@@ -386,19 +475,22 @@ async def get_next_question(
     cache_key = f"question:{hashlib.md5(question_text.encode()).hexdigest()}:{difficulty}"
     rephrased = None
 
-    if redis_client:
+    redis_cache = _get_redis_client()
+    if redis_cache:
         try:
-            cached = redis_client.get(cache_key)
-            if cached:
+            cached = redis_cache.get(cache_key)
+            if isinstance(cached, (bytes, bytearray)):
                 rephrased = cached.decode()
+            elif isinstance(cached, str):
+                rephrased = cached
         except Exception as e:
             logger.warning(f"Redis get failed: {str(e)}")
 
     if not rephrased:
         rephrased = groq_service.rephrase_question(question_text, difficulty)
-        if redis_client:
+        if redis_cache:
             try:
-                redis_client.setex(cache_key, 86400, rephrased)
+                redis_cache.setex(cache_key, 86400, rephrased)
             except Exception as e:
                 logger.warning(f"Redis set failed: {str(e)}")
 

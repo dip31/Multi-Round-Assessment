@@ -9,9 +9,9 @@ Integrates LlamaIndex with Groq LLM for:
 
 import json
 import logging
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
-from llama_index.core import Document, VectorStoreIndex, PromptTemplate
+from llama_index.core import PromptTemplate
 from groq import Groq
 
 import fitz  # PyMuPDF
@@ -32,34 +32,7 @@ class RAGOrchestrator:
         """
         self.client = Groq(api_key=groq_api_key)
         self.model = "llama-3.3-70b-versatile"
-        
-        # Try to use OpenAI embeddings, fall back to local if not available
-        try:
-            if openai_api_key:
-                try:
-                    from llama_index.embeddings.openai import OpenAIEmbedding
-                    self.embed_model = OpenAIEmbedding(api_key=openai_api_key)
-                except ImportError:
-                    logger.warning("OpenAI embeddings not available, using HuggingFace")
-                    from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-                    self.embed_model = HuggingFaceEmbedding(
-                        model_name="sentence-transformers/all-MiniLM-L6-v2"
-                    )
-            else:
-                from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-                self.embed_model = HuggingFaceEmbedding(
-                    model_name="sentence-transformers/all-MiniLM-L6-v2"
-                )
-        except Exception as e:
-            logger.warning(f"Embedding model init failed: {str(e)}, using local fallback")
-            try:
-                from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-                self.embed_model = HuggingFaceEmbedding(
-                    model_name="sentence-transformers/all-MiniLM-L6-v2"
-                )
-            except Exception as e2:
-                logger.error(f"Failed to load any embedding model: {str(e2)}")
-                raise
+        self.groq_llm = None
         
         self.index = None
         self.query_engine = None
@@ -71,9 +44,9 @@ class RAGOrchestrator:
             temperature=temperature,
             max_tokens=max_tokens,
         )
-        return completion.choices[0].message.content
+        return completion.choices[0].message.content or ""
     
-    def parse_resume(self, file_bytes: bytes) -> Dict[str, any]:
+    def parse_resume(self, file_bytes: bytes) -> Dict[str, Any]:
         """
         Parse PDF resume using LlamaIndex document parsing.
         
@@ -94,11 +67,8 @@ class RAGOrchestrator:
             full_text = ""
             for page_num in range(len(doc)):
                 page = doc[page_num]
-                full_text += page.get_text()
+                full_text += str(page.get_text())
             doc.close()
-            
-            # Create LlamaIndex document
-            document = Document(text=full_text)
             
             # Use Groq to extract structured information
             extraction_prompt = PromptTemplate("""
@@ -128,9 +98,19 @@ class RAGOrchestrator:
             
             response_text = self._complete(extraction_prompt.format(resume_text=full_text))
             
+            # Clean up response text in case groq adds markdown ticks
+            cleaned_text = response_text.strip()
+            if cleaned_text.startswith("```json"):
+                cleaned_text = cleaned_text[7:]
+            if cleaned_text.startswith("```"):
+                cleaned_text = cleaned_text[3:]
+            if cleaned_text.endswith("```"):
+                cleaned_text = cleaned_text[:-3]
+            cleaned_text = cleaned_text.strip()
+            
             # Parse JSON response
             try:
-                extracted_data = json.loads(response_text)
+                extracted_data = json.loads(cleaned_text)
             except json.JSONDecodeError:
                 # If JSON parsing fails, use fallback extraction
                 extracted_data = self._fallback_extraction(full_text)
@@ -149,7 +129,7 @@ class RAGOrchestrator:
                 "full_content": ""
             }
     
-    def _fallback_extraction(self, text: str) -> Dict:
+    def _fallback_extraction(self, text: str) -> Dict[str, Any]:
         """Fallback extraction using simple keyword matching."""
         skill_keywords = {
             "Python", "Java", "React", "FastAPI", "SQL", "Machine Learning",
@@ -176,23 +156,9 @@ class RAGOrchestrator:
         Args:
             resume_text: Full resume text content
         """
-        try:
-            # Create document for indexing
-            document = Document(text=resume_text)
-            
-            # Build vector index
-            self.index = VectorStoreIndex.from_documents(
-                [document],
-                embed_model=self.embed_model,
-            )
-            
-            # Create query engine with Groq LLM
-            self.query_engine = self.index.as_query_engine(llm=self.groq_llm)
-            
-        except Exception as e:
-            logger.error(f"Failed to build resume index: {str(e)}")
-            self.index = None
-            self.query_engine = None
+        logger.info("Resume vector indexing is disabled; using LLM-only question generation")
+        self.index = None
+        self.query_engine = None
     
     def generate_questions(
         self,
@@ -287,7 +253,7 @@ class RAGOrchestrator:
             Response from the resume based on the query
         """
         if not self.query_engine:
-            return "Resume index not initialized"
+            return "Resume index not initialized or query engine unavailable"
         
         try:
             response = self.query_engine.query(query)

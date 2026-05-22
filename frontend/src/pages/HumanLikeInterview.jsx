@@ -7,6 +7,7 @@ import {
     synthesizeSpeech,
 } from '../services/interviewService';
 import useBasicProctoring from '../hooks/useBasicProctoring';
+import TimerComponent from '../components/TimerComponent';
 import { Toast } from '../components/Toast';
 
 const STATES = {
@@ -454,28 +455,33 @@ export default function HumanLikeInterview() {
                         )}
 
                         {interviewState === STATES.WAITING_FOR_CANDIDATE && (
-                            <button
-                                onClick={startRecording}
-                                className="group relative px-12 py-6 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 rounded-2xl font-bold text-xl transition-all duration-300 transform hover:scale-105 active:scale-95 shadow-2xl"
-                            >
-                                <div className="flex items-center gap-3">
-                                    <span className="text-3xl">🎤</span>
-                                    <span>Start Speaking</span>
-                                </div>
-                                <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl blur opacity-30 group-hover:opacity-50 transition-opacity"></div>
-                            </button>
+                            <div className="flex items-center gap-4">
+                                <TimerComponent
+                                    duration={currentDifficulty === 'EASY' ? 60 : currentDifficulty === 'MEDIUM' ? 90 : 120}
+                                    mode="thinking"
+                                    onThinkingComplete={() => startRecording()}
+                                    onEarlyStart={() => startRecording()}
+                                    isRecording={false}
+                                    recordingSeconds={0}
+                                />
+                            </div>
                         )}
 
                         {interviewState === STATES.CANDIDATE_SPEAKING && (
-                            <button
-                                onClick={stopAndSubmit}
-                                className="px-12 py-6 bg-slate-700 hover:bg-slate-600 rounded-2xl font-bold text-xl transition-all duration-300 transform hover:scale-105 active:scale-95"
-                            >
-                                <div className="flex items-center gap-3">
-                                    <span className="text-3xl">⏹️</span>
-                                    <span>Done Speaking</span>
-                                </div>
-                            </button>
+                            <div className="flex items-center gap-4">
+                                <TimerComponent
+                                    duration={180}
+                                    mode="recording"
+                                    isRecording={true}
+                                    recordingSeconds={recordingSeconds}
+                                />
+                                <button
+                                    onClick={stopAndSubmit}
+                                    className="px-6 py-3 bg-slate-700 hover:bg-slate-600 rounded-2xl font-bold text-lg"
+                                >
+                                    Done Speaking
+                                </button>
+                            </div>
                         )}
 
                         {interviewState === STATES.PROCESSING_RESPONSE && (

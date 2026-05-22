@@ -5,7 +5,7 @@ import Timer from '../components/Timer';
 import Toast from '../components/shared/Toast';
 import ProctoringWarning from '../components/ProctoringWarning';
 import { getNextQuestion, submitAnswer } from '../services/aptitudeService';
-import { getSessionStatus, completeSession } from '../services/sessionService';
+import { getSessionStatus, startCodingAfterAptitude } from '../services/sessionService';
 import { useAdvancedProctoring } from '../hooks/useAdvancedProctoring';
 
 const MAX_QUESTIONS = 10;
@@ -36,7 +36,7 @@ export default function AptitudeTest() {
 
     const finalizeAndGoToResult = useCallback(async () => {
         try {
-            await completeSession();
+            await startCodingAfterAptitude();
         } catch {
             // Ignore session finalization errors and continue to the result page.
         } finally {

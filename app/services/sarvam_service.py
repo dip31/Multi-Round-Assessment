@@ -30,17 +30,23 @@ logger = logging.getLogger(__name__)
 SARVAM_API_KEY = settings.SARVAM_API_KEY
 REDIS_URL = settings.REDIS_URL
 
-# Initialize Redis client
-redis_client: Optional[redis.Redis] = None
-try:
-    redis_client = redis.from_url(REDIS_URL, decode_responses=False)
-    # Test connection
-    if redis_client is not None:
-        redis_client.ping()
+def _initialize_redis_client() -> Optional[redis.Redis]:
+    """Connect to Redis if configured; otherwise keep TTS running without cache."""
+    if not REDIS_URL:
+        logger.info("Redis TTS cache disabled: REDIS_URL not configured")
+        return None
+
+    try:
+        client = redis.from_url(REDIS_URL, decode_responses=False)
+        client.ping()
         logger.info("Redis cache connected for TTS")
-except Exception as e:
-    logger.warning(f"Redis TTS cache unavailable: {str(e)}")
-    redis_client = None
+        return client
+    except Exception as e:
+        logger.info(f"Redis TTS cache unavailable; continuing without cache: {str(e)}")
+        return None
+
+
+redis_client: Optional[redis.Redis] = _initialize_redis_client()
 
 # Initialize Sarvam client
 sarvam_client: Optional[Any] = None

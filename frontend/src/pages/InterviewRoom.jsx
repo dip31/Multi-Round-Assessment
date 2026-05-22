@@ -135,6 +135,53 @@ export default function InterviewRoom() {
         }
     }, []);
     
+    // Fetch next question (MOVED UP - declared before use in startup)
+    const fetchNextQuestion = useCallback(async () => {
+        if (!interviewId) {
+            console.error('Cannot fetch question: No interview ID');
+            setToast({
+                type: 'error',
+                message: 'Interview session not found',
+            });
+            return;
+        }
+        
+        try {
+            console.log('Fetching next question for interview:', interviewId);
+            const res = await getNextQuestion(interviewId);
+            console.log('Question received:', res);
+            
+            setCurrentQuestion(res.question);
+            setTurnNumber(res.turn_number);
+            setDifficulty(res.difficulty);
+            setPhase(res.phase);
+            setTranscript('');
+            setQuestionScore(null);
+            setRoomState(STATES.READY);
+            
+            // Play question via TTS
+            try {
+                const audioBytes = await synthesizeSpeech(res.question);
+                try {
+                    await playAudio(audioBytes);
+                } catch (audioError) {
+                    // TTS failed but interview continues
+                    console.warn('Audio playback failed, showing text instead');
+                }
+            } catch (ttsError) {
+                console.warn('TTS failed:', ttsError);
+                // Interview continues, question visible on screen
+            }
+        } catch (error) {
+            console.error('Failed to fetch next question:', error);
+            setToast({
+                type: 'error',
+                message: error.response?.data?.detail || 'Failed to load next question',
+            });
+            setRoomState(STATES.READY);
+        }
+    }, [interviewId]);
+    
     // Startup: play intro, then fetch first question
     useEffect(() => {
         if (!interviewId) {
@@ -171,7 +218,7 @@ export default function InterviewRoom() {
                 }
             }
         };
-    }, [interviewId, playTTSWithRetry]);
+    }, [interviewId, playTTSWithRetry, fetchNextQuestion]);
     
     // ═══════════════════════════════════════════════════════════════════════
     // REAL-TIME FEEDBACK POLLING (every 3 seconds during recording)
@@ -222,52 +269,6 @@ export default function InterviewRoom() {
             }
         };
     }, [isRecording, interviewId, proctoring, recordingSeconds]);
-    
-    const fetchNextQuestion = async () => {
-        if (!interviewId) {
-            console.error('Cannot fetch question: No interview ID');
-            setToast({
-                type: 'error',
-                message: 'Interview session not found',
-            });
-            return;
-        }
-        
-        try {
-            console.log('Fetching next question for interview:', interviewId);
-            const res = await getNextQuestion(interviewId);
-            console.log('Question received:', res);
-            
-            setCurrentQuestion(res.question);
-            setTurnNumber(res.turn_number);
-            setDifficulty(res.difficulty);
-            setPhase(res.phase);
-            setTranscript('');
-            setQuestionScore(null);
-            setRoomState(STATES.READY);
-            
-            // Play question via TTS
-            try {
-                const audioBytes = await synthesizeSpeech(res.question);
-                try {
-                    await playAudio(audioBytes);
-                } catch (audioError) {
-                    // TTS failed but interview continues
-                    console.warn('Audio playback failed, showing text instead');
-                }
-            } catch (ttsError) {
-                console.warn('TTS failed:', ttsError);
-                // Interview continues, question visible on screen
-            }
-        } catch (error) {
-            console.error('Failed to fetch next question:', error);
-            setToast({
-                type: 'error',
-                message: error.response?.data?.detail || 'Failed to load next question',
-            });
-            setRoomState(STATES.READY);
-        }
-    };
     
     const startRecording = async () => {
         try {

@@ -11,8 +11,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, text
+try:
+    from sqlalchemy.dialects.postgresql import JSONB
+except Exception:
+    from sqlalchemy import JSON as JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -37,7 +40,7 @@ class InterviewSession(Base):
     phase: Mapped[str] = mapped_column(String(20), server_default="HR", nullable=False)
     current_turn: Mapped[int] = mapped_column(Integer, server_default="0", nullable=False)
     total_turns: Mapped[int] = mapped_column(Integer, server_default="10", nullable=False)
-    rl_state: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"), nullable=False)
+    rl_state: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'"), nullable=False)
     created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), server_default=func.now(), nullable=True)
 
     # ── Relationships ─────────────────────────────────────────────────
@@ -67,8 +70,8 @@ class ApprovedQuestionPool(Base):
         nullable=False,
         index=True,
     )
-    extracted_skills: Mapped[list] = mapped_column(JSONB, server_default=text("'[]'::jsonb"), nullable=False)
-    extracted_projects: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"), nullable=False)
+    extracted_skills: Mapped[list] = mapped_column(JSONB, server_default=text("'[]'"), nullable=False)
+    extracted_projects: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'"), nullable=False)
     question_pool: Mapped[list] = mapped_column(JSONB, nullable=False)
     admin_approved: Mapped[bool] = mapped_column(Boolean, server_default=text("false"), nullable=False, index=True)
     approved_by: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
@@ -103,7 +106,7 @@ class InterviewTurn(Base):
     content_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     final_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     intent: Mapped[str | None] = mapped_column(String(10), nullable=True)
-    behavioral_snapshot: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'::jsonb"), nullable=False)
+    behavioral_snapshot: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'"), nullable=False)
     rl_reward: Mapped[float | None] = mapped_column(Float, nullable=True)
     is_followup: Mapped[bool] = mapped_column(Boolean, server_default=text("false"), nullable=False)
     followup_number: Mapped[int] = mapped_column(Integer, server_default=text("0"), nullable=False)
@@ -119,3 +122,32 @@ class InterviewTurn(Base):
 
     def __repr__(self) -> str:
         return f"<InterviewTurn id={self.id} interview_id={self.interview_id} turn={self.turn_number}>"
+
+
+class ProctoringViolation(Base):
+    """Represents a proctoring violation detected during an interview session.
+    
+    Columns mirror the ``proctoring_violations`` table.
+    """
+
+    __tablename__ = "proctoring_violations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    session_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("interview_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    event_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    face_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    violation_metadata: Mapped[dict | None] = mapped_column("metadata", JSON, nullable=True)
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=False),
+        server_default=func.now(),
+        nullable=True,
+    )
+
+    def __repr__(self) -> str:
+        return f"<ProctoringViolation id={self.id} session_id={self.session_id} event_type={self.event_type!r}>"
