@@ -1,0 +1,27 @@
+# ═══════════════════════════════════════════════════════════════
+# Rate Limiting Rules — per endpoint to prevent abuse
+# ═══════════════════════════════════════════════════════════════
+
+rate_limits:
+  global:
+    requests_per_minute: 60
+    burst: 10
+
+  per_endpoint:
+    # AI-heavy endpoints get stricter limits
+    /api/v1/intake/generate-jd:
+      requests_per_minute: 10
+      burst: 3
+
+    /api/v1/sourcing/parse-resume:
+      requests_per_minute: 20
+      burst: 5
+
+    # Standard CRUD endpoints
+    /api/v1/intake/jobs:
+      requests_per_minute: 60
+      burst: 10
+
+    /api/v1/sourcing/upload-resume:
+      requests_per_minute: 30
+      burst: 5

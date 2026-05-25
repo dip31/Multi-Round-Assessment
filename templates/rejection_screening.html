@@ -1,0 +1,67 @@
+{# Rejection after initial screening (Kumar's scoring stage) #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" /><title>Update on your application at {{ company_name }}</title>
+<style>
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+         background:#f4f6f9;margin:0;padding:0; }
+  .wrapper { max-width:620px;margin:40px auto;background:#fff;border-radius:12px;
+             box-shadow:0 4px 20px rgba(0,0,0,.08);overflow:hidden; }
+  .header { background:linear-gradient(135deg,#4b5563,#6b7280);padding:36px 40px;
+            text-align:center; }
+  .header h1 { color:#fff;font-size:22px;margin:0;font-weight:700; }
+  .body { padding:36px 40px; }
+  .body p { color:#374151;font-size:15px;line-height:1.75;margin:0 0 14px; }
+  .reason-box { background:#f3f4f6;border-radius:8px;padding:14px 18px;
+                color:#6b7280;font-size:14px;margin:16px 0; }
+  .talent-pool { background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;
+                 padding:16px 20px;margin:20px 0; }
+  .talent-pool a { color:#1d4ed8;font-weight:600; }
+  .footer { background:#f9fafb;padding:20px 40px;text-align:center;
+            color:#9ca3af;font-size:12px;border-top:1px solid #e5e7eb; }
+  .footer a { color:#6b7280; }
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header"><h1>Application Update 📋</h1></div>
+  <div class="body">
+    <p>Hi <strong>{{ first_name }}</strong>,</p>
+    <p>
+      Thank you for your interest in the <strong>{{ job_title }}</strong> role at
+      <strong>{{ company_name }}</strong>. We appreciate the time you've taken to
+      connect with us.
+    </p>
+    <p>
+      After a careful review of your profile, we've decided to move forward with
+      other candidates whose backgrounds more closely match the current requirements
+      for this specific role.
+    </p>
+    {% if rejection_reason %}
+    <div class="reason-box">
+      <strong>Feedback:</strong> {{ rejection_reason }}
+    </div>
+    {% endif %}
+    <p>
+      This decision is not a reflection of your abilities — the recruitment landscape
+      is competitive, and sometimes it comes down to very specific criteria for a
+      given role.
+    </p>
+    <div class="talent-pool">
+      <strong>Stay connected with us!</strong><br/>
+      Join our talent pool to be the first to hear about future opportunities that
+      match your profile.<br/>
+      <a href="{{ talent_pool_url }}">→ Join our Talent Pool</a>
+    </div>
+    <p>
+      We genuinely wish you the very best in your job search.<br/>
+      <strong>{{ company_name }} Talent Team</strong>
+    </p>
+  </div>
+  <div class="footer">
+    <a href="{{ unsubscribe_url }}">Unsubscribe</a> · {{ company_name }}
+  </div>
+</div>
+</body>
+</html>

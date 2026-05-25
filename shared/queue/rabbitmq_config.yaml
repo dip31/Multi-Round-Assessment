@@ -1,0 +1,81 @@
+# ═══════════════════════════════════════════════════════════════
+# RabbitMQ Broker Configuration
+# All exchange and queue definitions for the recruitment system
+# ═══════════════════════════════════════════════════════════════
+
+rabbitmq:
+  host: localhost
+  port: 5672
+  username: guest
+  password: guest
+  vhost: /recruitment
+
+exchanges:
+  - name: recruitment.events
+    type: topic
+    durable: true
+
+queues:
+  # ── Intake Queues ──────────────────────────────────
+  - name: intake.jd_generation
+    bindings:
+      - exchange: recruitment.events
+        routing_key: job.created
+    durable: true
+    prefetch_count: 1
+
+  - name: intake.job_posting
+    bindings:
+      - exchange: recruitment.events
+        routing_key: jd.generated
+    durable: true
+    prefetch_count: 1
+
+  # ── Sourcing Queues ────────────────────────────────
+  - name: sourcing.resume_parsing
+    bindings:
+      - exchange: recruitment.events
+        routing_key: resume.uploaded
+    durable: true
+    prefetch_count: 2
+
+  - name: sourcing.profile_parsing
+    bindings:
+      - exchange: recruitment.events
+        routing_key: profile.scraped
+    durable: true
+    prefetch_count: 2
+
+  # ── Phase 3 Queues (for their system) ──────────────
+  - name: screening.candidate_queue
+    bindings:
+      - exchange: recruitment.events
+        routing_key: profile.parsed
+      - exchange: recruitment.events
+        routing_key: profile.scraped
+    durable: true
+    prefetch_count: 5
+
+  - name: matching.job_candidate
+    bindings:
+      - exchange: recruitment.events
+        routing_key: job.posted
+      - exchange: recruitment.events
+        routing_key: candidate.created
+    durable: true
+    prefetch_count: 3
+
+  - name: interview.scheduling
+    bindings:
+      - exchange: recruitment.events
+        routing_key: candidate.screened
+    durable: true
+    prefetch_count: 2
+
+  # ── Audit Queue ────────────────────────────────────
+  - name: system.audit
+    bindings:
+      - exchange: recruitment.events
+        routing_key: "*.#"
+    durable: true
+    prefetch_count: 5

@@ -1,0 +1,62 @@
+# ═══════════════════════════════════════════════════════════════
+# API Gateway Configuration
+# Kong/Express Gateway — routes from all services defined here
+# ═══════════════════════════════════════════════════════════════
+
+gateway:
+  name: recruitment-api-gateway
+  version: "1.0"
+  base_url: /api/v1
+
+services:
+  # ── Intake Service (Stage 1) ──────────────────────
+  intake:
+    prefix: /intake
+    routes:
+      - path: /jobs
+        methods: [GET, POST]
+        target: intake.job_requisition_api
+        auth_required: true
+      - path: /jobs/{job_id}
+        methods: [GET, PUT, DELETE]
+        target: intake.job_requisition_api
+        auth_required: true
+      - path: /generate-jd
+        methods: [POST]
+        target: intake.jd_generator
+        auth_required: true
+      - path: /post-job
+        methods: [POST]
+        target: intake.job_poster
+        auth_required: true
+
+  # ── Sourcing Service (Stage 2) ────────────────────
+  sourcing:
+    prefix: /sourcing
+    routes:
+      - path: /upload-resume
+        methods: [POST]
+        target: sourcing.resume_collector
+        auth_required: true
+      - path: /parse-resume/{candidate_id}
+        methods: [POST]
+        target: sourcing.profile_parser
+        auth_required: true
+      - path: /candidates
+        methods: [GET]
+        target: sourcing.resume_collector
+        auth_required: true
+
+  # ── System ────────────────────────────────────────
+  system:
+    prefix: /system
+    routes:
+      - path: /health
+        methods: [GET]
+        auth_required: false
+      - path: /events
+        methods: [GET]
+        auth_required: true
+      - path: /audit
+        methods: [GET]
+        auth_required: true

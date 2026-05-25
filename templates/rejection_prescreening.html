@@ -1,0 +1,66 @@
+{# Rejection after AI chatbot pre-screening (Kushal's Stage 5) #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" /><title>Update on your screening at {{ company_name }}</title>
+<style>
+  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+         background:#f4f6f9;margin:0;padding:0; }
+  .wrapper { max-width:620px;margin:40px auto;background:#fff;border-radius:12px;
+             box-shadow:0 4px 20px rgba(0,0,0,.08);overflow:hidden; }
+  .header { background:linear-gradient(135deg,#374151,#4b5563);padding:36px 40px;
+            text-align:center; }
+  .header h1 { color:#fff;font-size:22px;margin:0;font-weight:700; }
+  .body { padding:36px 40px; }
+  .body p { color:#374151;font-size:15px;line-height:1.75;margin:0 0 14px; }
+  .reason-box { background:#f3f4f6;border-radius:8px;padding:14px 18px;
+                color:#6b7280;font-size:14px;margin:16px 0; }
+  .talent-pool { background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;
+                 padding:16px 20px;margin:20px 0; }
+  .talent-pool a { color:#1d4ed8;font-weight:600; }
+  .footer { background:#f9fafb;padding:20px 40px;text-align:center;
+            color:#9ca3af;font-size:12px;border-top:1px solid #e5e7eb; }
+  .footer a { color:#6b7280; }
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header"><h1>Pre-Screening Update 🔄</h1></div>
+  <div class="body">
+    <p>Hi <strong>{{ first_name }}</strong>,</p>
+    <p>
+      Thank you for completing the pre-screening for the
+      <strong>{{ job_title }}</strong> position at <strong>{{ company_name }}</strong>.
+      We truly appreciate you investing your time in this process.
+    </p>
+    <p>
+      After reviewing your responses, we've determined that this particular role
+      may not be the ideal match at this stage. Some of the requirements for this
+      position — such as notice period, experience level, or compensation expectations
+      — may not align with current constraints.
+    </p>
+    {% if rejection_reason %}
+    <div class="reason-box">
+      <strong>Specific note:</strong> {{ rejection_reason }}
+    </div>
+    {% endif %}
+    <p>
+      We encourage you to keep exploring — the right role is out there. And when
+      circumstances change, we'd love to reconnect.
+    </p>
+    <div class="talent-pool">
+      <strong>Join our talent pool!</strong><br/>
+      Be notified of future roles that better fit your profile and expectations.<br/>
+      <a href="{{ talent_pool_url }}">→ Join our Talent Pool</a>
+    </div>
+    <p>
+      Best wishes on your journey,<br/>
+      <strong>{{ company_name }} Talent Team</strong>
+    </p>
+  </div>
+  <div class="footer">
+    <a href="{{ unsubscribe_url }}">Unsubscribe</a> · {{ company_name }}
+  </div>
+</div>
+</body>
+</html>

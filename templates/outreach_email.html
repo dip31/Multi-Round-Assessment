@@ -1,0 +1,71 @@
+{# ─── OUTREACH EMAIL — initial contact ───────────────────────────────────────
+   Used by: outreach/email_sender.py
+   Variables: first_name, job_title, company_name, chatbot_url
+#}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Exciting Opportunity at {{ company_name }}</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+         background: #f4f6f9; margin: 0; padding: 0; }
+  .wrapper { max-width: 620px; margin: 40px auto; background: #ffffff;
+             border-radius: 12px; overflow: hidden;
+             box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+  .header  { background: linear-gradient(135deg, #1a56db 0%, #06b6d4 100%);
+             padding: 40px 40px 32px; text-align: center; }
+  .header h1 { color: #fff; font-size: 26px; margin: 0; font-weight: 700; }
+  .header p  { color: rgba(255,255,255,0.85); font-size: 14px; margin: 8px 0 0; }
+  .body    { padding: 40px; }
+  .body p  { color: #374151; font-size: 15px; line-height: 1.7; margin: 0 0 16px; }
+  .cta     { text-align: center; margin: 32px 0; }
+  .cta a   { display: inline-block; background: linear-gradient(135deg, #1a56db, #06b6d4);
+             color: #fff; text-decoration: none; padding: 14px 36px;
+             border-radius: 8px; font-size: 16px; font-weight: 600;
+             letter-spacing: 0.02em; }
+  .footer  { background: #f9fafb; padding: 24px 40px; text-align: center;
+             color: #9ca3af; font-size: 12px; border-top: 1px solid #e5e7eb; }
+  .footer a { color: #6b7280; }
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header">
+    <h1>{{ company_name }}</h1>
+    <p>We found a great match for you 🎯</p>
+  </div>
+  <div class="body">
+    <p>Hi <strong>{{ first_name }}</strong>,</p>
+    <p>
+      We came across your profile and were genuinely impressed by your background.
+      We have an exciting opening for a <strong>{{ job_title }}</strong> role at
+      <strong>{{ company_name }}</strong> that we think aligns perfectly with your
+      experience.
+    </p>
+    <p>
+      To move forward, we'd love to learn a bit more about you through a quick
+      5-minute chat with our AI screening assistant. There are no trick questions —
+      just a short conversation about your availability, experience, and what
+      you're looking for next.
+    </p>
+    <div class="cta">
+      <a href="{{ chatbot_url }}">Start Quick Screening →</a>
+    </div>
+    <p>
+      The link is valid for <strong>48 hours</strong>. If you have any questions,
+      simply reply to this email and our team will get back to you.
+    </p>
+    <p>
+      Looking forward to connecting!<br/>
+      <strong>The {{ company_name }} Talent Team</strong>
+    </p>
+  </div>
+  <div class="footer">
+    You received this because your profile matched our requirements.<br/>
+    <a href="{{ unsubscribe_url }}">Unsubscribe</a> · {{ company_name }}
+  </div>
+</div>
+</body>
+</html>

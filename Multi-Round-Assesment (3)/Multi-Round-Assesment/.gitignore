@@ -1,0 +1,33 @@
+# Environment
+.env
+.envrc
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+
+# Testing
+htmlcov/
+.coverage
+.pytest_cache/
+
+# Alembic
+alembic/versions/__pycache__/
+
+# mypy / Pyre
+.mypy_cache/
+.pyre/

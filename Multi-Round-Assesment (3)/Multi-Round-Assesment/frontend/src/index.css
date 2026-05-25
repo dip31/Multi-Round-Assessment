@@ -1,0 +1,135 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;500;600;700;800&display=swap');
+
+@import "tailwindcss";
+
+@theme {
+  /* Main Backgrounds */
+  --color-bg-primary: #F4F3FF;
+  --color-bg-surface: #FFFFFF;
+
+  /* Layout Specifics */
+  --color-nav-bg: #0A0F1E;
+  --color-hero-bg: #1A1040;
+
+  /* Borders & Shadows */
+  --color-border: #E5E7EB;
+
+  /* Typography */
+  --color-text-primary: #1A1040;
+  --color-text-secondary: #6B7280;
+  --color-text-inverse: #FFFFFF;
+
+  /* Accents & Status */
+  --color-accent: #6C63FF;
+  --color-success: #10B981;
+  --color-warning: #F59E0B;
+  --color-danger: #EF4444;
+
+  /* Progress Panel Specials */
+  --color-progress-not-visited: #D1D5DB;
+
+  /* Typography Fonts */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
+  --font-display: 'Syne', system-ui, -apple-system, sans-serif;
+
+  /* Landing Page Specific Colors */
+  --color-on-primary: #39008c;
+  --color-surface-tint: #ba9eff;
+  --color-on-surface-variant: #adaaad;
+  --color-on-secondary-fixed-variant: #005777;
+  --color-surface-container-highest: #262528;
+  --color-outline-variant: #48474a;
+  --color-secondary: #2db7f2;
+  --color-surface: #0e0e10;
+  --color-on-primary-fixed: #000000;
+  --color-inverse-on-surface: #565457;
+  --color-outline: #767577;
+  --color-surface-container-low: #131315;
+  --color-surface-dim: #0e0e10;
+  --color-tertiary-fixed-dim: #c488ff;
+  --color-secondary-fixed-dim: #73ceff;
+  --color-on-tertiary: #400072;
+  --color-inverse-primary: #6e3bd7;
+  --color-primary-fixed-dim: #a27cff;
+  --color-tertiary-dim: #be83fa;
+  --color-primary-fixed: #ae8dff;
+  --color-primary-dim: #8455ef;
+  --color-primary-container: #ae8dff;
+  --color-error: #ff6e84;
+  --color-surface-container: #19191c;
+  --color-surface-variant: #262528;
+  --color-on-background: #f9f5f8;
+  --color-on-tertiary-container: #2e0055;
+  --color-primary: #ba9eff;
+  --color-secondary-container: #00668a;
+  --color-surface-container-high: #1f1f22;
+  --color-tertiary-fixed: #cd9bff;
+  --color-on-secondary: #003044;
+  --color-on-error-container: #ffb2b9;
+  --color-on-tertiary-fixed: #270048;
+  --color-secondary-fixed: #9bdaff;
+  --color-background: #0e0e10;
+  --color-on-surface: #f9f5f8;
+  --color-surface-bright: #2c2c2f;
+  --color-secondary-dim: #05a9e3;
+  --color-on-secondary-container: #f2f9ff;
+  --color-error-container: #a70138;
+  --color-error-dim: #d73357;
+  --color-on-primary-container: #2b006e;
+  --color-on-error: #490013;
+  --color-on-tertiary-fixed-variant: #53108c;
+  --color-on-secondary-fixed: #00394f;
+  --color-tertiary-container: #bc80f8;
+  --color-inverse-surface: #fcf8fb;
+  --color-tertiary: #c890ff;
+  --color-on-primary-fixed-variant: #370086;
+
+  /* Landing Page Fonts */
+  --font-headline: 'Inter', system-ui, sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-label: 'Inter', system-ui, sans-serif;
+}
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-display);
+  }
+
+  ::selection {
+    background-color: var(--color-accent);
+    color: white;
+  }
+}
+
+@layer utilities {
+  .glass-panel {
+    background: rgba(38, 37, 40, 0.4);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(72, 71, 74, 0.2);
+  }
+  .hero-gradient {
+    background: linear-gradient(135deg, #ba9eff 0%, #8455ef 100%);
+  }
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  }
+}

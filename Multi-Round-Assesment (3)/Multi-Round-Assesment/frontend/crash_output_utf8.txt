@@ -1,0 +1,87 @@
+﻿node : node:internal/pr
+ocess/promises:394
+At line:1 char:1
++ node test_crash.mjs 
+> crash_output.txt 2>&1
++ ~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (node:internal   
+ /process/promises:    
+394:String) [], Re    
+moteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+    triggerUncaughtExce
+ption(err, true /* 
+fromPromise */);
+    ^
+
+browserType.launch: 
+Executable doesn't 
+exist at C:\Users\dives
+\AppData\Local\ms-playw
+right\chromium_headless
+_shell-1208\chrome-head
+less-shell-win64\chrome
+-headless-shell.exe
+ΓòöΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓò
+ÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓ
+òÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓò
+ÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓ
+òÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓò
+ÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓ
+òÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòù
+Γòæ Looks like 
+Playwright Test or 
+Playwright was just 
+installed or updated. 
+Γòæ
+Γòæ Please run the 
+following command to 
+download new browsers: 
+             Γòæ
+Γòæ                    
+                       
+                       
+       Γòæ
+Γòæ     npx playwright 
+install                
+                       
+       Γòæ
+Γòæ                    
+                       
+                       
+       Γòæ
+Γòæ <3 Playwright Team 
+                       
+                       
+       Γòæ
+ΓòÜΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓò
+ÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓ
+òÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓò
+ÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓ
+òÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓò
+ÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓ
+òÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+ΓòÉΓòÉΓòÉΓòÉΓòÉΓò¥
+    at D:\Projects\EDI 
+4\Multi-Round-Assesment
+\frontend\test_crash.mj
+s:4:34
+    at D:\Projects\EDI 
+4\Multi-Round-Assesment
+\frontend\test_crash.mj
+s:66:3 {
+  name: 'Error'
+}
+
+Node.js v22.18.0

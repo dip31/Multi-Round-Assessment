@@ -1,0 +1,1504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Recruitment System — Agent Dashboard</title>
+    <meta name="description" content="Multi-Agent AI Recruitment System Testing Dashboard">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="sidebar-collapsed">
+    <!-- ═══ Background Animation ═══ -->
+    <div class="bg-grid"></div>
+    <div class="bg-glow bg-glow-1"></div>
+    <div class="bg-glow bg-glow-2"></div>
+
+    <!-- ═══ Header ═══ -->
+    <header id="app-header">
+        <div class="header-left">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="8" r="4"/>
+                        <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                        <path d="M21 21v-2a4 4 0 0 0-3-3.87"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1>AI Recruitment System</h1>
+                    <span class="subtitle">Multi-Agent RPA Pipeline</span>
+                </div>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="status-badge" id="api-status">
+                <span class="status-dot"></span>
+                <span>Connecting...</span>
+            </div>
+            <div class="header-actions">
+                <button class="btn btn-ghost" onclick="loadEvents()" title="Refresh Events">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                        <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
+    <div class="nav-overlay" id="nav-overlay"></div>
+    <button class="nav-toggle" id="nav-toggle" aria-label="Open navigation">
+        <span></span>
+        <span></span>
+        <span></span>
+    </button>
+
+    <!-- ═══ Main Content ═══ -->
+    <main>
+        <!-- Navigation Tabs -->
+        <nav class="tab-nav" id="tab-nav">
+            <div class="sidebar-menu">
+                <button class="nav-close" id="nav-close" aria-label="Close navigation">
+                    <span></span>
+                    <span></span>
+                </button>
+                <button class="tab-btn active" data-tab="overview" onclick="switchTab('overview')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                        <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                        <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+                    </svg>
+                    <span class="nav-label">Dashboard</span>
+                </button>
+                <button class="tab-btn" data-tab="stage1" onclick="switchTab('stage1')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                        <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+                        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                    </svg>
+                    <span class="nav-label">Job Intake</span>
+                </button>
+                <button class="tab-btn" data-tab="stage2" onclick="switchTab('stage2')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                    <span class="nav-label">Candidate Intake</span>
+                </button>
+                <button class="tab-btn" data-tab="stage3" onclick="switchTab('stage3')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                        <path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/>
+                    </svg>
+                    <span class="nav-label">Screening</span>
+                </button>
+                <button class="tab-btn" data-tab="stage4" onclick="switchTab('stage4')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                        <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                        <polyline points="22,6 12,13 2,6"/>
+                    </svg>
+                    <span class="nav-label">Outreach</span>
+                </button>
+                <button class="tab-btn" data-tab="stage5" onclick="switchTab('stage5')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        <line x1="9" y1="10" x2="15" y2="10"/>
+                        <line x1="12" y1="7" x2="12" y2="13"/>
+                    </svg>
+                    <span class="nav-label">Prescreening</span>
+                </button>
+                <button class="tab-btn" data-tab="stage6" onclick="switchTab('stage6')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                        <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                    </svg>
+                    <span class="nav-label">Interview & Evaluation</span>
+                </button>
+                <button class="tab-btn" data-tab="stage8" onclick="switchTab('stage8')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                    </svg>
+                    <span class="nav-label">Offer Management</span>
+                </button>
+                <button class="tab-btn" data-tab="stage9" onclick="switchTab('stage9')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+                    </svg>
+                    <span class="nav-label">Onboarding</span>
+                </button>
+                <button class="tab-btn" data-tab="stage10" onclick="switchTab('stage10')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                        <line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/>
+                    </svg>
+                    <span class="nav-label">Analytics</span>
+                </button>
+            </div>
+        </nav>
+
+        <!-- ═══ Tab Content ═══ -->
+
+        <!-- Overview Tab -->
+        <section class="tab-content active" id="tab-overview">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon blue">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                            <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-jobs">0</span>
+                        <span class="stat-label">Total Jobs</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon green">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                            <circle cx="12" cy="8" r="4"/><path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-candidates">0</span>
+                        <span class="stat-label">Candidates</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon purple">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                            <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+                            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-postings">0</span>
+                        <span class="stat-label">Postings</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon orange">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-events">0</span>
+                        <span class="stat-label">Events</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recruitment Pipeline Visualization -->
+            <h2 class="section-title">Complete Recruitment Pipeline (10 Steps)</h2>
+            <div class="pipeline">
+                <!-- Stage 1: Job Intake -->
+                <div class="pipeline-stage">
+                    <div class="pipeline-node stage1">
+                        <span class="pipeline-num">1</span>
+                        <span class="pipeline-label">Job Requisition</span>
+                    </div>
+                    <div class="pipeline-arrow">→</div>
+                    <div class="pipeline-node stage1">
+                        <span class="pipeline-num">2</span>
+                        <span class="pipeline-label">JD Generation</span>
+                    </div>
+                    <div class="pipeline-arrow">→</div>
+                    <div class="pipeline-node stage1">
+                        <span class="pipeline-num">3</span>
+                        <span class="pipeline-label">Job Posting</span>
+                    </div>
+                </div>
+                <div class="pipeline-divider">
+                    <span>1: Job Intake</span>
+                    <span class="pipeline-connector">⬇</span>
+                    <span>2: Candidate Intake</span>
+                </div>
+                
+                <!-- Stage 2: Candidate Intake -->
+                <div class="pipeline-stage">
+                    <div class="pipeline-node stage2">
+                        <span class="pipeline-num">4</span>
+                        <span class="pipeline-label">Resume Upload</span>
+                    </div>
+                    <div class="pipeline-arrow">→</div>
+                    <div class="pipeline-node stage2">
+                        <span class="pipeline-num">5</span>
+                        <span class="pipeline-label">Profile Parsing</span>
+                    </div>
+                    <div class="pipeline-arrow">→</div>
+                    <div class="pipeline-node stage2">
+                        <span class="pipeline-num">6</span>
+                        <span class="pipeline-label">Candidate Entry</span>
+                    </div>
+                </div>
+                <div class="pipeline-divider">
+                    <span>2: Candidate Intake</span>
+                    <span class="pipeline-connector">⬇</span>
+                    <span>3: Screening</span>
+                </div>
+                
+                <!-- Stage 3: Screening -->
+                <div class="pipeline-stage">
+                    <div class="pipeline-node stage3">
+                        <span class="pipeline-num">7</span>
+                        <span class="pipeline-label">Duplicate Detection</span>
+                    </div>
+                    <div class="pipeline-arrow">→</div>
+                    <div class="pipeline-node stage3">
+                        <span class="pipeline-num">8</span>
+                        <span class="pipeline-label">Candidate Scoring</span>
+                    </div>
+                    <div class="pipeline-arrow">→</div>
+                    <div class="pipeline-node stage3">
+                        <span class="pipeline-num">9</span>
+                        <span class="pipeline-label">Shortlisting</span>
+                    </div>
+                </div>
+                <div class="pipeline-divider">
+                    <span>3: Screening</span>
+                    <span class="pipeline-connector">⬇</span>
+                    <span>4: Outreach</span>
+                </div>
+                
+                <!-- Stage 4: Outreach -->
+                <div class="pipeline-stage">
+                    <div class="pipeline-node stage4">
+                        <span class="pipeline-num">10</span>
+                        <span class="pipeline-label">Email Outreach</span>
+                    </div>
+                    <div class="pipeline-arrow">→</div>
+                    <div class="pipeline-node stage4">
+                        <span class="pipeline-num">11</span>
+                        <span class="pipeline-label">Follow-ups</span>
+                    </div>
+                    <div class="pipeline-arrow">→</div>
+                    <div class="pipeline-node stage4">
+                        <span class="pipeline-num">12</span>
+                        <span class="pipeline-label">Response Tracking</span>
+                    </div>
+                </div>
+                <div class="pipeline-divider">
+                    <span>4: Outreach</span>
+                    <span class="pipeline-connector">⬇</span>
+                    <span>5: Prescreening</span>
+                </div>
+                
+                <!-- Stage 5: Prescreening -->
+                <div class="pipeline-stage">
+                    <div class="pipeline-node stage5">
+                        <span class="pipeline-num">13</span>
+                        <span class="pipeline-label">Chatbot Session</span>
+                    </div>
+                    <div class="pipeline-arrow">→</div>
+                    <div class="pipeline-node stage5">
+                        <span class="pipeline-num">14</span>
+                        <span class="pipeline-label">Answer Evaluation</span>
+                    </div>
+                    <div class="pipeline-arrow">→</div>
+                    <div class="pipeline-node stage5">
+                        <span class="pipeline-num">15</span>
+                        <span class="pipeline-label">BGV Check</span>
+                    </div>
+                </div>
+                <div class="pipeline-divider">
+                    <span>5: Prescreening</span>
+                    <span class="pipeline-connector">⬇</span>
+                    <span>6 & 7: Interview</span>
+                </div>
+                
+                <!-- Stage 6 & 7: Interview & Evaluation -->
+                <div class="pipeline-stage">
+                    <div class="pipeline-node stage6">
+                        <span class="pipeline-num">16</span>
+                        <span class="pipeline-label">AI Interview</span>
+                    </div>
+                    <div class="pipeline-arrow">→</div>
+                    <div class="pipeline-node stage6">
+                        <span class="pipeline-num">17</span>
+                        <span class="pipeline-label">Answer Assessment</span>
+                    </div>
+                    <div class="pipeline-arrow">→</div>
+                    <div class="pipeline-node stage6">
+                        <span class="pipeline-num">18</span>
+                        <span class="pipeline-label">Scoring & Report</span>
+                    </div>
+                </div>
+                <div class="pipeline-divider">
+                    <span>6 & 7: Interview</span>
+                    <span class="pipeline-connector">⬇</span>
+                    <span>8: Offer</span>
+                </div>
+                
+                <!-- Stage 8: Offer Management -->
+                <div class="pipeline-stage">
+                    <div class="pipeline-node stage8">
+                        <span class="pipeline-num">19</span>
+                        <span class="pipeline-label">Offer Generation</span>
+                    </div>
+                    <div class="pipeline-arrow">→</div>
+                    <div class="pipeline-node stage8">
+                        <span class="pipeline-num">20</span>
+                        <span class="pipeline-label">Offer Dispatch</span>
+                    </div>
+                    <div class="pipeline-arrow">→</div>
+                    <div class="pipeline-node stage8">
+                        <span class="pipeline-num">21</span>
+                        <span class="pipeline-label">Negotiation</span>
+                    </div>
+                </div>
+                <div class="pipeline-divider">
+                    <span>8: Offer</span>
+                    <span class="pipeline-connector">⬇</span>
+                    <span>9: Onboarding</span>
+                </div>
+                
+                <!-- Stage 9: Onboarding -->
+                <div class="pipeline-stage">
+                    <div class="pipeline-node stage9">
+                        <span class="pipeline-num">22</span>
+                        <span class="pipeline-label">Task Management</span>
+                    </div>
+                    <div class="pipeline-arrow">→</div>
+                    <div class="pipeline-node stage9">
+                        <span class="pipeline-num">23</span>
+                        <span class="pipeline-label">Document Collection</span>
+                    </div>
+                    <div class="pipeline-arrow">→</div>
+                    <div class="pipeline-node stage9">
+                        <span class="pipeline-num">24</span>
+                        <span class="pipeline-label">IT Provisioning</span>
+                    </div>
+                </div>
+                <div class="pipeline-divider">
+                    <span>9: Onboarding</span>
+                    <span class="pipeline-connector">⬇</span>
+                    <span>10: Analytics</span>
+                </div>
+                
+                <!-- Stage 10: Analytics -->
+                <div class="pipeline-stage">
+                    <div class="pipeline-node stage10">
+                        <span class="pipeline-num">25</span>
+                        <span class="pipeline-label">Funnel Metrics</span>
+                    </div>
+                    <div class="pipeline-arrow">→</div>
+                    <div class="pipeline-node stage10">
+                        <span class="pipeline-num">26</span>
+                        <span class="pipeline-label">Time-to-Hire</span>
+                    </div>
+                    <div class="pipeline-arrow">→</div>
+                    <div class="pipeline-node stage10">
+                        <span class="pipeline-num">27</span>
+                        <span class="pipeline-label">Forecasting</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Stage 1: Job Poster Tab -->
+        <section class="tab-content" id="tab-stage1">
+            <!-- Job Creation Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>Create Job Requisition</h2>
+                    <span class="agent-badge">Job Requisition Agent</span>
+                </div>
+                <form id="job-form" onsubmit="createJob(event)">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="job-title">Job Title *</label>
+                            <input type="text" id="job-title" placeholder="e.g. Senior Python Developer" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="job-dept">Department</label>
+                            <input type="text" id="job-dept" placeholder="e.g. Engineering">
+                        </div>
+                        <div class="form-group">
+                            <label for="job-location">Location</label>
+                            <input type="text" id="job-location" placeholder="e.g. Bangalore, India">
+                        </div>
+                        <div class="form-group">
+                            <label for="job-type">Employment Type</label>
+                            <select id="job-type">
+                                <option value="full-time">Full-time</option>
+                                <option value="part-time">Part-time</option>
+                                <option value="contract">Contract</option>
+                                <option value="internship">Internship</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="job-exp-min">Min Experience (years)</label>
+                            <input type="number" id="job-exp-min" value="0" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="job-exp-max">Max Experience (years)</label>
+                            <input type="number" id="job-exp-max" value="5" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="job-salary-min">Min Salary (₹)</label>
+                            <input type="number" id="job-salary-min" placeholder="e.g. 800000">
+                        </div>
+                        <div class="form-group">
+                            <label for="job-salary-max">Max Salary (₹)</label>
+                            <input type="number" id="job-salary-max" placeholder="e.g. 1500000">
+                        </div>
+                    </div>
+                    <div class="form-group full-width">
+                        <label for="job-skills">Skills (comma-separated)</label>
+                        <input type="text" id="job-skills" placeholder="e.g. Python, FastAPI, PostgreSQL, Docker">
+                    </div>
+                    <div class="info-box">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                            <circle cx="12" cy="12" r="10"/><path d="l 9,12 2,2 4,-4"/>
+                        </svg>
+                        Professional job description will be automatically generated using AI
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="btn-create-job">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                        Create Job with AI Description
+                    </button>
+                </form>
+                
+                <!-- Generated JD Result -->
+                <div id="jd-result" class="result-panel hidden">
+                    <h3>Generated Job Description</h3>
+                    <div id="jd-content" class="markdown-content job-description-content"></div>
+                </div>
+            </div>
+
+            <!-- Job Posting Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>Post Job to Platforms</h2>
+                    <span class="agent-badge">Job Poster Agent</span>
+                </div>
+                <form id="posting-form" onsubmit="postJob(event)">
+                    <div class="form-group">
+                        <label for="post-job-select">Select Job</label>
+                        <select id="post-job-select">
+                            <option value="">-- Select a job --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Platforms</label>
+                        <div class="checkbox-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="platform" value="linkedin" checked>
+                                <span class="platform-icon linkedin">in</span> LinkedIn
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="platform" value="indeed" checked>
+                                <span class="platform-icon indeed">I</span> Indeed
+                            </label>
+                            <label class="checkbox-label">
+                                <input type="checkbox" name="platform" value="adzuna">
+                                <span class="platform-icon adzuna">AZ</span> Adzuna Feed
+                            </label>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="btn-post-job">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                            <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+                            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+                        </svg>
+                        Post to Selected Platforms
+                    </button>
+                </form>
+                <div id="posting-result" class="result-panel hidden">
+                    <h3>Posting Results</h3>
+                    <div id="posting-content"></div>
+                </div>
+            </div>
+
+            <!-- Jobs List Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>Existing Jobs</h2>
+                    <button class="btn btn-ghost btn-sm" onclick="loadJobs()">Refresh</button>
+                </div>
+                <div id="jobs-list" class="cards-list">
+                    <div class="empty-state">No jobs created yet. Use the form above to create one.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Candidate Intake Tab -->
+        <section class="tab-content" id="tab-stage2">
+            <!-- Resume Upload Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>Upload & Parse Resume</h2>
+                    <span class="agent-badge">Resume Collector + Parser Agents</span>
+                </div>
+                <div class="form-group">
+                    <label for="resume-job-select">Link to Job (Optional)</label>
+                    <select id="resume-job-select">
+                        <option value="">-- No specific job --</option>
+                    </select>
+                </div>
+                <div class="upload-zone" id="upload-zone">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="48" height="48">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    <p>Drag & drop a resume here, or click to browse</p>
+                    <span class="upload-hint">Supports PDF, DOCX, TXT (max 10MB)</span>
+                    <input type="file" id="resume-file" accept=".pdf,.docx,.doc,.txt" hidden>
+                </div>
+                <div id="upload-progress" class="hidden">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <span id="upload-status">Uploading...</span>
+                </div>
+                <div id="parse-result" class="result-panel hidden">
+                    <h3>Parsed Resume Data</h3>
+                    <div id="parse-content"></div>
+                </div>
+            </div>
+
+            <!-- Candidate Form Input Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>Enter Candidate Details</h2>
+                    <span class="agent-badge">Candidate Form Agent</span>
+                </div>
+                <p class="panel-description">Provide candidate information required for screening (skills, experience, education, location).</p>
+                <form id="candidate-form" onsubmit="addCandidateForm(event)">
+                    <div class="form-group">
+                        <label for="candidate-job-select">Apply to Job *</label>
+                        <select id="candidate-job-select" required>
+                            <option value="">-- Select a job --</option>
+                        </select>
+                        <small class="form-help">Required — links candidate to job requirements for screening.</small>
+                    </div>
+                    
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="candidate-name">Full Name *</label>
+                            <input type="text" id="candidate-name" required placeholder="e.g. John Doe">
+                        </div>
+                        <div class="form-group">
+                            <label for="candidate-email">Email *</label>
+                            <input type="email" id="candidate-email" required placeholder="e.g. john.doe@example.com">
+                        </div>
+                        <div class="form-group">
+                            <label for="candidate-phone">Phone *</label>
+                            <input type="tel" id="candidate-phone" required placeholder="e.g. +1 234 567 8900">
+                        </div>
+                        <div class="form-group">
+                            <label for="candidate-location">Location</label>
+                            <input type="text" id="candidate-location" placeholder="e.g. San Francisco, CA">
+                        </div>
+                        <div class="form-group">
+                            <label for="candidate-role">Current Role</label>
+                            <input type="text" id="candidate-role" placeholder="e.g. Senior Software Engineer">
+                        </div>
+                        <div class="form-group">
+                            <label for="candidate-experience">Years of Experience *</label>
+                            <input type="number" id="candidate-experience" value="0" min="0" step="0.5" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="candidate-education">Education Level</label>
+                            <select id="candidate-education">
+                                <option value="">-- Select education --</option>
+                                <option value="high school">High School</option>
+                                <option value="associate">Associate</option>
+                                <option value="bachelor's">Bachelor's / B.Tech / B.E</option>
+                                <option value="master's">Master's / M.Tech / MBA</option>
+                                <option value="phd">PhD / Doctorate</option>
+                            </select>
+                            <small class="form-help">Used for education scoring in screening</small>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="candidate-skills">Skills (comma-separated) *</label>
+                        <input type="text" id="candidate-skills" required placeholder="e.g. Python, JavaScript, React, SQL">
+                        <small class="form-help">Required for skill-match scoring — enter skills separated by commas</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="candidate-linkedin">LinkedIn/Portfolio URL</label>
+                        <input type="url" id="candidate-linkedin" placeholder="e.g. https://linkedin.com/in/johndoe">
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary" id="btn-add-candidate">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                        Add Candidate
+                    </button>
+                </form>
+                <div id="candidate-form-result" class="result-panel hidden">
+                    <h3>Candidate Added</h3>
+                    <div id="candidate-form-content"></div>
+                </div>
+            </div>
+
+            <!-- Candidates List Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>Candidates</h2>
+                    <button class="btn btn-ghost btn-sm" onclick="loadCandidates()">Refresh</button>
+                </div>
+                <div id="candidates-list" class="cards-list">
+                    <div class="empty-state">No candidates yet. Upload a resume or enter candidate details.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Stage 3: Screening Tab -->
+        <section class="tab-content" id="tab-stage3">
+            <!-- Header -->
+            <div class="stage3-header">
+                <h1>Candidate Screening Engine</h1>
+                <p class="stage3-subtitle">Automated scoring and shortlisting pipeline</p>
+            </div>
+
+            <!-- KPI Cards -->
+            <div class="stats-grid" id="screening-stats">
+                <div class="stat-card">
+                    <div class="stat-icon blue">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                            <circle cx="12" cy="8" r="4"/><path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-total-candidates">0</span>
+                        <span class="stat-label">Total Candidates</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon green">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                            <path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-screened">0</span>
+                        <span class="stat-label">Screened</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon purple">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-shortlisted">0</span>
+                        <span class="stat-label">Shortlisted</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon orange">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                            <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-rejected">0</span>
+                        <span class="stat-label">Rejected</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon red">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                            <circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6"/>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-duplicates">0</span>
+                        <span class="stat-label">Duplicates</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon cyan">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-avg-score">0</span>
+                        <span class="stat-label">Avg Score</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Auto Detection Banner -->
+            <div id="auto-detection-banner" class="info-banner hidden">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                    <circle cx="12" cy="12" r="10"/><path d="l 9,12 2,2 4,-4"/>
+                </svg>
+                <span id="auto-detection-text">Candidates detected from intake module and loaded automatically</span>
+            </div>
+
+            <!-- Screening Flow Visual -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>Screening Pipeline</h2>
+                    <span class="agent-badge">Screening Engine</span>
+                </div>
+                <div class="screening-flow">
+                    <div class="flow-step completed">
+                        <div class="flow-icon">✓</div>
+                        <span>Candidate Import</span>
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-step" id="flow-duplicate">
+                        <div class="flow-icon">⚡</div>
+                        <span>Duplicate Detection</span>
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-step" id="flow-scoring">
+                        <div class="flow-icon">📊</div>
+                        <span>Score Calculation</span>
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-step" id="flow-ranking">
+                        <div class="flow-icon">🏆</div>
+                        <span>Ranking</span>
+                    </div>
+                    <div class="flow-arrow">→</div>
+                    <div class="flow-step" id="flow-shortlist">
+                        <div class="flow-icon">✨</div>
+                        <span>Shortlist Generated</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Screening Controls -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>Screening Controls</h2>
+                </div>
+                <div class="form-group">
+                    <label for="screening-job-select">Filter by Job (Optional)</label>
+                    <select id="screening-job-select">
+                        <option value="">-- All Jobs --</option>
+                    </select>
+                </div>
+                <div class="screening-actions">
+                    <button class="btn btn-primary" id="btn-run-screening" onclick="runScreening()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                            <polygon points="5 3 19 12 5 21 5 3"/>
+                        </svg>
+                        Run Screening
+                    </button>
+                    <button class="btn btn-ghost" onclick="runScreening(true)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                            <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                        </svg>
+                        Re-run Screening
+                    </button>
+                    <button class="btn btn-ghost" onclick="loadScreeningData()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                            <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                        </svg>
+                        Refresh Data
+                    </button>
+                </div>
+            </div>
+
+            <!-- Results Table -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>Screening Results</h2>
+                    <div class="panel-actions">
+                        <select id="status-filter" onchange="filterCandidates()">
+                            <option value="">All Statuses</option>
+                            <option value="shortlisted">Shortlisted</option>
+                            <option value="rejected">Rejected</option>
+                            <option value="new">Unscreened</option>
+                        </select>
+                        <button class="btn btn-ghost btn-sm" onclick="exportShortlist()">Export Shortlist</button>
+                    </div>
+                </div>
+                <div id="screening-results" class="screening-table">
+                    <div class="empty-state">No screening results yet. Run screening to see results.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Stage 4: Outreach Tab -->
+        <section class="tab-content" id="tab-stage4">
+            <!-- Header -->
+            <div class="stage-header">
+                <div>
+                    <h2>Outreach</h2>
+                    <p>Candidate contact list with direct EmailJS send action.</p>
+                </div>
+            </div>
+
+            <div class="panel">
+                <div class="panel-header">
+                    <h3>Outreach Candidates</h3>
+                    <button class="btn btn-primary" onclick="loadOutreachData()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                            <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                        </svg>
+                        Refresh
+                    </button>
+                </div>
+                <div class="panel-body">
+                    <div class="form-group" style="margin-bottom: 20px; max-width: 320px;">
+                        <label for="outreach-job-filter">Filter by Job</label>
+                        <select id="outreach-job-filter" class="form-control" onchange="filterOutreachCandidates()">
+                            <option value="">-- All Jobs --</option>
+                        </select>
+                    </div>
+                    <div id="outreach-candidates" class="table-container">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Candidate Name</th>
+                                    <th>Email</th>
+                                    <th>Job</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="outreach-table-body">
+                                <tr>
+                                    <td colspan="4" class="empty-state">Loading outreach candidates...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Stage 5: Prescreening Tab -->
+        <section class="tab-content" id="tab-stage5">
+            <!-- Header -->
+            <div class="stage-header">
+                <div>
+                    <h2>AI Prescreening</h2>
+                    <p>Chatbot screening and background verification</p>
+                </div>
+                <div class="stage-stats">
+                    <div class="stat-mini">
+                        <span class="stat-mini-value" id="prescreening-total">0</span>
+                        <span class="stat-mini-label">In Prescreening</span>
+                    </div>
+                    <div class="stat-mini">
+                        <span class="stat-mini-value" id="prescreening-completed">0</span>
+                        <span class="stat-mini-label">Completed</span>
+                    </div>
+                    <div class="stat-mini">
+                        <span class="stat-mini-value" id="prescreening-passed">0</span>
+                        <span class="stat-mini-label">Passed</span>
+                    </div>
+                    <div class="stat-mini">
+                        <span class="stat-mini-value" id="bgv-cleared">0</span>
+                        <span class="stat-mini-label">BGV Cleared</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Enhanced Stats Grid -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon blue">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-total-sessions">0</span>
+                        <span class="stat-label">Total Sessions</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon green">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-sessions-completed">0</span>
+                        <span class="stat-label">Completed</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon purple">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-sessions-passed">0</span>
+                        <span class="stat-label">Passed</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon orange">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-avg-prescreening-score">0.0</span>
+                        <span class="stat-label">Avg Score</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Prescreening Info -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h3>AI Chatbot Prescreening</h3>
+                    <div style="display: flex; gap: 12px;">
+                        <button class="btn btn-secondary" onclick="togglePrescreeningView('admin')" id="btn-admin-view">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                            </svg>
+                            Admin View
+                        </button>
+                        <button class="btn btn-primary" onclick="togglePrescreeningView('candidate')" id="btn-candidate-view">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                            </svg>
+                            Candidate View (Demo)
+                        </button>
+                        <button class="btn btn-primary" onclick="createPrescreeningSession()" id="btn-create-session">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                            </svg>
+                            Create Session
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Admin View -->
+                <div class="panel-body" id="prescreening-admin-view">
+                    <div class="info-box info">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                            <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+                        </svg>
+                        <div>
+                            <strong>Automated Prescreening:</strong> Candidates receive a unique chatbot link with 6 prescreening questions. Answers are evaluated automatically using Claude AI, and background verification is initiated for passing candidates.
+                        </div>
+                    </div>
+                    
+                    <!-- Job Filter -->
+                    <div class="form-group" style="margin-bottom: 20px;">
+                        <label for="prescreening-job-filter">Filter by Job</label>
+                        <select id="prescreening-job-filter" class="form-control" onchange="filterPrescreeningSessions()">
+                            <option value="">-- All Jobs --</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Status Filter -->
+                    <div class="form-group" style="margin-bottom: 20px;">
+                        <label for="prescreening-status-filter">Filter by Status</label>
+                        <select id="prescreening-status-filter" class="form-control" onchange="filterPrescreeningSessions()">
+                            <option value="">-- All Statuses --</option>
+                            <option value="PENDING">Pending</option>
+                            <option value="IN_PROGRESS">In Progress</option>
+                            <option value="COMPLETED">Completed</option>
+                            <option value="EXPIRED">Expired</option>
+                        </select>
+                    </div>
+                    
+                    <button class="btn btn-primary" onclick="loadPrescreeningData()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                            <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                        </svg>
+                        Refresh Prescreening Data
+                    </button>
+                </div>
+
+                <!-- Candidate View (Demo) -->
+                <div class="panel-body" id="prescreening-candidate-view" style="display: none;">
+                    <div class="info-box success">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                            <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+                        </svg>
+                        <div>
+                            <strong>Demo Mode:</strong> This shows what candidates see when they click the prescreening link. The 6 questions below are what every candidate must answer.
+                        </div>
+                    </div>
+
+                    <!-- Candidate Prescreening Interface -->
+                    <div id="candidate-demo-container">
+                        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 24px; border-radius: 12px; margin: 20px 0; color: white;">
+                            <h3 style="margin: 0 0 8px 0;">🤖 AI Prescreening Interview</h3>
+                            <p style="margin: 0; opacity: 0.9;">Complete these 6 questions to proceed with your application</p>
+                        </div>
+
+                        <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                            <p><strong>Instructions:</strong></p>
+                            <p style="margin: 8px 0;">• Answer all 6 questions honestly and thoroughly</p>
+                            <p style="margin: 8px 0;">• Minimum 20 characters per answer</p>
+                            <p style="margin: 8px 0;">• Estimated time: 10-15 minutes</p>
+                            <p style="margin: 8px 0;">• Your answers will be evaluated by AI</p>
+                        </div>
+
+                        <div id="demo-questions-container">
+                            <!-- Questions will be loaded here -->
+                        </div>
+
+                        <div style="margin-top: 24px; padding: 20px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px;">
+                            <strong style="color: #10b981;">✓ What Happens After Submission</strong>
+                            <p style="margin: 8px 0 0 0; opacity: 0.8;">
+                                1. AI evaluates your answers automatically using Claude AI<br>
+                                2. Background verification is initiated for qualified candidates<br>
+                                3. You'll receive an email with next steps within 2-3 business days
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Enhanced Candidates in Prescreening -->
+            <div class="panel" id="prescreening-list-panel">
+                <div class="panel-header">
+                    <h3>Prescreening Sessions</h3>
+                    <div style="display: flex; gap: 12px;">
+                        <button class="btn btn-ghost btn-sm" onclick="exportPrescreeningData()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="7 10 12 15 17 10"/>
+                                <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                            Export
+                        </button>
+                        <button class="btn btn-ghost btn-sm" onclick="runBulkEvaluation()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/>
+                            </svg>
+                            Bulk Evaluate
+                        </button>
+                    </div>
+                </div>
+                <div id="prescreening-candidates" class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Candidate Name</th>
+                                <th>Email</th>
+                                <th>Job Title</th>
+                                <th>Session Status</th>
+                                <th>Questions Answered</th>
+                                <th>AI Score</th>
+                                <th>Verdict</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="prescreening-table-body">
+                            <tr>
+                                <td colspan="9" class="empty-state">Loading prescreening data...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Session Details Modal -->
+            <div class="panel" id="session-details-panel" style="display: none;">
+                <div class="panel-header">
+                    <h3>Session Details</h3>
+                    <button class="btn btn-ghost btn-sm" onclick="closeSessionDetails()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                        Close
+                    </button>
+                </div>
+                <div id="session-details-content">
+                    <!-- Session details will be loaded here -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Stage 6 & 7: Interview & Evaluation Tab -->
+        <section class="tab-content" id="tab-stage6">
+            <div class="stage-header">
+                <h1>AI Interview & Evaluation</h1>
+                <p class="stage-subtitle">Conduct interviews and evaluate candidates with AI-powered insights</p>
+            </div>
+
+            <!-- Stats Overview -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon blue">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                            <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-total-interviews">0</span>
+                        <span class="stat-label">Total Interviews</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon green">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-completed-interviews">0</span>
+                        <span class="stat-label">Completed</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon purple">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-avg-score">0.0</span>
+                        <span class="stat-label">Avg Score</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon orange">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-in-progress">0</span>
+                        <span class="stat-label">In Progress</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Candidate Interview Access -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>Candidate Interview Interface</h2>
+                    <span class="agent-badge">AI Interview System</span>
+                </div>
+                <div class="info-box" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-color: #667eea; color: white;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                        <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                    </svg>
+                    <div>
+                        <strong style="font-size: 1.1em;">Take the Interview as a Candidate</strong><br>
+                        <span style="opacity: 0.95; margin-top: 0.25rem; display: block;">Experience the AI-powered interview with real-time speech recognition, adaptive difficulty, and behavioral analysis</span>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+                    <a href="/candidate/interview" class="btn btn-primary" style="flex: 1; text-align: center; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 0.75rem; padding: 1rem; font-size: 1.05em;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                            <polyline points="15 3 21 3 21 9"/>
+                            <line x1="10" y1="14" x2="21" y2="3"/>
+                        </svg>
+                        Take Interview
+                    </a>
+                </div>
+                <div class="info-box" style="margin-top: 1rem;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                        <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+                    </svg>
+                    <div>
+                        <strong>Interview Flow:</strong> Login → Upload Resume → Start Interview → Complete 10 Questions → View Report<br>
+                        <span style="opacity: 0.7; font-size: 0.9em;">The interview interface runs in the multi-round assessment app and opens directly from this dashboard.</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Interview Results & Scorecards -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>Interview Results & Scorecards</h2>
+                    <button class="btn btn-ghost btn-sm" onclick="loadInterviewResults()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                            <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                        </svg>
+                        Refresh
+                    </button>
+                </div>
+                <div id="interview-results-list" class="cards-list">
+                    <div class="empty-state">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="48" height="48" style="opacity: 0.3; margin-bottom: 1rem;">
+                            <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                        </svg>
+                        <p>No completed interviews yet</p>
+                        <span style="opacity: 0.7; font-size: 0.9em;">Interview results will appear here after candidates complete their sessions</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pipeline Integration -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>Pipeline Integration</h2>
+                    <span class="agent-badge">Ready</span>
+                </div>
+                <div class="info-box">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                        <polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+                    </svg>
+                    <div>
+                        <strong>Automated Pipeline Flow:</strong><br>
+                        <span style="opacity: 0.8;">Interview results are automatically processed and made available for offer generation and beyond</span>
+                    </div>
+                </div>
+                <div style="margin-top: 1.5rem; padding: 1.5rem; background: rgba(102, 126, 234, 0.05); border-radius: 12px; border: 1px solid rgba(102, 126, 234, 0.2);">
+                    <h3 style="margin: 0 0 1rem 0; font-size: 1em; color: #667eea;">Output Data Structure</h3>
+                    <div style="font-family: 'Courier New', monospace; font-size: 0.9em; line-height: 1.6; opacity: 0.9;">
+                        <div style="color: #666;">// Available for downstream stages:</div>
+                        <div>{</div>
+                        <div style="padding-left: 1rem;">
+                            <span style="color: #667eea;">interview_id</span>: <span style="color: #e83e8c;">number</span>,<br>
+                            <span style="color: #667eea;">candidate_id</span>: <span style="color: #e83e8c;">number</span>,<br>
+                            <span style="color: #667eea;">overall_score</span>: <span style="color: #e83e8c;">float</span>, <span style="color: #999;">// 0-1 scale</span><br>
+                            <span style="color: #667eea;">content_score</span>: <span style="color: #e83e8c;">float</span>,<br>
+                            <span style="color: #667eea;">behavior_score</span>: <span style="color: #e83e8c;">float</span>,<br>
+                            <span style="color: #667eea;">phase</span>: <span style="color: #28a745;">"COMPLETE"</span>,<br>
+                            <span style="color: #667eea;">total_turns</span>: <span style="color: #e83e8c;">number</span>,<br>
+                            <span style="color: #667eea;">feedback_summary</span>: <span style="color: #e83e8c;">string</span>,<br>
+                            <span style="color: #667eea;">turn_reviews</span>: <span style="color: #e83e8c;">array</span>,<br>
+                            <span style="color: #667eea;">recommendation</span>: <span style="color: #e83e8c;">string</span> <span style="color: #999;">// "hire" | "maybe" | "reject"</span>
+                        </div>
+                        <div>}</div>
+                    </div>
+                </div>
+                <div style="margin-top: 1rem; display: flex; gap: 1rem;">
+                    <button class="btn btn-ghost" onclick="exportInterviewData()" style="flex: 1;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        Export Interview Data (JSON)
+                    </button>
+                    <button class="btn btn-ghost" onclick="viewAPIEndpoints()" style="flex: 1;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                            <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+                        </svg>
+                        View API Endpoints
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Stage 8: Offer Management Tab -->
+        <section class="tab-content" id="tab-stage8">
+            <div class="stage-header">
+                <h1>Offer Management</h1>
+                <p class="stage-subtitle">Generate, dispatch, and negotiate job offers</p>
+            </div>
+
+            <!-- Stats Overview -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon blue">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-total-offers">0</span>
+                        <span class="stat-label">Total Offers</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon green">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-accepted-offers">0</span>
+                        <span class="stat-label">Accepted</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon orange">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-pending-offers">0</span>
+                        <span class="stat-label">Pending</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon purple">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-negotiations">0</span>
+                        <span class="stat-label">Negotiations</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Offers List -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>Offer Letters</h2>
+                    <button class="btn btn-ghost btn-sm" onclick="loadOffers()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                            <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                        </svg>
+                        Refresh
+                    </button>
+                </div>
+                <div id="offers-list" class="cards-list">
+                    <div class="empty-state">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="48" height="48" style="opacity: 0.3; margin-bottom: 1rem;">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                        <p>No offers generated yet</p>
+                        <span style="opacity: 0.7; font-size: 0.9em;">Offers will appear here after interview completion</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Stage 9: Onboarding Tab -->
+        <section class="tab-content" id="tab-stage9">
+            <div class="stage-header">
+                <h1>Onboarding</h1>
+                <p class="stage-subtitle">Manage new hire onboarding, documents, and IT provisioning</p>
+            </div>
+
+            <!-- Stats Overview -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon blue">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                            <circle cx="12" cy="8" r="4"/><path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-total-onboarding">0</span>
+                        <span class="stat-label">Total Onboarding</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon green">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                            <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-completed-onboarding">0</span>
+                        <span class="stat-label">Completed</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon orange">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-pending-docs">0</span>
+                        <span class="stat-label">Pending Docs</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon purple">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24">
+                            <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>
+                        </svg>
+                    </div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="stat-pending-tasks">0</span>
+                        <span class="stat-label">Pending Tasks</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Onboarding List -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>Onboarding Records</h2>
+                    <button class="btn btn-ghost btn-sm" onclick="loadOnboarding()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                            <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                        </svg>
+                        Refresh
+                    </button>
+                </div>
+                <div id="onboarding-list" class="cards-list">
+                    <div class="empty-state">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="48" height="48" style="opacity: 0.3; margin-bottom: 1rem;">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+                        </svg>
+                        <p>No onboarding records yet</p>
+                        <span style="opacity: 0.7; font-size: 0.9em;">Onboarding starts after offer acceptance</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Stage 10: Analytics Tab -->
+        <section class="tab-content" id="tab-stage10">
+            <div class="stage-header">
+                <h1>Recruitment Analytics</h1>
+                <p class="stage-subtitle">Track metrics, forecast hiring needs, and optimize recruitment ROI</p>
+            </div>
+
+            <!-- Funnel Metrics -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>Recruitment Funnel</h2>
+                    <button class="btn btn-ghost btn-sm" onclick="loadAnalyticsDashboard()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                            <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                        </svg>
+                        Refresh
+                    </button>
+                </div>
+                <div id="funnel-metrics" class="cards-list">
+                    <div class="empty-state">Loading funnel metrics...</div>
+                </div>
+            </div>
+
+            <!-- Export Options -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h2>Export Reports</h2>
+                </div>
+                <div style="display: flex; gap: 1rem;">
+                    <button class="btn btn-primary" onclick="exportAnalyticsCSV()" style="flex: 1;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        Export CSV
+                    </button>
+                    <button class="btn btn-primary" onclick="exportAnalyticsPDF()" style="flex: 1;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        Export PDF
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Remove old Stage 7 tab -->
+            </div>
+
+    </main>
+
+    <!-- ═══ Toast Notifications ═══ -->
+    <div id="toast-container"></div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+{# Follow-up #1 — Day 3, email not opened #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" /><title>Did you see our message, {{ first_name }}?</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+         background:#f4f6f9; margin:0; padding:0; }
+  .wrapper { max-width:620px; margin:40px auto; background:#fff; border-radius:12px;
+             box-shadow:0 4px 20px rgba(0,0,0,.08); overflow:hidden; }
+  .header { background:linear-gradient(135deg,#7c3aed,#06b6d4); padding:36px 40px;
+            text-align:center; }
+  .header h1 { color:#fff; font-size:22px; margin:0; font-weight:700; }
+  .body { padding:36px 40px; }
+  .body p { color:#374151; font-size:15px; line-height:1.75; margin:0 0 14px; }
+  .cta { text-align:center; margin:28px 0; }
+  .cta a { display:inline-block; background:linear-gradient(135deg,#7c3aed,#06b6d4);
+           color:#fff; text-decoration:none; padding:13px 34px; border-radius:8px;
+           font-size:15px; font-weight:600; }
+  .footer { background:#f9fafb; padding:20px 40px; text-align:center;
+            color:#9ca3af; font-size:12px; border-top:1px solid #e5e7eb; }
+  .footer a { color:#6b7280; }
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header"><h1>Just checking in 👋</h1></div>
+  <div class="body">
+    <p>Hi <strong>{{ first_name }}</strong>,</p>
+    <p>
+      We reached out a few days ago about the <strong>{{ job_title }}</strong>
+      opportunity at <strong>{{ company_name }}</strong> — we wanted to make sure
+      our message didn't slip through the cracks!
+    </p>
+    <p>
+      We're still very interested in your profile. The screening is only a
+      5-minute conversation — completely asynchronous, so you can do it at your
+      own pace.
+    </p>
+    <div class="cta">
+      <a href="{{ chatbot_url }}">Take the Quick Screening →</a>
+    </div>
+    <p>The link is still active. Hope to hear from you soon!</p>
+    <p>Warm regards,<br/><strong>{{ company_name }} Talent Team</strong></p>
+  </div>
+  <div class="footer">
+    <a href="{{ unsubscribe_url }}">Unsubscribe</a> · {{ company_name }}
+  </div>
+</div>
+</body>
+</html>
