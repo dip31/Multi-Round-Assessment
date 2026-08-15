@@ -37,7 +37,7 @@ export default function CodingRoundV2() {
     || parseInt(localStorage.getItem('coding_round_id') || '0', 10) 
     || null;
   // sessionId is resolved separately so we only pass a real id to proctoring.
-  const [sessionId, setSessionId] = useState(storedSessionId);
+  const [sessionId, setSessionId] = useState(null); // Don't use stale localStorage value
 
   const { startMonitoring, stopMonitoring, isMonitoring, videoRef } = useAdvancedProctoring(sessionId, (violation) => {
     if (violation.terminate) {
