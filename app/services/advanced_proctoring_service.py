@@ -19,19 +19,19 @@ class AdvancedProctoringService:
     
     def __init__(self):
         self.violation_thresholds = {
-            "TAB_SWITCH": {"max_allowed": 5, "risk_weight": 0.3},
-            "FULLSCREEN_EXIT": {"max_allowed": 3, "risk_weight": 0.4},
-            "PAGE_RELOAD": {"max_allowed": 1, "risk_weight": 0.8},
-            "IDLE_ACTIVITY": {"max_allowed": 10, "risk_weight": 0.2},
-            "COPY_PASTE": {"max_allowed": 0, "risk_weight": 0.6},
-            "NETWORK_DISCONNECT": {"max_allowed": 0, "risk_weight": 0.7},
-            "DEVICE_CHANGE": {"max_allowed": 0, "risk_weight": 0.7},
-            "MULTIPLE_PERSON_DETECTED": {"max_allowed": 0, "risk_weight": 0.9},
-            "FACE_NOT_VISIBLE": {"max_allowed": 5, "risk_weight": 0.7},
-            "MOUTH_MOVEMENT_DETECTED": {"max_allowed": 8, "risk_weight": 0.5},
-            "LOOKING_AWAY": {"max_allowed": 15, "risk_weight": 0.3},
-            "HEAD_TURN_DETECTED": {"max_allowed": 10, "risk_weight": 0.4},
-            "VOICE_ACTIVITY_DETECTED": {"max_allowed": 5, "risk_weight": 0.6},
+            "TAB_SWITCH": {"max_allowed": 2, "risk_weight": 0.4},
+            "FULLSCREEN_EXIT": {"max_allowed": 2, "risk_weight": 0.5},
+            "PAGE_RELOAD": {"max_allowed": 1, "risk_weight": 0.9},
+            "IDLE_ACTIVITY": {"max_allowed": 3, "risk_weight": 0.3},
+            "COPY_PASTE": {"max_allowed": 1, "risk_weight": 0.7},
+            "NETWORK_DISCONNECT": {"max_allowed": 2, "risk_weight": 0.8},
+            "DEVICE_CHANGE": {"max_allowed": 1, "risk_weight": 0.8},
+            "MULTIPLE_PERSON_DETECTED": {"max_allowed": 0, "risk_weight": 1.0},
+            "FACE_NOT_VISIBLE": {"max_allowed": 3, "risk_weight": 0.8},
+            "MOUTH_MOVEMENT_DETECTED": {"max_allowed": 3, "risk_weight": 0.6},
+            "LOOKING_AWAY": {"max_allowed": 5, "risk_weight": 0.4},
+            "HEAD_TURN_DETECTED": {"max_allowed": 3, "risk_weight": 0.5},
+            "VOICE_ACTIVITY_DETECTED": {"max_allowed": 2, "risk_weight": 0.7},
         }
 
     def log_advanced_event(
@@ -64,7 +64,7 @@ class AdvancedProctoringService:
         
         # Update event metadata with risk score
         event.event_metadata["risk_score"] = risk_score
-        event.event_metadata["processed_at"] = datetime.utcnow().isoformat()
+        event.event_metadata["processed_at"] = datetime.now().isoformat()
         
         db.commit()
         

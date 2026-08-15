@@ -4,7 +4,7 @@ Assessment session endpoints.
 Handles session creation and status retrieval for the authenticated user.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user
@@ -19,22 +19,22 @@ router = APIRouter(prefix="/session", tags=["Assessment Sessions"])
 @router.post(
     "/start",
     response_model=SessionResponse,
-    status_code=status.HTTP_201_CREATED,
     summary="Start a new assessment session",
 )
 def start_session(
+    response: Response,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> SessionResponse:
     """Create a new assessment session and its first aptitude round.
 
-    Raises:
-        HTTPException (409): If the user already has an active session.
+    Returns 201 for new session, 200 for existing session.
     """
     existing = get_active_session(db, user_id=current_user.id)
     if existing:
         # Return the existing session with 200 instead of 409
         # This prevents console errors while maintaining idempotency
+        response.status_code = status.HTTP_200_OK
         return existing
 
     session = create_session(db, user_id=current_user.id)
@@ -44,6 +44,7 @@ def start_session(
 
     # Refresh to include the new round in the response
     db.refresh(session)
+    response.status_code = status.HTTP_201_CREATED
     return session
 
 

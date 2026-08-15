@@ -61,7 +61,7 @@ def start_coding_round(db: Session, user_id: int) -> dict:
             problem_id=p.id,
             problem_order=idx,
             marked_for_review=False,
-            assigned_at=datetime.utcnow(),
+            assigned_at=datetime.now(),
         )
         db.add(sp)
         assigned.append(sp)
@@ -94,16 +94,17 @@ def run_and_evaluate(
 
     result = evaluate_submission(code=code, language=language, test_cases=test_cases, visible_only=visible_only)
 
-    # If this is a full submit, persist a CodingSubmission row
-    if not visible_only:
-        # determine round id if not provided
-        resolved_round_id = round_id
-        if resolved_round_id is None:
-            # try to find the user's active coding round if caller used get_user_active_round
-            resolved_round_id = 0
+    status = result.get("status")
+    if status not in {"running", "accepted", "wrong_answer", "runtime_error", "time_limit_exceeded", "compilation_error", "memory_limit_exceeded", "internal_error"}:
+        status = "accepted" if (result.get("score") or 0) >= 1.0 else "wrong_answer"
+    result["status"] = status
 
+# If this is a full submit, persist a CodingSubmission row
+    if not visible_only:
+        if round_id is None:
+            raise ValueError("round_id is required for submissions")
+        
         submission = CodingSubmission(
-            round_id=resolved_round_id,
             problem_id=problem_id,
             code=code,
             language=language,

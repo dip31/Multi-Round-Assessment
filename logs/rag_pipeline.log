@@ -2541,3 +2541,1269 @@ AttributeError: module 'bcrypt' has no attribute '__about__'
 2026-05-22 12:00:53,632 [app.middleware.request_logging] GET /api/v1/interview/session/29/next -> 200 (6073.8 ms)
 2026-05-22 12:00:59,297 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
 2026-05-22 12:01:03,418 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (9761.4 ms)
+2026-08-05 13:05:05,490 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (1166.5 ms)
+2026-08-05 13:05:05,539 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (28.9 ms)
+2026-08-05 13:05:06,164 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (120.9 ms)
+2026-08-05 13:05:06,186 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (9.7 ms)
+2026-08-05 13:05:10,516 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (147.1 ms)
+2026-08-05 13:05:11,136 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (610.6 ms)
+2026-08-05 13:05:11,583 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (45.1 ms)
+2026-08-05 13:05:11,638 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (97.6 ms)
+2026-08-05 13:09:28,573 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (10.5 ms)
+2026-08-05 13:09:28,598 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (14.3 ms)
+2026-08-05 13:09:31,159 [app.middleware.request_logging] POST /api/v1/session/start -> 201 (14.3 ms)
+2026-08-05 13:09:31,191 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (7.5 ms)
+2026-08-05 13:09:31,278 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 404 (11.4 ms)
+2026-08-05 13:09:31,341 [app.middleware.request_logging] POST /api/v1/coding/start-after-aptitude -> 200 (36.3 ms)
+2026-08-05 13:09:31,604 [app.middleware.request_logging] GET /api/v1/aptitude/result -> 200 (220.5 ms)
+2026-08-05 13:09:31,734 [app.middleware.request_logging] GET /api/v1/aptitude/result -> 200 (89.7 ms)
+2026-08-05 13:09:35,686 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (125.1 ms)
+2026-08-05 13:09:38,709 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (18.3 ms)
+2026-08-05 13:09:38,732 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (12.1 ms)
+2026-08-05 13:09:39,509 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (21.9 ms)
+2026-08-05 13:09:39,574 [app.middleware.request_logging] POST /api/v1/coding/start-after-aptitude -> 200 (76.2 ms)
+2026-08-05 13:09:39,784 [app.middleware.request_logging] GET /api/v1/aptitude/result -> 200 (53.7 ms)
+2026-08-05 13:09:39,891 [app.middleware.request_logging] GET /api/v1/aptitude/result -> 200 (85.1 ms)
+2026-08-05 13:09:41,248 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (40.4 ms)
+2026-08-05 13:09:42,751 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (11.3 ms)
+2026-08-05 13:09:42,770 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (9.6 ms)
+2026-08-05 13:09:44,381 [app.middleware.request_logging] POST /api/v1/coding/start-after-aptitude -> 200 (41.4 ms)
+2026-08-05 13:09:44,443 [app.middleware.request_logging] GET /api/v1/aptitude/result -> 200 (25.7 ms)
+2026-08-05 13:09:44,477 [app.middleware.request_logging] GET /api/v1/aptitude/result -> 200 (20.7 ms)
+2026-08-05 13:09:46,212 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (25.2 ms)
+2026-08-05 13:09:49,347 [app.middleware.request_logging] POST /api/v1/coding/start-after-aptitude -> 200 (49.0 ms)
+2026-08-05 13:10:03,243 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (17.4 ms)
+2026-08-05 13:10:22,417 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (17.7 ms)
+2026-08-05 13:10:40,359 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (15.9 ms)
+2026-08-05 13:10:40,732 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (18.4 ms)
+2026-08-05 13:10:43,793 [app.middleware.request_logging] POST /api/v1/coding/start-after-aptitude -> 200 (31.8 ms)
+2026-08-05 13:10:46,099 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (18.9 ms)
+2026-08-05 13:10:49,156 [app.middleware.request_logging] POST /api/v1/coding/start-after-aptitude -> 200 (27.4 ms)
+2026-08-05 13:10:56,575 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (14.7 ms)
+2026-08-05 13:10:59,404 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (31.3 ms)
+2026-08-05 13:11:06,087 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (18.1 ms)
+2026-08-05 13:11:09,140 [app.middleware.request_logging] POST /api/v1/coding/start-after-aptitude -> 200 (36.3 ms)
+2026-08-05 13:11:11,530 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (15.2 ms)
+2026-08-05 13:11:12,748 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (20.4 ms)
+2026-08-05 13:11:13,184 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (19.3 ms)
+2026-08-05 13:11:14,605 [app.middleware.request_logging] POST /api/v1/coding/start-after-aptitude -> 200 (33.4 ms)
+2026-08-05 13:11:16,579 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (15.9 ms)
+2026-08-05 13:11:19,641 [app.middleware.request_logging] POST /api/v1/coding/start-after-aptitude -> 200 (30.4 ms)
+2026-08-05 13:11:25,015 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (17.0 ms)
+2026-08-05 13:11:28,068 [app.middleware.request_logging] POST /api/v1/coding/start-after-aptitude -> 200 (31.9 ms)
+2026-08-05 13:11:30,181 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (17.1 ms)
+2026-08-05 13:11:33,256 [app.middleware.request_logging] POST /api/v1/coding/start-after-aptitude -> 200 (38.2 ms)
+2026-08-06 10:17:15,209 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (671.4 ms)
+2026-08-06 10:17:15,228 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (9.1 ms)
+2026-08-06 10:17:15,849 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (76.4 ms)
+2026-08-06 10:17:15,860 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (6.1 ms)
+2026-08-06 10:17:26,099 [app.middleware.request_logging] POST /api/v1/session/start -> 201 (62.8 ms)
+2026-08-06 10:17:26,137 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (13.1 ms)
+2026-08-06 10:17:26,526 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 200 (298.9 ms)
+2026-08-06 10:17:28,974 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (309.8 ms)
+2026-08-06 10:17:37,252 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (30.0 ms)
+2026-08-06 10:17:40,352 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (11.5 ms)
+2026-08-06 10:18:05,302 [app.middleware.request_logging] POST /api/v1/aptitude/submit-answer -> 200 (115.7 ms)
+2026-08-06 10:18:05,461 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 200 (18.6 ms)
+2026-08-06 10:18:20,935 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (14.3 ms)
+2026-08-06 10:18:27,142 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (14.8 ms)
+2026-08-06 10:18:27,186 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (40.1 ms)
+2026-08-06 10:18:29,731 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (19.0 ms)
+2026-08-06 10:18:38,748 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (26.8 ms)
+2026-08-06 10:19:07,759 [app.middleware.request_logging] POST /api/v1/aptitude/submit-answer -> 200 (50.0 ms)
+2026-08-06 10:19:07,796 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 200 (22.0 ms)
+2026-08-06 10:19:13,151 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (11.4 ms)
+2026-08-06 10:19:15,688 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (19.1 ms)
+2026-08-06 10:19:17,896 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (12.7 ms)
+2026-08-06 10:19:17,945 [app.middleware.request_logging] POST /api/v1/aptitude/submit-answer -> 200 (33.8 ms)
+2026-08-06 10:19:21,003 [app.middleware.request_logging] POST /api/v1/coding/start-after-aptitude -> 200 (87.9 ms)
+2026-08-06 10:19:21,240 [app.middleware.request_logging] GET /api/v1/aptitude/result -> 200 (116.2 ms)
+2026-08-06 10:19:21,275 [app.middleware.request_logging] GET /api/v1/aptitude/result -> 200 (25.4 ms)
+2026-08-06 10:19:26,969 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (8.5 ms)
+2026-08-06 10:19:26,984 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (8.9 ms)
+2026-08-06 10:19:31,450 [app.middleware.request_logging] GET /api/v1/report/analytics -> 200 (105.5 ms)
+2026-08-06 10:19:31,465 [app.middleware.request_logging] GET /api/v1/report/analytics -> 200 (9.8 ms)
+2026-08-06 10:19:38,445 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (7.4 ms)
+2026-08-06 10:19:38,459 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (7.6 ms)
+2026-08-06 10:19:41,456 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (45.0 ms)
+2026-08-06 10:19:41,480 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (9.1 ms)
+2026-08-06 10:19:41,871 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (17.1 ms)
+2026-08-06 10:19:42,032 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (175.4 ms)
+2026-08-06 10:22:26,691 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (11.8 ms)
+2026-08-06 10:22:26,712 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (11.0 ms)
+2026-08-06 10:23:10,033 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (16.8 ms)
+2026-08-06 10:23:10,049 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (8.1 ms)
+2026-08-06 10:23:10,453 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (28.8 ms)
+2026-08-06 10:23:10,459 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (33.4 ms)
+2026-08-06 10:23:15,516 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (10.6 ms)
+2026-08-06 10:23:15,528 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (7.5 ms)
+2026-08-06 10:24:27,855 [app.middleware.request_logging] POST /api/v1/session/start -> 201 (11.5 ms)
+2026-08-06 10:24:46,639 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-06 10:24:46,671 [faiss.loader] Loading faiss with AVX2 support.
+2026-08-06 10:24:46,671 [faiss.loader] Could not load library with AVX2 support due to:
+ModuleNotFoundError("No module named 'faiss.swigfaiss_avx2'")
+2026-08-06 10:24:46,673 [faiss.loader] Loading faiss.
+2026-08-06 10:24:47,424 [faiss.loader] Successfully loaded faiss.
+2026-08-06 10:25:51,640 [sentence_transformers.base.model] No device provided, using cpu
+2026-08-06 10:25:52,226 [sentence_transformers.base.model] Loading SentenceTransformer model from BAAI/bge-base-en-v1.5.
+2026-08-06 10:26:00,319 [rag_pipeline] [RAG Retrieval] role=Full Stack | fetched=8 | returned=5 | topics=['security', 'react', 'system design', 'react', 'authentication'] | scores=[0.646, 0.631, 0.624, 0.608, 0.606]
+2026-08-06 10:26:03,168 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-06 10:26:03,263 [app.middleware.request_logging] POST /api/v1/interview/resume/upload -> 200 (81951.8 ms)
+2026-08-06 10:26:06,864 [app.middleware.request_logging] GET /api/v1/interview/pool/33 -> 200 (69.5 ms)
+2026-08-06 10:26:08,789 [app.middleware.request_logging] GET /api/v1/interview/pool/33 -> 200 (5.6 ms)
+2026-08-06 10:26:09,834 [app.middleware.request_logging] POST /api/v1/interview/session/start -> 200 (42.1 ms)
+2026-08-06 10:47:20,243 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-06 10:47:22,104 [rag_pipeline] [RAG Retrieval] role=SDE | fetched=8 | returned=5 | topics=['object oriented programming', 'software design', 'system design', 'mlops', 'react'] | scores=[0.596, 0.577, 0.416, 0.411, 0.408]
+2026-08-06 10:47:24,371 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-06 10:47:24,461 [app.middleware.request_logging] POST /api/v1/interview/resume/upload -> 200 (5353.4 ms)
+2026-08-06 10:47:28,019 [app.middleware.request_logging] GET /api/v1/interview/pool/34 -> 200 (27.8 ms)
+2026-08-06 10:47:30,005 [app.middleware.request_logging] GET /api/v1/interview/pool/34 -> 200 (17.9 ms)
+2026-08-06 10:47:31,024 [app.middleware.request_logging] POST /api/v1/interview/session/start -> 200 (36.5 ms)
+2026-08-06 10:47:42,355 [app.services.sarvam_service] Redis TTS cache unavailable; continuing without cache: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it.
+2026-08-06 10:47:42,474 [app.services.sarvam_service] Sarvam AI client initialized
+2026-08-06 10:47:42,663 [app.services.sarvam_service] Unexpected Sarvam TTS error: TextToSpeechClient.convert() got an unexpected keyword argument 'target_language_code'
+2026-08-06 10:47:42,663 [app.modules.interview.routers.interview_router] Sarvam TTS failed: Sarvam TTS error None: TextToSpeechClient.convert() got an unexpected keyword argument 'target_language_code'
+2026-08-06 10:47:42,670 [app.services.sarvam_service] Unexpected Sarvam TTS error: TextToSpeechClient.convert() got an unexpected keyword argument 'target_language_code'
+2026-08-06 10:47:42,671 [app.modules.interview.routers.interview_router] Sarvam TTS failed: Sarvam TTS error None: TextToSpeechClient.convert() got an unexpected keyword argument 'target_language_code'
+2026-08-06 10:47:42,677 [app.middleware.request_logging] POST /api/v1/interview/tts -> 503 (5234.3 ms)
+2026-08-06 10:47:42,682 [app.middleware.request_logging] POST /api/v1/interview/tts -> 503 (14.8 ms)
+2026-08-06 10:47:42,839 [app.modules.interview.routers.interview_router] Selected question 4a7c5ff1dd5f: What motivates you to work on projects that involv... (asked_ids: 0)
+2026-08-06 10:47:46,979 [app.modules.interview.routers.interview_router] Redis cache unavailable; continuing without cache: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it.
+2026-08-06 10:47:47,416 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-06 10:47:47,430 [app.middleware.request_logging] GET /api/v1/interview/session/32/next -> 200 (4727.8 ms)
+2026-08-06 10:47:47,465 [app.services.sarvam_service] Unexpected Sarvam TTS error: TextToSpeechClient.convert() got an unexpected keyword argument 'target_language_code'
+2026-08-06 10:47:47,466 [app.modules.interview.routers.interview_router] Sarvam TTS failed: Sarvam TTS error None: TextToSpeechClient.convert() got an unexpected keyword argument 'target_language_code'
+2026-08-06 10:47:47,469 [app.middleware.request_logging] POST /api/v1/interview/tts -> 503 (5.4 ms)
+2026-08-06 10:49:05,345 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2026-08-06 10:49:05,360 [app.middleware.request_logging] POST /api/v1/interview/stt -> 200 (734.5 ms)
+2026-08-06 10:49:05,418 [app.middleware.request_logging] POST /api/v1/interview/session/32/respond -> 200 (39.7 ms)
+2026-08-06 10:49:05,435 [app.services.sarvam_service] Unexpected Sarvam TTS error: TextToSpeechClient.convert() got an unexpected keyword argument 'target_language_code'
+2026-08-06 10:49:05,435 [app.modules.interview.routers.interview_router] Sarvam TTS failed: Sarvam TTS error None: TextToSpeechClient.convert() got an unexpected keyword argument 'target_language_code'
+2026-08-06 10:49:05,436 [app.middleware.request_logging] POST /api/v1/interview/tts -> 503 (4.3 ms)
+2026-08-06 10:50:19,220 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2026-08-06 10:50:19,224 [app.middleware.request_logging] POST /api/v1/interview/stt -> 200 (555.2 ms)
+2026-08-06 10:50:19,559 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-06 10:50:20,033 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-06 10:50:20,142 [app.middleware.request_logging] POST /api/v1/interview/session/32/respond -> 200 (896.2 ms)
+2026-08-06 10:50:20,162 [app.services.sarvam_service] Unexpected Sarvam TTS error: TextToSpeechClient.convert() got an unexpected keyword argument 'target_language_code'
+2026-08-06 10:50:20,163 [app.modules.interview.routers.interview_router] Sarvam TTS failed: Sarvam TTS error None: TextToSpeechClient.convert() got an unexpected keyword argument 'target_language_code'
+2026-08-06 10:50:20,165 [app.middleware.request_logging] POST /api/v1/interview/tts -> 503 (9.6 ms)
+2026-08-06 10:51:43,158 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2026-08-06 10:51:43,162 [app.middleware.request_logging] POST /api/v1/interview/stt -> 200 (477.7 ms)
+2026-08-06 10:51:43,482 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-06 10:51:43,758 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-06 10:51:43,778 [app.middleware.request_logging] POST /api/v1/interview/session/32/respond -> 200 (593.7 ms)
+2026-08-06 10:51:43,799 [app.services.sarvam_service] Unexpected Sarvam TTS error: TextToSpeechClient.convert() got an unexpected keyword argument 'target_language_code'
+2026-08-06 10:51:43,800 [app.modules.interview.routers.interview_router] Sarvam TTS failed: Sarvam TTS error None: TextToSpeechClient.convert() got an unexpected keyword argument 'target_language_code'
+2026-08-06 10:51:43,803 [app.middleware.request_logging] POST /api/v1/interview/tts -> 503 (6.4 ms)
+2026-08-06 10:51:53,399 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (84.6 ms)
+2026-08-06 10:51:53,420 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (10.8 ms)
+2026-08-08 16:44:31,949 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (1128.3 ms)
+2026-08-08 16:44:31,984 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (17.5 ms)
+2026-08-08 16:44:32,587 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (93.8 ms)
+2026-08-08 16:44:32,612 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (13.5 ms)
+2026-08-08 16:45:18,643 [app.middleware.request_logging] POST /api/v1/session/start -> 201 (147.2 ms)
+2026-08-08 16:45:18,695 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (19.3 ms)
+2026-08-08 16:45:19,258 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 200 (461.0 ms)
+2026-08-08 16:45:23,543 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (356.2 ms)
+2026-08-08 16:45:27,066 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (33.2 ms)
+2026-08-08 16:45:29,578 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (27.0 ms)
+2026-08-08 16:45:38,141 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (39.1 ms)
+2026-08-08 16:45:39,128 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (12.7 ms)
+2026-08-08 16:45:43,800 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (34.1 ms)
+2026-08-08 16:45:45,284 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (32.1 ms)
+2026-08-08 16:45:45,587 [app.middleware.request_logging] POST /api/v1/aptitude/submit-answer -> 200 (224.3 ms)
+2026-08-08 16:45:46,292 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (24.9 ms)
+2026-08-08 16:45:48,562 [app.middleware.request_logging] POST /api/v1/coding/start-after-aptitude -> 200 (139.5 ms)
+2026-08-08 16:45:48,797 [app.middleware.request_logging] GET /api/v1/aptitude/result -> 200 (150.6 ms)
+2026-08-08 16:45:48,849 [app.middleware.request_logging] GET /api/v1/aptitude/result -> 200 (37.9 ms)
+2026-08-08 16:46:02,425 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (14.2 ms)
+2026-08-08 16:46:02,450 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (15.1 ms)
+2026-08-08 16:47:22,311 [app.middleware.request_logging] POST /api/v1/session/start -> 201 (13.3 ms)
+2026-08-08 16:47:38,365 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-08 16:47:38,431 [faiss.loader] Loading faiss with AVX2 support.
+2026-08-08 16:47:38,432 [faiss.loader] Could not load library with AVX2 support due to:
+ModuleNotFoundError("No module named 'faiss.swigfaiss_avx2'")
+2026-08-08 16:47:38,433 [faiss.loader] Loading faiss.
+2026-08-08 16:47:39,360 [faiss.loader] Successfully loaded faiss.
+2026-08-08 16:48:16,507 [sentence_transformers.base.model] No device provided, using cpu
+2026-08-08 16:48:17,225 [sentence_transformers.base.model] Loading SentenceTransformer model from BAAI/bge-base-en-v1.5.
+2026-08-08 16:48:28,101 [rag_pipeline] [RAG Retrieval] role=Full Stack | fetched=8 | returned=5 | topics=['security', 'react', 'system design', 'authentication', 'react'] | scores=[0.653, 0.639, 0.629, 0.617, 0.616]
+2026-08-08 16:48:30,583 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-08 16:48:30,669 [app.middleware.request_logging] POST /api/v1/interview/resume/upload -> 200 (59359.3 ms)
+2026-08-08 16:48:34,214 [app.middleware.request_logging] GET /api/v1/interview/pool/35 -> 200 (18.2 ms)
+2026-08-08 16:48:36,203 [app.middleware.request_logging] GET /api/v1/interview/pool/35 -> 200 (9.5 ms)
+2026-08-08 16:50:53,441 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-08 16:50:53,525 [faiss.loader] Loading faiss with AVX2 support.
+2026-08-08 16:50:53,526 [faiss.loader] Could not load library with AVX2 support due to:
+ModuleNotFoundError("No module named 'faiss.swigfaiss_avx2'")
+2026-08-08 16:50:53,526 [faiss.loader] Loading faiss.
+2026-08-08 16:50:53,700 [faiss.loader] Successfully loaded faiss.
+2026-08-08 16:51:13,532 [sentence_transformers.base.model] No device provided, using cpu
+2026-08-08 16:51:14,192 [sentence_transformers.base.model] Loading SentenceTransformer model from BAAI/bge-base-en-v1.5.
+2026-08-08 16:51:24,582 [rag_pipeline] [RAG Retrieval] role=Full Stack | fetched=8 | returned=5 | topics=['security', 'react', 'system design', 'react', 'authentication'] | scores=[0.639, 0.631, 0.622, 0.612, 0.607]
+2026-08-08 16:51:27,417 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-08 16:51:27,475 [app.middleware.request_logging] POST /api/v1/interview/resume/upload -> 200 (40596.6 ms)
+2026-08-08 16:51:31,025 [app.middleware.request_logging] GET /api/v1/interview/pool/36 -> 200 (14.6 ms)
+2026-08-08 16:51:33,018 [app.middleware.request_logging] GET /api/v1/interview/pool/36 -> 200 (9.5 ms)
+2026-08-08 16:51:34,071 [app.middleware.request_logging] POST /api/v1/interview/session/start -> 200 (68.1 ms)
+2026-08-08 16:51:40,138 [app.services.sarvam_service] Redis TTS cache unavailable; continuing without cache: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it.
+2026-08-08 16:51:40,184 [app.services.sarvam_service] Sarvam client ready: True, key set: True
+2026-08-08 16:51:40,185 [app.services.sarvam_service] TTS request: text_len=133
+2026-08-08 16:51:40,289 [app.services.sarvam_service] Sarvam TTS failed: type=TypeError, status=None
+2026-08-08 16:51:40,291 [app.modules.interview.routers.interview_router] Sarvam TTS failed: Sarvam TTS error None: TextToSpeechClient.convert() got an unexpected keyword argument 'target_language_code'
+2026-08-08 16:51:40,295 [app.services.sarvam_service] TTS request: text_len=133
+2026-08-08 16:51:40,296 [app.services.sarvam_service] Sarvam TTS failed: type=TypeError, status=None
+2026-08-08 16:51:40,297 [app.modules.interview.routers.interview_router] Sarvam TTS failed: Sarvam TTS error None: TextToSpeechClient.convert() got an unexpected keyword argument 'target_language_code'
+2026-08-08 16:51:40,300 [app.middleware.request_logging] POST /api/v1/interview/tts -> 503 (4491.6 ms)
+2026-08-08 16:51:40,306 [app.middleware.request_logging] POST /api/v1/interview/tts -> 503 (13.2 ms)
+2026-08-08 16:51:40,419 [app.modules.interview.routers.interview_router] Selected question 7f05320497b8: What motivated you to choose the technologies you ... (asked_ids: 0)
+2026-08-08 16:51:44,537 [app.modules.interview.routers.interview_router] Redis cache unavailable; continuing without cache: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it.
+2026-08-08 16:51:44,914 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-08 16:51:44,925 [app.middleware.request_logging] GET /api/v1/interview/session/33/next -> 200 (4570.5 ms)
+2026-08-08 16:51:44,965 [app.services.sarvam_service] TTS request: text_len=192
+2026-08-08 16:51:44,966 [app.services.sarvam_service] Sarvam TTS failed: type=TypeError, status=None
+2026-08-08 16:51:44,967 [app.modules.interview.routers.interview_router] Sarvam TTS failed: Sarvam TTS error None: TextToSpeechClient.convert() got an unexpected keyword argument 'target_language_code'
+2026-08-08 16:51:44,970 [app.middleware.request_logging] POST /api/v1/interview/tts -> 503 (6.2 ms)
+2026-08-08 17:00:10,241 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (1111.5 ms)
+2026-08-08 17:00:10,286 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (19.2 ms)
+2026-08-08 17:00:10,817 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (39.8 ms)
+2026-08-08 17:00:10,841 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (13.8 ms)
+2026-08-08 17:00:14,667 [app.middleware.request_logging] POST /api/v1/session/start -> 201 (18.3 ms)
+2026-08-08 17:00:28,016 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-08 17:00:28,066 [faiss.loader] Loading faiss with AVX2 support.
+2026-08-08 17:00:28,067 [faiss.loader] Could not load library with AVX2 support due to:
+ModuleNotFoundError("No module named 'faiss.swigfaiss_avx2'")
+2026-08-08 17:00:28,068 [faiss.loader] Loading faiss.
+2026-08-08 17:00:28,198 [faiss.loader] Successfully loaded faiss.
+2026-08-08 17:00:46,222 [sentence_transformers.base.model] No device provided, using cpu
+2026-08-08 17:00:46,873 [sentence_transformers.base.model] Loading SentenceTransformer model from BAAI/bge-base-en-v1.5.
+2026-08-08 17:00:57,216 [rag_pipeline] [RAG Retrieval] role=Full Stack | fetched=8 | returned=5 | topics=['security', 'react', 'system design', 'authentication', 'react'] | scores=[0.653, 0.639, 0.629, 0.617, 0.616]
+2026-08-08 17:01:00,202 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-08 17:01:00,256 [app.middleware.request_logging] POST /api/v1/interview/resume/upload -> 200 (37577.6 ms)
+2026-08-08 17:01:03,810 [app.middleware.request_logging] GET /api/v1/interview/pool/37 -> 200 (13.7 ms)
+2026-08-08 17:01:05,802 [app.middleware.request_logging] GET /api/v1/interview/pool/37 -> 200 (9.4 ms)
+2026-08-08 17:01:06,823 [app.middleware.request_logging] POST /api/v1/interview/session/start -> 200 (32.7 ms)
+2026-08-08 17:01:15,339 [app.services.sarvam_service] Redis TTS cache unavailable; continuing without cache: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it.
+2026-08-08 17:01:15,370 [app.services.sarvam_service] Sarvam client ready: True, key set: True
+2026-08-08 17:01:15,371 [app.services.sarvam_service] TTS request: text_len=133
+2026-08-08 17:01:19,324 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-08 17:01:19,403 [app.services.sarvam_service] TTS success: audios_count=1, bytes=409184, latency=4.03s
+2026-08-08 17:01:19,412 [app.services.sarvam_service] TTS request: text_len=133
+2026-08-08 17:01:22,842 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-08 17:01:22,928 [app.services.sarvam_service] TTS success: audios_count=1, bytes=374060, latency=3.52s
+2026-08-08 17:01:22,930 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (11781.2 ms)
+2026-08-08 17:01:22,933 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (3528.6 ms)
+2026-08-08 17:01:31,736 [app.modules.interview.routers.interview_router] Selected question 7f05320497b8: What motivated you to choose the technologies you ... (asked_ids: 0)
+2026-08-08 17:01:35,842 [app.modules.interview.routers.interview_router] Redis cache unavailable; continuing without cache: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it.
+2026-08-08 17:01:36,117 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-08 17:01:36,131 [app.middleware.request_logging] GET /api/v1/interview/session/34/next -> 200 (4446.1 ms)
+2026-08-08 17:01:36,162 [app.services.sarvam_service] TTS request: text_len=190
+2026-08-08 17:01:40,781 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-08 17:01:40,865 [app.services.sarvam_service] TTS success: audios_count=1, bytes=473922, latency=4.70s
+2026-08-08 17:01:40,866 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (4706.8 ms)
+2026-08-08 17:02:47,970 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2026-08-08 17:02:47,975 [app.middleware.request_logging] POST /api/v1/interview/stt -> 200 (834.1 ms)
+2026-08-08 17:02:48,333 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-08 17:02:48,836 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-08 17:02:48,902 [app.middleware.request_logging] POST /api/v1/interview/session/34/respond -> 200 (893.1 ms)
+2026-08-08 17:02:48,932 [app.services.sarvam_service] TTS request: text_len=271
+2026-08-08 17:02:55,074 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-08 17:02:55,607 [app.services.sarvam_service] TTS success: audios_count=1, bytes=616046, latency=6.67s
+2026-08-08 17:02:55,610 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (6680.8 ms)
+2026-08-08 17:03:17,346 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2026-08-08 17:03:17,350 [app.middleware.request_logging] POST /api/v1/interview/stt -> 200 (340.8 ms)
+2026-08-08 17:03:17,597 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-08 17:03:17,861 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-08 17:03:17,893 [app.middleware.request_logging] POST /api/v1/interview/session/34/respond -> 200 (517.0 ms)
+2026-08-08 17:03:17,918 [app.services.sarvam_service] TTS request: text_len=208
+2026-08-08 17:03:22,989 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-08 17:03:23,191 [app.services.sarvam_service] TTS success: audios_count=1, bytes=525192, latency=5.28s
+2026-08-08 17:03:23,192 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (5277.5 ms)
+2026-08-10 14:03:11,185 [app.middleware.request_logging] GET /api/v1/auth/me -> 401 (6.7 ms)
+2026-08-10 14:03:11,188 [httpx] HTTP Request: GET http://testserver/api/v1/auth/me "HTTP/1.1 401 Unauthorized"
+2026-08-10 14:03:11,200 [app.middleware.request_logging] POST /api/v1/auth/register -> 422 (8.3 ms)
+2026-08-10 14:03:11,202 [httpx] HTTP Request: POST http://testserver/api/v1/auth/register "HTTP/1.1 422 Unprocessable Entity"
+2026-08-10 14:03:29,449 [app.middleware.request_logging] POST /api/v1/auth/register -> 201 (467.0 ms)
+2026-08-10 14:03:29,452 [httpx] HTTP Request: POST http://testserver/api/v1/auth/register "HTTP/1.1 201 Created"
+2026-08-10 14:03:29,730 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (275.4 ms)
+2026-08-10 14:03:29,732 [httpx] HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 200 OK"
+2026-08-10 14:03:29,739 [app.middleware.request_logging] POST /api/v1/session/start -> 401 (5.4 ms)
+2026-08-10 14:03:29,741 [httpx] HTTP Request: POST http://testserver/api/v1/session/start "HTTP/1.1 401 Unauthorized"
+2026-08-10 14:03:29,751 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 401 (6.9 ms)
+2026-08-10 14:03:29,753 [httpx] HTTP Request: GET http://testserver/api/v1/aptitude/next-question "HTTP/1.1 401 Unauthorized"
+2026-08-10 14:03:29,901 [app.middleware.request_logging] POST /api/v1/interview/resume/upload -> 401 (145.8 ms)
+2026-08-10 14:03:29,903 [httpx] HTTP Request: POST http://testserver/api/v1/interview/resume/upload "HTTP/1.1 401 Unauthorized"
+2026-08-10 14:09:41,708 [app.middleware.request_logging] POST /api/v1/auth/register -> 201 (442.8 ms)
+2026-08-10 14:09:41,711 [httpx] HTTP Request: POST http://testserver/api/v1/auth/register "HTTP/1.1 201 Created"
+2026-08-10 14:09:41,990 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (275.5 ms)
+2026-08-10 14:09:41,993 [httpx] HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 200 OK"
+2026-08-10 14:10:57,874 [app.middleware.request_logging] POST /api/v1/auth/register -> 201 (301.1 ms)
+2026-08-10 14:10:57,877 [httpx] HTTP Request: POST http://testserver/api/v1/auth/register "HTTP/1.1 201 Created"
+2026-08-10 14:10:58,157 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (274.8 ms)
+2026-08-10 14:10:58,160 [httpx] HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 200 OK"
+2026-08-10 14:10:58,167 [app.middleware.request_logging] POST /api/v1/session/start -> 401 (4.1 ms)
+2026-08-10 14:10:58,169 [httpx] HTTP Request: POST http://testserver/api/v1/session/start "HTTP/1.1 401 Unauthorized"
+2026-08-10 14:10:58,178 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 401 (5.8 ms)
+2026-08-10 14:10:58,180 [httpx] HTTP Request: GET http://testserver/api/v1/aptitude/next-question "HTTP/1.1 401 Unauthorized"
+2026-08-10 14:10:58,295 [app.middleware.request_logging] POST /api/v1/interview/resume/upload -> 401 (112.2 ms)
+2026-08-10 14:10:58,297 [httpx] HTTP Request: POST http://testserver/api/v1/interview/resume/upload "HTTP/1.1 401 Unauthorized"
+2026-08-10 14:10:58,531 [app.middleware.request_logging] POST /api/v1/auth/register -> 201 (230.7 ms)
+2026-08-10 14:10:58,533 [httpx] HTTP Request: POST http://testserver/api/v1/auth/register "HTTP/1.1 201 Created"
+2026-08-10 14:10:58,760 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (225.5 ms)
+2026-08-10 14:10:58,763 [httpx] HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 200 OK"
+2026-08-10 14:10:58,767 [app.middleware.request_logging] POST /api/v1/session/start -> 401 (1.4 ms)
+2026-08-10 14:10:58,768 [httpx] HTTP Request: POST http://testserver/api/v1/session/start "HTTP/1.1 401 Unauthorized"
+2026-08-10 14:10:58,772 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 401 (2.1 ms)
+2026-08-10 14:10:58,774 [httpx] HTTP Request: GET http://testserver/api/v1/aptitude/next-question "HTTP/1.1 401 Unauthorized"
+2026-08-10 14:10:58,779 [app.middleware.request_logging] POST /api/v1/interview/resume/upload -> 401 (2.2 ms)
+2026-08-10 14:10:58,781 [httpx] HTTP Request: POST http://testserver/api/v1/interview/resume/upload "HTTP/1.1 401 Unauthorized"
+2026-08-10 15:44:38,821 [app.middleware.request_logging] POST /api/v1/auth/register -> 201 (259.2 ms)
+2026-08-10 15:44:38,830 [httpx] HTTP Request: POST http://testserver/api/v1/auth/register "HTTP/1.1 201 Created"
+2026-08-10 15:44:39,152 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (317.4 ms)
+2026-08-10 15:44:39,154 [httpx] HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 200 OK"
+2026-08-10 15:44:39,174 [app.middleware.request_logging] POST /api/v1/session/start -> 201 (17.0 ms)
+2026-08-10 15:44:39,176 [httpx] HTTP Request: POST http://testserver/api/v1/session/start "HTTP/1.1 201 Created"
+2026-08-10 15:44:39,188 [app.middleware.request_logging] POST /api/v1/session/start -> 201 (7.7 ms)
+2026-08-10 15:44:39,190 [httpx] HTTP Request: POST http://testserver/api/v1/session/start "HTTP/1.1 201 Created"
+2026-08-10 15:47:45,628 [app.middleware.request_logging] GET /health -> 200 (114.1 ms)
+2026-08-10 15:47:45,634 [httpx] HTTP Request: GET http://testserver/health "HTTP/1.1 200 OK"
+2026-08-10 15:47:46,642 [app.middleware.request_logging] POST /api/v1/auth/register -> 201 (997.9 ms)
+2026-08-10 15:47:46,649 [httpx] HTTP Request: POST http://testserver/api/v1/auth/register "HTTP/1.1 201 Created"
+2026-08-10 15:47:46,673 [app.middleware.request_logging] POST /api/v1/auth/register -> 409 (14.6 ms)
+2026-08-10 15:47:46,680 [httpx] HTTP Request: POST http://testserver/api/v1/auth/register "HTTP/1.1 409 Conflict"
+2026-08-10 15:47:47,318 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (626.8 ms)
+2026-08-10 15:47:47,325 [httpx] HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 200 OK"
+2026-08-10 15:47:47,889 [app.middleware.request_logging] POST /api/v1/auth/login -> 401 (554.5 ms)
+2026-08-10 15:47:47,891 [httpx] HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 401 Unauthorized"
+2026-08-10 15:47:47,945 [app.middleware.request_logging] POST /api/v1/session/start -> 201 (47.7 ms)
+2026-08-10 15:47:47,951 [httpx] HTTP Request: POST http://testserver/api/v1/session/start "HTTP/1.1 201 Created"
+2026-08-10 15:47:47,972 [app.middleware.request_logging] POST /api/v1/session/start -> 200 (14.2 ms)
+2026-08-10 15:47:47,977 [httpx] HTTP Request: POST http://testserver/api/v1/session/start "HTTP/1.1 200 OK"
+2026-08-10 15:47:47,998 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (14.5 ms)
+2026-08-10 15:47:48,003 [httpx] HTTP Request: GET http://testserver/api/v1/session/status "HTTP/1.1 200 OK"
+2026-08-10 15:47:48,018 [app.middleware.request_logging] POST /api/v1/session/start -> 401 (6.6 ms)
+2026-08-10 15:47:48,022 [httpx] HTTP Request: POST http://testserver/api/v1/session/start "HTTP/1.1 401 Unauthorized"
+2026-08-10 15:48:29,885 [app.middleware.request_logging] POST /api/v1/auth/register -> 409 (139.4 ms)
+2026-08-10 15:48:29,893 [httpx] HTTP Request: POST http://testserver/api/v1/auth/register "HTTP/1.1 409 Conflict"
+2026-08-10 15:48:30,617 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (717.3 ms)
+2026-08-10 15:48:30,622 [httpx] HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 200 OK"
+2026-08-10 15:48:30,644 [app.middleware.request_logging] POST /api/v1/session/start -> 401 (16.5 ms)
+2026-08-10 15:48:30,649 [httpx] HTTP Request: POST http://testserver/api/v1/session/start "HTTP/1.1 401 Unauthorized"
+2026-08-10 15:48:30,672 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 401 (16.0 ms)
+2026-08-10 15:48:30,677 [httpx] HTTP Request: GET http://testserver/api/v1/aptitude/next-question "HTTP/1.1 401 Unauthorized"
+2026-08-10 15:48:31,004 [app.middleware.request_logging] POST /api/v1/interview/resume/upload -> 401 (320.4 ms)
+2026-08-10 15:48:31,009 [httpx] HTTP Request: POST http://testserver/api/v1/interview/resume/upload "HTTP/1.1 401 Unauthorized"
+2026-08-10 15:48:31,035 [app.middleware.request_logging] POST /api/v1/auth/register -> 409 (19.8 ms)
+2026-08-10 15:48:31,041 [httpx] HTTP Request: POST http://testserver/api/v1/auth/register "HTTP/1.1 409 Conflict"
+2026-08-10 15:48:31,609 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (561.0 ms)
+2026-08-10 15:48:31,613 [httpx] HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 200 OK"
+2026-08-10 15:48:31,625 [app.middleware.request_logging] POST /api/v1/session/start -> 401 (5.4 ms)
+2026-08-10 15:48:31,629 [httpx] HTTP Request: POST http://testserver/api/v1/session/start "HTTP/1.1 401 Unauthorized"
+2026-08-10 15:48:31,638 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 401 (3.7 ms)
+2026-08-10 15:48:31,641 [httpx] HTTP Request: GET http://testserver/api/v1/aptitude/next-question "HTTP/1.1 401 Unauthorized"
+2026-08-10 15:48:31,655 [app.middleware.request_logging] POST /api/v1/interview/resume/upload -> 401 (6.8 ms)
+2026-08-10 15:48:31,660 [httpx] HTTP Request: POST http://testserver/api/v1/interview/resume/upload "HTTP/1.1 401 Unauthorized"
+2026-08-10 15:52:58,362 [app.middleware.request_logging] POST /api/v1/auth/register -> 409 (36.3 ms)
+2026-08-10 15:52:58,363 [httpx] HTTP Request: POST http://testserver/api/v1/auth/register "HTTP/1.1 409 Conflict"
+2026-08-10 15:52:58,615 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (248.9 ms)
+2026-08-10 15:52:58,618 [httpx] HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 200 OK"
+2026-08-10 15:52:58,627 [app.middleware.request_logging] POST /api/v1/session/start -> 401 (5.5 ms)
+2026-08-10 15:52:58,629 [httpx] HTTP Request: POST http://testserver/api/v1/session/start "HTTP/1.1 401 Unauthorized"
+2026-08-10 15:52:58,638 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 401 (6.0 ms)
+2026-08-10 15:52:58,640 [httpx] HTTP Request: GET http://testserver/api/v1/aptitude/next-question "HTTP/1.1 401 Unauthorized"
+2026-08-10 15:52:58,780 [app.middleware.request_logging] POST /api/v1/interview/resume/upload -> 401 (136.5 ms)
+2026-08-10 15:52:58,782 [httpx] HTTP Request: POST http://testserver/api/v1/interview/resume/upload "HTTP/1.1 401 Unauthorized"
+2026-08-10 15:52:58,790 [app.middleware.request_logging] POST /api/v1/auth/register -> 409 (5.0 ms)
+2026-08-10 15:52:58,791 [httpx] HTTP Request: POST http://testserver/api/v1/auth/register "HTTP/1.1 409 Conflict"
+2026-08-10 15:52:59,014 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (219.2 ms)
+2026-08-10 15:52:59,018 [httpx] HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 200 OK"
+2026-08-10 15:52:59,022 [app.middleware.request_logging] POST /api/v1/session/start -> 401 (1.4 ms)
+2026-08-10 15:52:59,023 [httpx] HTTP Request: POST http://testserver/api/v1/session/start "HTTP/1.1 401 Unauthorized"
+2026-08-10 15:52:59,028 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 401 (1.8 ms)
+2026-08-10 15:52:59,029 [httpx] HTTP Request: GET http://testserver/api/v1/aptitude/next-question "HTTP/1.1 401 Unauthorized"
+2026-08-10 15:52:59,034 [app.middleware.request_logging] POST /api/v1/interview/resume/upload -> 401 (2.2 ms)
+2026-08-10 15:52:59,035 [httpx] HTTP Request: POST http://testserver/api/v1/interview/resume/upload "HTTP/1.1 401 Unauthorized"
+2026-08-10 15:53:22,059 [app.middleware.request_logging] GET /health -> 200 (33.0 ms)
+2026-08-10 15:53:22,062 [app.middleware.request_logging] GET /docs -> 200 (0.5 ms)
+2026-08-10 15:56:31,209 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (2665.8 ms)
+2026-08-10 15:56:31,263 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (29.7 ms)
+2026-08-10 15:56:31,837 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (82.6 ms)
+2026-08-10 15:56:31,864 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (14.8 ms)
+2026-08-10 15:56:41,619 [app.middleware.request_logging] POST /api/v1/session/start -> 201 (90.4 ms)
+2026-08-10 15:56:41,688 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (18.2 ms)
+2026-08-10 15:56:42,228 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 200 (380.1 ms)
+2026-08-10 15:56:47,660 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (558.0 ms)
+2026-08-10 15:56:51,124 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (25.4 ms)
+2026-08-10 15:57:14,359 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (47.3 ms)
+2026-08-10 15:57:31,057 [app.middleware.request_logging] POST /api/v1/aptitude/submit-answer -> 200 (152.8 ms)
+2026-08-10 15:57:31,113 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 200 (37.2 ms)
+2026-08-10 15:57:38,479 [app.middleware.request_logging] POST /api/v1/aptitude/submit-answer -> 200 (57.6 ms)
+2026-08-10 15:57:38,547 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 200 (42.0 ms)
+2026-08-10 15:57:44,069 [app.middleware.request_logging] POST /api/v1/aptitude/submit-answer -> 200 (53.5 ms)
+2026-08-10 15:57:44,113 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 200 (30.3 ms)
+2026-08-10 15:57:55,613 [app.middleware.request_logging] POST /api/v1/aptitude/submit-answer -> 200 (57.5 ms)
+2026-08-10 15:57:55,810 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 200 (23.0 ms)
+2026-08-10 15:58:17,435 [app.middleware.request_logging] POST /api/v1/aptitude/submit-answer -> 200 (82.8 ms)
+2026-08-10 15:58:17,501 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 200 (38.4 ms)
+2026-08-10 15:58:35,156 [app.middleware.request_logging] POST /api/v1/aptitude/submit-answer -> 200 (70.3 ms)
+2026-08-10 15:58:35,228 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 200 (50.0 ms)
+2026-08-10 15:58:51,085 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (22.7 ms)
+2026-08-10 15:59:00,007 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (25.0 ms)
+2026-08-10 15:59:03,285 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (35.1 ms)
+2026-08-10 15:59:08,352 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (35.7 ms)
+2026-08-10 15:59:20,928 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (43.2 ms)
+2026-08-10 15:59:29,179 [app.middleware.request_logging] POST /api/v1/aptitude/submit-answer -> 200 (55.6 ms)
+2026-08-10 15:59:29,232 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 200 (37.8 ms)
+2026-08-10 15:59:36,567 [app.middleware.request_logging] POST /api/v1/aptitude/submit-answer -> 200 (61.8 ms)
+2026-08-10 15:59:36,641 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 200 (54.9 ms)
+2026-08-10 15:59:42,119 [app.middleware.request_logging] POST /api/v1/aptitude/submit-answer -> 200 (76.8 ms)
+2026-08-10 15:59:42,228 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 200 (37.8 ms)
+2026-08-10 15:59:51,396 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (15.6 ms)
+2026-08-10 15:59:58,097 [app.middleware.request_logging] POST /api/v1/aptitude/submit-answer -> 200 (73.7 ms)
+2026-08-10 15:59:58,257 [app.middleware.request_logging] POST /api/v1/coding/start-after-aptitude -> 200 (141.9 ms)
+2026-08-10 15:59:58,511 [app.middleware.request_logging] GET /api/v1/aptitude/result -> 200 (170.7 ms)
+2026-08-10 15:59:58,559 [app.middleware.request_logging] GET /api/v1/aptitude/result -> 200 (36.3 ms)
+2026-08-10 16:04:04,758 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (68.5 ms)
+2026-08-10 16:04:04,799 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (20.9 ms)
+2026-08-10 16:04:07,296 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (102.1 ms)
+2026-08-10 16:04:07,322 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (13.5 ms)
+2026-08-10 16:04:07,755 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (48.2 ms)
+2026-08-10 16:04:07,854 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (143.5 ms)
+2026-08-10 16:04:17,775 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (13.5 ms)
+2026-08-10 16:04:17,789 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (8.4 ms)
+2026-08-10 16:04:30,913 [app.middleware.request_logging] POST /api/v1/session/start -> 200 (19.0 ms)
+2026-08-10 16:04:46,033 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-10 16:04:46,103 [faiss.loader] Loading faiss with AVX2 support.
+2026-08-10 16:04:46,104 [faiss.loader] Could not load library with AVX2 support due to:
+ModuleNotFoundError("No module named 'faiss.swigfaiss_avx2'")
+2026-08-10 16:04:46,104 [faiss.loader] Loading faiss.
+2026-08-10 16:04:46,726 [faiss.loader] Successfully loaded faiss.
+2026-08-10 16:05:35,079 [sentence_transformers.base.model] No device provided, using cpu
+2026-08-10 16:05:35,635 [sentence_transformers.base.model] Loading SentenceTransformer model from BAAI/bge-base-en-v1.5.
+2026-08-10 16:05:42,040 [rag_pipeline] [RAG Retrieval] role=Full Stack | fetched=8 | returned=5 | topics=['security', 'react', 'system design', 'authentication', 'react'] | scores=[0.653, 0.64, 0.63, 0.619, 0.617]
+2026-08-10 16:05:45,141 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-10 16:06:18,477 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-10 16:06:20,408 [rag_pipeline] [RAG Retrieval] role=Full Stack | fetched=8 | returned=5 | topics=['security', 'react', 'system design', 'authentication', 'react'] | scores=[0.653, 0.639, 0.629, 0.617, 0.616]
+2026-08-10 16:06:22,823 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-10 16:21:35,624 [app.middleware.request_logging] POST /api/v1/auth/register -> 409 (32.8 ms)
+2026-08-10 16:21:35,626 [httpx] HTTP Request: POST http://testserver/api/v1/auth/register "HTTP/1.1 409 Conflict"
+2026-08-10 16:21:35,881 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (252.8 ms)
+2026-08-10 16:21:35,883 [httpx] HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 200 OK"
+2026-08-10 16:21:35,889 [app.middleware.request_logging] POST /api/v1/session/start -> 401 (4.3 ms)
+2026-08-10 16:21:35,892 [httpx] HTTP Request: POST http://testserver/api/v1/session/start "HTTP/1.1 401 Unauthorized"
+2026-08-10 16:21:35,899 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 401 (4.1 ms)
+2026-08-10 16:21:35,901 [httpx] HTTP Request: GET http://testserver/api/v1/aptitude/next-question "HTTP/1.1 401 Unauthorized"
+2026-08-10 16:21:36,014 [app.middleware.request_logging] POST /api/v1/interview/resume/upload -> 401 (110.9 ms)
+2026-08-10 16:21:36,015 [httpx] HTTP Request: POST http://testserver/api/v1/interview/resume/upload "HTTP/1.1 401 Unauthorized"
+2026-08-10 16:21:36,023 [app.middleware.request_logging] POST /api/v1/auth/register -> 409 (4.4 ms)
+2026-08-10 16:21:36,024 [httpx] HTTP Request: POST http://testserver/api/v1/auth/register "HTTP/1.1 409 Conflict"
+2026-08-10 16:21:36,244 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (217.5 ms)
+2026-08-10 16:21:36,246 [httpx] HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 200 OK"
+2026-08-10 16:21:36,250 [app.middleware.request_logging] POST /api/v1/session/start -> 401 (1.2 ms)
+2026-08-10 16:21:36,251 [httpx] HTTP Request: POST http://testserver/api/v1/session/start "HTTP/1.1 401 Unauthorized"
+2026-08-10 16:21:36,254 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 401 (1.1 ms)
+2026-08-10 16:21:36,255 [httpx] HTTP Request: GET http://testserver/api/v1/aptitude/next-question "HTTP/1.1 401 Unauthorized"
+2026-08-10 16:21:36,259 [app.middleware.request_logging] POST /api/v1/interview/resume/upload -> 401 (1.7 ms)
+2026-08-10 16:21:36,260 [httpx] HTTP Request: POST http://testserver/api/v1/interview/resume/upload "HTTP/1.1 401 Unauthorized"
+2026-08-10 16:21:52,417 [app.middleware.request_logging] GET /health -> 200 (26.2 ms)
+2026-08-10 16:21:52,421 [app.middleware.request_logging] GET /docs -> 200 (0.4 ms)
+2026-08-10 16:25:17,030 [app.middleware.request_logging] POST /api/v1/auth/register -> 201 (447.8 ms)
+2026-08-10 16:25:17,034 [httpx] HTTP Request: POST http://testserver/api/v1/auth/register "HTTP/1.1 201 Created"
+2026-08-10 16:25:17,675 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (635.8 ms)
+2026-08-10 16:25:17,679 [httpx] HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 200 OK"
+2026-08-10 16:25:17,730 [app.middleware.request_logging] POST /api/v1/session/start -> 201 (45.0 ms)
+2026-08-10 16:25:17,735 [httpx] HTTP Request: POST http://testserver/api/v1/session/start "HTTP/1.1 201 Created"
+2026-08-10 16:26:19,199 [app.middleware.request_logging] POST /api/v1/auth/register -> 409 (55.5 ms)
+2026-08-10 16:26:19,202 [httpx] HTTP Request: POST http://testserver/api/v1/auth/register "HTTP/1.1 409 Conflict"
+2026-08-10 16:26:19,523 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (317.6 ms)
+2026-08-10 16:26:19,526 [httpx] HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 200 OK"
+2026-08-10 16:26:19,535 [app.middleware.request_logging] POST /api/v1/session/start -> 401 (6.5 ms)
+2026-08-10 16:26:19,537 [httpx] HTTP Request: POST http://testserver/api/v1/session/start "HTTP/1.1 401 Unauthorized"
+2026-08-10 16:26:19,547 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 401 (7.2 ms)
+2026-08-10 16:26:19,549 [httpx] HTTP Request: GET http://testserver/api/v1/aptitude/next-question "HTTP/1.1 401 Unauthorized"
+2026-08-10 16:26:19,706 [app.middleware.request_logging] POST /api/v1/interview/resume/upload -> 401 (154.1 ms)
+2026-08-10 16:26:19,709 [httpx] HTTP Request: POST http://testserver/api/v1/interview/resume/upload "HTTP/1.1 401 Unauthorized"
+2026-08-10 16:26:19,720 [app.middleware.request_logging] POST /api/v1/auth/register -> 409 (6.9 ms)
+2026-08-10 16:26:19,722 [httpx] HTTP Request: POST http://testserver/api/v1/auth/register "HTTP/1.1 409 Conflict"
+2026-08-10 16:26:19,999 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (274.8 ms)
+2026-08-10 16:26:20,002 [httpx] HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 200 OK"
+2026-08-10 16:26:20,007 [app.middleware.request_logging] POST /api/v1/session/start -> 401 (2.5 ms)
+2026-08-10 16:26:20,009 [httpx] HTTP Request: POST http://testserver/api/v1/session/start "HTTP/1.1 401 Unauthorized"
+2026-08-10 16:26:20,014 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 401 (2.3 ms)
+2026-08-10 16:26:20,016 [httpx] HTTP Request: GET http://testserver/api/v1/aptitude/next-question "HTTP/1.1 401 Unauthorized"
+2026-08-10 16:26:20,021 [app.middleware.request_logging] POST /api/v1/interview/resume/upload -> 401 (2.4 ms)
+2026-08-10 16:26:20,022 [httpx] HTTP Request: POST http://testserver/api/v1/interview/resume/upload "HTTP/1.1 401 Unauthorized"
+2026-08-10 16:30:38,074 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (1027.2 ms)
+2026-08-10 16:30:38,103 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (15.1 ms)
+2026-08-10 16:30:38,646 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (37.3 ms)
+2026-08-10 16:30:38,663 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (10.5 ms)
+2026-08-10 16:30:41,988 [app.middleware.request_logging] POST /api/v1/session/start -> 201 (37.9 ms)
+2026-08-10 16:31:00,374 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-10 16:31:00,393 [faiss.loader] Loading faiss with AVX2 support.
+2026-08-10 16:31:00,394 [faiss.loader] Could not load library with AVX2 support due to:
+ModuleNotFoundError("No module named 'faiss.swigfaiss_avx2'")
+2026-08-10 16:31:00,394 [faiss.loader] Loading faiss.
+2026-08-10 16:31:00,463 [faiss.loader] Successfully loaded faiss.
+2026-08-10 16:31:06,818 [sentence_transformers.base.model] No device provided, using cpu
+2026-08-10 16:31:07,354 [sentence_transformers.base.model] Loading SentenceTransformer model from BAAI/bge-base-en-v1.5.
+2026-08-10 16:31:13,396 [rag_pipeline] [RAG Retrieval] role=Full Stack | fetched=8 | returned=5 | topics=['security', 'react', 'system design', 'react', 'authentication'] | scores=[0.649, 0.64, 0.629, 0.619, 0.618]
+2026-08-10 16:31:15,808 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-10 16:31:15,892 [app.middleware.request_logging] POST /api/v1/interview/resume/upload -> 200 (20715.1 ms)
+2026-08-10 16:31:20,188 [app.middleware.request_logging] GET /api/v1/interview/pool/38 -> 200 (47.8 ms)
+2026-08-10 16:31:21,890 [app.middleware.request_logging] GET /api/v1/interview/pool/38 -> 200 (9.9 ms)
+2026-08-10 16:31:22,956 [app.middleware.request_logging] POST /api/v1/interview/session/start -> 200 (75.9 ms)
+2026-08-10 16:31:29,972 [app.services.sarvam_service] Redis TTS cache unavailable; continuing without cache: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it.
+2026-08-10 16:31:30,061 [app.services.sarvam_service] Sarvam client ready: True, key set: True
+2026-08-10 16:31:30,064 [app.services.sarvam_service] TTS request: text_len=133
+2026-08-10 16:31:33,776 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-10 16:31:33,848 [app.services.sarvam_service] TTS success: audios_count=1, bytes=370766, latency=3.78s
+2026-08-10 16:31:33,851 [app.services.sarvam_service] TTS request: text_len=133
+2026-08-10 16:31:37,344 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-10 16:31:37,399 [app.services.sarvam_service] TTS success: audios_count=1, bytes=361440, latency=3.55s
+2026-08-10 16:31:37,400 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (11917.3 ms)
+2026-08-10 16:31:37,407 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (3556.8 ms)
+2026-08-10 16:31:45,876 [app.modules.interview.routers.interview_router] Selected question 30329b2c4ffc: Can you describe your experience with React and ho... (asked_ids: 0)
+2026-08-10 16:31:49,981 [app.modules.interview.routers.interview_router] Redis cache unavailable; continuing without cache: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it.
+2026-08-10 16:31:50,393 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-10 16:31:50,410 [app.middleware.request_logging] GET /api/v1/interview/session/35/next -> 200 (4597.2 ms)
+2026-08-10 16:31:50,440 [app.services.sarvam_service] TTS request: text_len=247
+2026-08-10 16:31:57,610 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-10 16:31:57,730 [app.services.sarvam_service] TTS success: audios_count=1, bytes=612192, latency=7.30s
+2026-08-10 16:31:57,732 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (7293.9 ms)
+2026-08-10 16:33:29,528 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2026-08-10 16:33:29,540 [app.middleware.request_logging] POST /api/v1/interview/stt -> 200 (899.9 ms)
+2026-08-10 16:33:30,898 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-10 16:33:31,554 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-10 16:33:31,640 [app.middleware.request_logging] POST /api/v1/interview/session/35/respond -> 200 (2075.4 ms)
+2026-08-10 16:33:31,666 [app.services.sarvam_service] TTS request: text_len=325
+2026-08-10 16:33:37,310 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-10 16:33:37,432 [app.services.sarvam_service] TTS success: audios_count=1, bytes=806664, latency=5.77s
+2026-08-10 16:33:37,434 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (5769.6 ms)
+2026-08-10 16:35:32,259 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2026-08-10 16:35:32,268 [app.middleware.request_logging] POST /api/v1/interview/stt -> 200 (700.3 ms)
+2026-08-10 16:35:32,549 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-10 16:35:33,151 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-10 16:35:33,171 [app.middleware.request_logging] POST /api/v1/interview/session/35/respond -> 200 (865.2 ms)
+2026-08-10 16:35:33,233 [app.services.sarvam_service] TTS request: text_len=167
+2026-08-10 16:35:37,599 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-10 16:35:37,700 [app.services.sarvam_service] TTS success: audios_count=1, bytes=452314, latency=4.47s
+2026-08-10 16:35:37,701 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (4469.5 ms)
+2026-08-10 16:36:12,838 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (45.7 ms)
+2026-08-10 16:36:12,856 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (10.2 ms)
+2026-08-10 16:56:07,171 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (312.2 ms)
+2026-08-10 16:56:07,210 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (12.4 ms)
+2026-08-10 17:04:57,152 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (565.0 ms)
+2026-08-10 17:04:57,221 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (38.2 ms)
+2026-08-10 17:12:57,239 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (239.9 ms)
+2026-08-10 17:12:57,277 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (16.7 ms)
+2026-08-12 17:16:40,447 [app.middleware.request_logging] GET /health -> 200 (32.5 ms)
+2026-08-12 17:16:45,864 [app.middleware.request_logging] GET /health -> 200 (1.9 ms)
+2026-08-12 17:16:59,877 [app.middleware.request_logging] POST /api/v1/coding/run -> 422 (16.8 ms)
+2026-08-12 17:17:09,206 [app.middleware.request_logging] POST /api/v1/coding/run -> 422 (1.2 ms)
+2026-08-12 17:17:47,676 [app.middleware.request_logging] POST /api/v1/coding/run -> 401 (42.4 ms)
+2026-08-12 17:35:50,972 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (1205.6 ms)
+2026-08-12 17:35:51,009 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (13.8 ms)
+2026-08-12 17:35:51,574 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (58.0 ms)
+2026-08-12 17:35:51,592 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (8.7 ms)
+2026-08-12 17:35:58,184 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (148.4 ms)
+2026-08-12 17:35:58,200 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (9.2 ms)
+2026-08-12 17:35:58,614 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (29.9 ms)
+2026-08-12 17:35:58,675 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (89.6 ms)
+2026-08-12 17:36:50,465 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (1362.5 ms)
+2026-08-12 17:36:58,397 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (699.1 ms)
+2026-08-12 17:37:06,563 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (768.2 ms)
+2026-08-12 17:37:14,024 [app.middleware.request_logging] POST /api/v1/coding/submit -> 200 (4627.6 ms)
+2026-08-12 17:37:28,453 [app.middleware.request_logging] POST /api/v1/coding/submit -> 200 (4166.0 ms)
+2026-08-12 23:03:21,323 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (611.2 ms)
+2026-08-12 23:03:21,342 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (10.1 ms)
+2026-08-12 23:03:21,901 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (51.4 ms)
+2026-08-12 23:03:21,922 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (10.1 ms)
+2026-08-12 23:03:25,333 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (72.1 ms)
+2026-08-12 23:03:25,360 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (16.6 ms)
+2026-08-12 23:03:25,774 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (34.2 ms)
+2026-08-12 23:03:25,821 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (79.2 ms)
+2026-08-12 23:04:48,715 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (42176.2 ms)
+2026-08-12 23:05:48,553 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (42089.4 ms)
+2026-08-12 23:07:20,807 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (49.4 ms)
+2026-08-12 23:07:20,863 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (100.7 ms)
+2026-08-12 23:08:09,092 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (42117.1 ms)
+2026-08-12 23:08:19,460 [app.middleware.request_logging] POST /api/v1/coding/submit -> 200 (147429.0 ms)
+2026-08-12 23:08:39,845 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (21061.9 ms)
+2026-08-13 00:00:36,189 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (661.8 ms)
+2026-08-13 00:00:36,207 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (9.6 ms)
+2026-08-13 00:00:36,756 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (47.2 ms)
+2026-08-13 00:00:36,772 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (8.5 ms)
+2026-08-13 00:00:39,435 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (98.1 ms)
+2026-08-13 00:00:39,469 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (21.6 ms)
+2026-08-13 00:00:39,892 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (40.8 ms)
+2026-08-13 00:00:39,948 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (96.6 ms)
+2026-08-13 00:03:17,397 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (345.3 ms)
+2026-08-13 00:03:17,398 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (319.5 ms)
+2026-08-13 00:03:29,011 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (1464.4 ms)
+2026-08-13 00:04:40,784 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (3547.3 ms)
+2026-08-13 00:05:25,921 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (34316.9 ms)
+2026-08-13 00:06:39,139 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (2779.0 ms)
+2026-08-13 00:06:53,786 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (2078.4 ms)
+2026-08-13 00:14:45,751 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (318.5 ms)
+2026-08-13 00:14:45,756 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (321.4 ms)
+2026-08-13 00:19:13,294 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (108.5 ms)
+2026-08-13 00:19:13,296 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (96.8 ms)
+2026-08-13 01:20:27,547 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (1902.9 ms)
+2026-08-13 01:20:27,591 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (17.8 ms)
+2026-08-13 01:20:28,181 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (79.3 ms)
+2026-08-13 01:20:28,214 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (14.8 ms)
+2026-08-13 01:20:31,089 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (130.6 ms)
+2026-08-13 01:20:31,132 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (26.7 ms)
+2026-08-13 01:22:09,379 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (537.0 ms)
+2026-08-13 01:22:09,407 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (8.0 ms)
+2026-08-13 01:22:09,940 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (16.4 ms)
+2026-08-13 01:22:09,969 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (20.2 ms)
+2026-08-13 01:22:14,943 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (64.7 ms)
+2026-08-13 01:22:14,976 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (18.9 ms)
+2026-08-13 01:27:10,084 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (915.8 ms)
+2026-08-13 01:27:10,155 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (35.6 ms)
+2026-08-13 01:27:10,682 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (36.8 ms)
+2026-08-13 01:27:10,712 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (15.2 ms)
+2026-08-13 01:27:14,239 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (59.8 ms)
+2026-08-13 01:27:14,269 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (16.4 ms)
+2026-08-13 01:27:14,807 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (107.2 ms)
+2026-08-13 01:27:14,972 [app.middleware.request_logging] POST /api/v1/coding/submit -> 422 (271.0 ms)
+2026-08-13 01:27:14,977 [app.middleware.request_logging] POST /api/v1/coding/submit -> 422 (311.8 ms)
+2026-08-13 01:27:15,028 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (329.3 ms)
+2026-08-13 01:28:27,401 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (543.4 ms)
+2026-08-13 01:28:27,445 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (12.2 ms)
+2026-08-13 01:28:27,995 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (40.0 ms)
+2026-08-13 01:28:28,022 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (16.9 ms)
+2026-08-13 01:28:30,303 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (49.6 ms)
+2026-08-13 01:28:30,372 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (44.5 ms)
+2026-08-13 01:28:30,831 [app.middleware.request_logging] POST /api/v1/coding/submit -> 422 (25.8 ms)
+2026-08-13 01:28:30,931 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (105.3 ms)
+2026-08-13 01:28:30,936 [app.middleware.request_logging] POST /api/v1/coding/submit -> 422 (98.7 ms)
+2026-08-13 01:28:30,953 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (115.0 ms)
+2026-08-13 01:28:30,967 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (71.4 ms)
+2026-08-13 01:28:30,996 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (16.5 ms)
+2026-08-13 01:28:33,671 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (39.9 ms)
+2026-08-13 01:28:33,730 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (35.3 ms)
+2026-08-13 01:28:34,158 [app.middleware.request_logging] POST /api/v1/coding/submit -> 422 (21.1 ms)
+2026-08-13 01:28:34,223 [app.middleware.request_logging] POST /api/v1/coding/submit -> 422 (47.5 ms)
+2026-08-13 01:28:34,266 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (92.3 ms)
+2026-08-13 01:28:34,278 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (113.1 ms)
+2026-08-13 01:28:34,282 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (70.5 ms)
+2026-08-13 01:28:34,321 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (25.0 ms)
+2026-08-13 01:33:12,687 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (744.5 ms)
+2026-08-13 01:33:12,752 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (22.6 ms)
+2026-08-13 01:33:13,276 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (36.3 ms)
+2026-08-13 01:33:13,316 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (23.9 ms)
+2026-08-13 01:33:16,262 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (432.2 ms)
+2026-08-13 01:33:16,337 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (36.1 ms)
+2026-08-13 01:33:16,827 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (77.2 ms)
+2026-08-13 01:33:16,841 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (82.7 ms)
+2026-08-13 01:36:57,492 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (587.2 ms)
+2026-08-13 01:36:57,532 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (14.5 ms)
+2026-08-13 01:36:58,069 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (29.6 ms)
+2026-08-13 01:36:58,106 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (20.2 ms)
+2026-08-13 01:37:00,804 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (63.3 ms)
+2026-08-13 01:37:00,868 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (38.4 ms)
+2026-08-13 01:37:01,342 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (48.0 ms)
+2026-08-13 01:37:01,403 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (110.0 ms)
+2026-08-13 01:37:01,414 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (99.3 ms)
+2026-08-13 01:37:01,440 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (54.5 ms)
+2026-08-13 01:37:04,763 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (40.9 ms)
+2026-08-13 01:37:04,823 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (20.0 ms)
+2026-08-13 01:37:05,283 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (37.3 ms)
+2026-08-13 01:37:05,308 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (64.3 ms)
+2026-08-13 01:37:05,332 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (73.1 ms)
+2026-08-13 01:37:05,350 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (42.9 ms)
+2026-08-13 01:45:33,656 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (743.3 ms)
+2026-08-13 01:45:33,711 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (30.1 ms)
+2026-08-13 01:46:04,393 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (620.5 ms)
+2026-08-13 01:46:04,424 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (14.4 ms)
+2026-08-13 01:46:04,996 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (35.6 ms)
+2026-08-13 01:46:05,032 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (18.9 ms)
+2026-08-13 01:46:07,371 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (123.7 ms)
+2026-08-13 01:46:07,418 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (25.2 ms)
+2026-08-13 01:46:07,892 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (39.8 ms)
+2026-08-13 01:46:07,980 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (117.9 ms)
+2026-08-13 01:46:08,024 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (153.9 ms)
+2026-08-13 01:46:08,036 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (43.7 ms)
+2026-08-13 01:46:10,604 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (57.3 ms)
+2026-08-13 01:46:10,648 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (27.5 ms)
+2026-08-13 01:46:11,129 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (35.8 ms)
+2026-08-13 01:46:11,146 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (54.5 ms)
+2026-08-13 01:46:11,185 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (81.1 ms)
+2026-08-13 01:46:11,206 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (41.7 ms)
+2026-08-13 01:46:17,075 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (31.7 ms)
+2026-08-13 01:46:17,111 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (22.1 ms)
+2026-08-13 01:46:17,603 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (32.0 ms)
+2026-08-13 01:46:17,624 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (55.8 ms)
+2026-08-13 01:46:17,660 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (77.5 ms)
+2026-08-13 01:46:17,667 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (44.6 ms)
+2026-08-13 01:46:19,770 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (63.3 ms)
+2026-08-13 01:46:19,815 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (22.5 ms)
+2026-08-13 01:46:20,287 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (37.0 ms)
+2026-08-13 01:46:20,298 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (57.7 ms)
+2026-08-13 01:46:20,351 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (85.4 ms)
+2026-08-13 01:46:20,361 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (42.8 ms)
+2026-08-13 01:46:24,386 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (36.3 ms)
+2026-08-13 01:46:24,429 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (24.9 ms)
+2026-08-13 01:46:24,918 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (47.6 ms)
+2026-08-13 01:46:24,963 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (93.7 ms)
+2026-08-13 01:46:24,977 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (90.4 ms)
+2026-08-13 01:46:25,010 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (51.6 ms)
+2026-08-13 01:46:27,146 [app.middleware.request_logging] POST /api/v1/session/start -> 200 (24.9 ms)
+2026-08-13 01:46:27,228 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (29.8 ms)
+2026-08-13 01:46:27,393 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 404 (19.1 ms)
+2026-08-13 01:46:27,468 [app.middleware.request_logging] POST /api/v1/coding/start-after-aptitude -> 200 (40.8 ms)
+2026-08-13 01:46:28,081 [app.middleware.request_logging] GET /api/v1/aptitude/result -> 200 (491.4 ms)
+2026-08-13 01:46:28,205 [app.middleware.request_logging] GET /api/v1/aptitude/result -> 200 (105.7 ms)
+2026-08-13 01:46:34,051 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (48.0 ms)
+2026-08-13 01:46:34,116 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (36.3 ms)
+2026-08-13 01:46:34,961 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (1049.8 ms)
+2026-08-13 01:46:40,585 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (45.6 ms)
+2026-08-13 01:46:40,633 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (29.5 ms)
+2026-08-13 01:46:41,209 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (46.3 ms)
+2026-08-13 01:46:41,237 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (50.3 ms)
+2026-08-13 01:46:41,313 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (20.3 ms)
+2026-08-13 01:46:41,365 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (33.1 ms)
+2026-08-13 10:31:54,343 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (806.1 ms)
+2026-08-13 10:31:54,370 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (13.1 ms)
+2026-08-13 10:31:55,015 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (98.0 ms)
+2026-08-13 10:31:55,040 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (12.9 ms)
+2026-08-13 10:31:57,136 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (151.8 ms)
+2026-08-13 10:31:57,169 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (19.6 ms)
+2026-08-13 10:31:57,604 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (41.3 ms)
+2026-08-13 10:31:57,678 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (112.0 ms)
+2026-08-13 10:57:26,097 [app.middleware.request_logging] GET /health -> 200 (336.9 ms)
+2026-08-13 10:58:09,613 [app.middleware.request_logging] POST /api/auth/register -> 404 (18.8 ms)
+2026-08-13 10:58:27,612 [app.middleware.request_logging] POST /api/v1/auth/register -> 201 (634.2 ms)
+2026-08-13 10:58:45,055 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (500.7 ms)
+2026-08-13 11:19:33,641 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (1249.0 ms)
+2026-08-13 11:19:33,730 [app.middleware.request_logging] GET /api/v1/coding/problems -> 200 (89.2 ms)
+2026-08-13 11:21:09,516 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (448.9 ms)
+2026-08-13 11:21:09,528 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (470.7 ms)
+2026-08-13 11:21:09,646 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (30.5 ms)
+2026-08-13 11:21:23,491 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (1010.3 ms)
+2026-08-13 11:21:23,496 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (813.1 ms)
+2026-08-13 11:21:59,549 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (58.2 ms)
+2026-08-13 11:21:59,552 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (63.0 ms)
+2026-08-13 11:21:59,641 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (13.2 ms)
+2026-08-13 11:22:11,589 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (58.4 ms)
+2026-08-13 11:22:11,950 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (24.5 ms)
+2026-08-13 11:22:11,954 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (27.1 ms)
+2026-08-13 11:25:04,506 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (325.0 ms)
+2026-08-13 11:25:04,513 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (339.5 ms)
+2026-08-13 11:25:04,669 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (34.8 ms)
+2026-08-13 11:25:31,865 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (106.9 ms)
+2026-08-13 11:25:31,874 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (122.0 ms)
+2026-08-13 11:25:32,107 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (47.8 ms)
+2026-08-13 19:08:11,270 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (739.3 ms)
+2026-08-13 19:08:11,291 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (10.1 ms)
+2026-08-13 19:08:11,875 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (52.3 ms)
+2026-08-13 19:08:11,886 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (5.6 ms)
+2026-08-13 19:08:14,555 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (99.7 ms)
+2026-08-13 19:08:14,578 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (13.0 ms)
+2026-08-13 19:08:14,994 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (44.8 ms)
+2026-08-13 19:08:15,050 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (94.2 ms)
+2026-08-13 19:08:15,070 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (7.3 ms)
+2026-08-13 19:08:28,144 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (221.9 ms)
+2026-08-13 19:08:39,459 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (9.4 ms)
+2026-08-13 19:08:54,209 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (10.7 ms)
+2026-08-13 19:08:56,065 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (14.1 ms)
+2026-08-13 19:08:57,349 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (26.1 ms)
+2026-08-13 19:09:38,556 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (3543.3 ms)
+2026-08-13 19:10:23,241 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (17.0 ms)
+2026-08-13 19:10:41,958 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (12.0 ms)
+2026-08-13 19:10:46,761 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (14.3 ms)
+2026-08-13 19:11:11,168 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (2784.5 ms)
+2026-08-13 19:11:20,283 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (10.9 ms)
+2026-08-13 19:11:37,083 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (9.0 ms)
+2026-08-13 19:11:39,930 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (9.1 ms)
+2026-08-13 19:12:38,103 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (16.0 ms)
+2026-08-13 19:13:19,359 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (17.7 ms)
+2026-08-13 19:13:47,776 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (3244.9 ms)
+2026-08-13 19:13:52,437 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (26.5 ms)
+2026-08-13 19:14:41,235 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (18.7 ms)
+2026-08-13 19:15:16,377 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (44.4 ms)
+2026-08-13 19:15:21,791 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (16.8 ms)
+2026-08-13 19:15:33,149 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (25.3 ms)
+2026-08-13 19:16:33,091 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (15.8 ms)
+2026-08-13 19:18:35,499 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (2645.5 ms)
+2026-08-13 19:18:37,143 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (19.3 ms)
+2026-08-13 19:18:39,270 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (10.8 ms)
+2026-08-13 19:19:30,049 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (18.5 ms)
+2026-08-13 19:20:08,197 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (367.0 ms)
+2026-08-13 19:20:08,268 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (14.1 ms)
+2026-08-13 19:20:10,184 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (25.0 ms)
+2026-08-13 19:20:10,258 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (11.4 ms)
+2026-08-13 19:20:14,176 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (25.7 ms)
+2026-08-13 19:20:14,244 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (11.6 ms)
+2026-08-13 19:22:53,130 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (14.9 ms)
+2026-08-13 19:22:53,177 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (6.9 ms)
+2026-08-13 19:22:58,109 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (10.7 ms)
+2026-08-13 19:22:58,150 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (4.9 ms)
+2026-08-13 19:23:03,122 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (18.4 ms)
+2026-08-13 19:23:03,154 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (7.3 ms)
+2026-08-13 19:23:05,945 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (27.6 ms)
+2026-08-13 19:23:05,977 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (10.4 ms)
+2026-08-13 19:23:10,246 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (86.5 ms)
+2026-08-13 19:23:10,953 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (20.8 ms)
+2026-08-13 19:23:24,956 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (38.6 ms)
+2026-08-13 19:23:24,996 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (11.5 ms)
+2026-08-14 16:39:38,735 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (1283.3 ms)
+2026-08-14 16:39:38,774 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (19.6 ms)
+2026-08-14 16:39:39,346 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (70.4 ms)
+2026-08-14 16:39:39,367 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (10.3 ms)
+2026-08-14 16:39:42,758 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (176.9 ms)
+2026-08-14 16:39:42,795 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (19.8 ms)
+2026-08-14 16:39:43,297 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (58.1 ms)
+2026-08-14 16:39:43,464 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (20.6 ms)
+2026-08-14 16:39:43,477 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (222.5 ms)
+2026-08-14 16:39:55,335 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 403 (35.4 ms)
+2026-08-14 16:39:56,076 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 403 (14.5 ms)
+2026-08-14 16:41:23,565 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (1716.3 ms)
+2026-08-14 16:41:32,560 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (1308.4 ms)
+2026-08-14 16:42:10,202 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (1458.0 ms)
+2026-08-14 16:42:42,093 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (1323.8 ms)
+2026-08-14 16:43:30,830 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (4080.8 ms)
+2026-08-14 16:43:41,340 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (3860.8 ms)
+2026-08-15 12:14:43,345 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (1492.0 ms)
+2026-08-15 12:14:43,388 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (19.6 ms)
+2026-08-15 12:14:43,959 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (72.0 ms)
+2026-08-15 12:14:43,985 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (12.3 ms)
+2026-08-15 12:14:47,221 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (144.8 ms)
+2026-08-15 12:14:47,257 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (22.1 ms)
+2026-08-15 12:14:47,874 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (164.5 ms)
+2026-08-15 12:14:47,977 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (252.1 ms)
+2026-08-15 12:14:48,258 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (17.1 ms)
+2026-08-15 12:14:59,784 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 403 (38.5 ms)
+2026-08-15 12:15:00,666 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 403 (19.8 ms)
+2026-08-15 12:16:42,170 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (2132.5 ms)
+2026-08-15 12:16:53,095 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (1254.9 ms)
+2026-08-15 12:17:08,307 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (1192.4 ms)
+2026-08-15 12:17:18,882 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (1243.5 ms)
+2026-08-15 12:18:11,517 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (3961.9 ms)
+2026-08-15 12:18:32,921 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (3648.6 ms)
+2026-08-15 12:18:42,167 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (3457.3 ms)
+2026-08-15 12:18:51,006 [app.middleware.request_logging] POST /api/v1/coding/submit -> 200 (6843.1 ms)
+2026-08-15 12:20:02,681 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (2306.1 ms)
+2026-08-15 12:20:14,620 [app.middleware.request_logging] POST /api/v1/coding/submit -> 200 (9566.3 ms)
+2026-08-15 12:21:53,309 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (2280.7 ms)
+2026-08-15 12:22:06,277 [app.middleware.request_logging] POST /api/v1/coding/submit -> 200 (10187.9 ms)
+2026-08-15 12:23:07,436 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (3452.4 ms)
+2026-08-15 12:23:29,612 [app.middleware.request_logging] POST /api/v1/coding/submit -> 200 (9579.2 ms)
+2026-08-15 12:23:44,465 [app.middleware.request_logging] POST /api/v1/coding/submit -> 200 (9554.1 ms)
+2026-08-15 12:28:53,086 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (41.6 ms)
+2026-08-15 12:28:53,515 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (13.7 ms)
+2026-08-15 12:29:20,962 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (19.2 ms)
+2026-08-15 12:29:21,025 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (19.5 ms)
+2026-08-15 12:29:37,911 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (19.3 ms)
+2026-08-15 12:29:37,983 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (9.3 ms)
+2026-08-15 12:30:02,974 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (25.9 ms)
+2026-08-15 12:30:03,049 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (7.9 ms)
+2026-08-15 12:31:57,666 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (203.4 ms)
+2026-08-15 12:31:57,691 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (228.5 ms)
+2026-08-15 12:31:57,707 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (1022.1 ms)
+2026-08-15 12:31:57,858 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (41.2 ms)
+2026-08-15 12:32:00,744 [app.middleware.request_logging] POST /api/v1/coding/finish -> 200 (145.5 ms)
+2026-08-15 12:32:00,830 [app.middleware.request_logging] GET /api/v1/coding/results -> 404 (40.7 ms)
+2026-08-15 12:32:00,845 [app.middleware.request_logging] GET /api/v1/coding/results -> 404 (3.4 ms)
+2026-08-15 12:32:00,870 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (37.0 ms)
+2026-08-15 12:32:01,616 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (31.0 ms)
+2026-08-15 12:32:02,962 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (19.2 ms)
+2026-08-15 12:32:02,996 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (23.1 ms)
+2026-08-15 12:34:42,107 [app.middleware.request_logging] GET /api/v1/report/analytics -> 200 (62.6 ms)
+2026-08-15 12:34:42,144 [app.middleware.request_logging] GET /api/v1/report/analytics -> 200 (28.1 ms)
+2026-08-15 12:34:57,296 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (17.4 ms)
+2026-08-15 12:34:57,332 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (25.3 ms)
+2026-08-15 12:35:00,001 [app.middleware.request_logging] POST /api/v1/session/start -> 200 (17.0 ms)
+2026-08-15 12:35:00,071 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (17.1 ms)
+2026-08-15 12:35:00,174 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 404 (27.1 ms)
+2026-08-15 12:35:00,265 [app.middleware.request_logging] POST /api/v1/coding/start-after-aptitude -> 200 (72.4 ms)
+2026-08-15 12:35:00,507 [app.middleware.request_logging] GET /api/v1/aptitude/result -> 200 (194.7 ms)
+2026-08-15 12:35:00,608 [app.middleware.request_logging] GET /api/v1/aptitude/result -> 200 (86.8 ms)
+2026-08-15 12:35:02,591 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (19.3 ms)
+2026-08-15 12:35:04,716 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (15.1 ms)
+2026-08-15 12:35:04,739 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (14.4 ms)
+2026-08-15 12:35:09,966 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (33.4 ms)
+2026-08-15 12:35:10,000 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (16.6 ms)
+2026-08-15 12:35:10,503 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (48.2 ms)
+2026-08-15 12:35:10,528 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (52.2 ms)
+2026-08-15 12:35:10,578 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (15.5 ms)
+2026-08-15 12:35:15,171 [app.middleware.request_logging] POST /api/v1/coding/finish -> 200 (44.2 ms)
+2026-08-15 12:35:15,222 [app.middleware.request_logging] GET /api/v1/coding/results -> 404 (2.6 ms)
+2026-08-15 12:35:15,247 [app.middleware.request_logging] GET /api/v1/coding/results -> 404 (5.3 ms)
+2026-08-15 12:35:15,269 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (26.0 ms)
+2026-08-15 12:35:15,435 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (15.1 ms)
+2026-08-15 12:35:22,120 [app.services.sarvam_service] Redis TTS cache unavailable; continuing without cache: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it.
+2026-08-15 12:35:22,176 [app.services.sarvam_service] Sarvam client ready: True, key set: True
+2026-08-15 12:35:22,177 [app.services.sarvam_service] TTS request: text_len=133
+2026-08-15 12:35:25,551 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-15 12:35:25,655 [app.services.sarvam_service] TTS success: audios_count=1, bytes=336076, latency=3.47s
+2026-08-15 12:35:25,659 [app.services.sarvam_service] TTS request: text_len=133
+2026-08-15 12:35:28,935 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-15 12:35:29,085 [app.services.sarvam_service] TTS success: audios_count=1, bytes=344848, latency=3.44s
+2026-08-15 12:35:29,087 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (11624.1 ms)
+2026-08-15 12:35:29,090 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (3434.2 ms)
+2026-08-15 12:35:36,528 [app.modules.interview.routers.interview_router] Selected question d1799e9a72ad: How do you stay current with the latest developmen... (asked_ids: 2)
+2026-08-15 12:35:40,635 [app.modules.interview.routers.interview_router] Redis cache unavailable; continuing without cache: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it.
+2026-08-15 12:35:41,486 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-15 12:35:41,615 [app.middleware.request_logging] GET /api/v1/interview/session/35/next -> 200 (5181.6 ms)
+2026-08-15 12:35:41,636 [app.services.sarvam_service] TTS request: text_len=251
+2026-08-15 12:35:46,435 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-15 12:35:46,531 [app.services.sarvam_service] TTS success: audios_count=1, bytes=508558, latency=4.89s
+2026-08-15 12:35:46,533 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (4899.4 ms)
+2026-08-15 12:40:09,875 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (450.1 ms)
+2026-08-15 12:40:09,904 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (18.0 ms)
+2026-08-15 12:40:10,430 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (15.8 ms)
+2026-08-15 12:40:10,450 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (9.7 ms)
+2026-08-15 12:40:15,152 [app.middleware.request_logging] POST /api/v1/session/start -> 200 (13.6 ms)
+2026-08-15 12:40:35,060 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-15 12:40:35,080 [faiss.loader] Loading faiss with AVX2 support.
+2026-08-15 12:40:35,081 [faiss.loader] Could not load library with AVX2 support due to:
+ModuleNotFoundError("No module named 'faiss.swigfaiss_avx2'")
+2026-08-15 12:40:35,081 [faiss.loader] Loading faiss.
+2026-08-15 12:40:35,970 [faiss.loader] Successfully loaded faiss.
+2026-08-15 12:41:08,367 [sentence_transformers.base.model] No device provided, using cpu
+2026-08-15 12:41:09,006 [sentence_transformers.base.model] Loading SentenceTransformer model from BAAI/bge-base-en-v1.5.
+2026-08-15 12:41:15,558 [rag_pipeline] [RAG Retrieval] role=Full Stack | fetched=8 | returned=5 | topics=['security', 'react', 'system design', 'authentication', 'react'] | scores=[0.653, 0.64, 0.63, 0.619, 0.617]
+2026-08-15 12:41:18,441 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-15 12:41:18,527 [app.middleware.request_logging] POST /api/v1/interview/resume/upload -> 200 (49429.8 ms)
+2026-08-15 12:41:23,921 [app.middleware.request_logging] GET /api/v1/interview/pool/39 -> 200 (39.7 ms)
+2026-08-15 12:41:25,893 [app.middleware.request_logging] GET /api/v1/interview/pool/39 -> 200 (11.2 ms)
+2026-08-15 12:41:25,918 [app.middleware.request_logging] POST /api/v1/interview/session/start -> 200 (33.3 ms)
+2026-08-15 12:41:51,371 [app.services.sarvam_service] TTS request: text_len=133
+2026-08-15 12:41:54,413 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-15 12:41:54,531 [app.services.sarvam_service] TTS success: audios_count=1, bytes=344536, latency=3.16s
+2026-08-15 12:41:54,536 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (3169.7 ms)
+2026-08-15 12:41:54,547 [app.services.sarvam_service] TTS request: text_len=133
+2026-08-15 12:41:57,981 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-15 12:41:58,062 [app.services.sarvam_service] TTS success: audios_count=1, bytes=356806, latency=3.52s
+2026-08-15 12:41:58,064 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (3525.0 ms)
+2026-08-15 12:42:05,811 [app.modules.interview.routers.interview_router] Selected question 6dc046091e99: Can you tell me about a challenging project you wo... (asked_ids: 0)
+2026-08-15 12:42:09,935 [app.modules.interview.routers.interview_router] Redis cache unavailable; continuing without cache: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it.
+2026-08-15 12:42:10,297 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-15 12:42:10,306 [app.middleware.request_logging] GET /api/v1/interview/session/36/next -> 200 (4522.4 ms)
+2026-08-15 12:42:10,324 [app.services.sarvam_service] TTS request: text_len=295
+2026-08-15 12:42:16,597 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-15 12:42:16,719 [app.services.sarvam_service] TTS success: audios_count=1, bytes=667232, latency=6.39s
+2026-08-15 12:42:16,720 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (6397.7 ms)
+2026-08-15 12:44:06,986 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (659.3 ms)
+2026-08-15 12:44:07,009 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (11.9 ms)
+2026-08-15 12:44:07,560 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (33.9 ms)
+2026-08-15 12:44:07,578 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (8.6 ms)
+2026-08-15 12:44:14,792 [app.middleware.request_logging] POST /api/v1/session/start -> 200 (14.9 ms)
+2026-08-15 12:44:27,441 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-15 12:44:27,478 [faiss.loader] Loading faiss with AVX2 support.
+2026-08-15 12:44:27,478 [faiss.loader] Could not load library with AVX2 support due to:
+ModuleNotFoundError("No module named 'faiss.swigfaiss_avx2'")
+2026-08-15 12:44:27,479 [faiss.loader] Loading faiss.
+2026-08-15 12:44:27,585 [faiss.loader] Successfully loaded faiss.
+2026-08-15 12:44:38,864 [sentence_transformers.base.model] No device provided, using cpu
+2026-08-15 12:44:39,436 [sentence_transformers.base.model] Loading SentenceTransformer model from BAAI/bge-base-en-v1.5.
+2026-08-15 12:44:47,220 [rag_pipeline] [RAG Retrieval] role=Full Stack | fetched=8 | returned=5 | topics=['security', 'react', 'system design', 'authentication', 'react'] | scores=[0.653, 0.64, 0.63, 0.619, 0.617]
+2026-08-15 12:44:50,505 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-15 12:44:50,543 [app.middleware.request_logging] POST /api/v1/interview/resume/upload -> 200 (27137.9 ms)
+2026-08-15 12:44:54,089 [app.middleware.request_logging] GET /api/v1/interview/pool/40 -> 200 (11.8 ms)
+2026-08-15 12:44:56,078 [app.middleware.request_logging] GET /api/v1/interview/pool/40 -> 200 (9.0 ms)
+2026-08-15 12:44:57,090 [app.middleware.request_logging] POST /api/v1/interview/session/start -> 200 (25.3 ms)
+2026-08-15 12:45:05,584 [app.services.sarvam_service] Redis TTS cache unavailable; continuing without cache: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it.
+2026-08-15 12:45:05,614 [app.services.sarvam_service] Sarvam client ready: True, key set: True
+2026-08-15 12:45:05,614 [app.services.sarvam_service] TTS request: text_len=133
+2026-08-15 12:45:09,016 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-15 12:45:09,101 [app.services.sarvam_service] TTS success: audios_count=1, bytes=360362, latency=3.48s
+2026-08-15 12:45:09,105 [app.services.sarvam_service] TTS request: text_len=133
+2026-08-15 12:45:12,065 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-15 12:45:12,174 [app.services.sarvam_service] TTS success: audios_count=1, bytes=340450, latency=3.06s
+2026-08-15 12:45:12,174 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (10755.1 ms)
+2026-08-15 12:45:12,175 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (3072.5 ms)
+2026-08-15 12:50:16,375 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (594.6 ms)
+2026-08-15 12:50:16,399 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (8.9 ms)
+2026-08-15 12:50:16,960 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (45.8 ms)
+2026-08-15 12:50:16,982 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (9.2 ms)
+2026-08-15 12:50:19,816 [app.middleware.request_logging] POST /api/v1/session/start -> 201 (30.9 ms)
+2026-08-15 12:50:36,297 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-15 12:50:36,338 [faiss.loader] Loading faiss with AVX2 support.
+2026-08-15 12:50:36,339 [faiss.loader] Could not load library with AVX2 support due to:
+ModuleNotFoundError("No module named 'faiss.swigfaiss_avx2'")
+2026-08-15 12:50:36,339 [faiss.loader] Loading faiss.
+2026-08-15 12:50:36,470 [faiss.loader] Successfully loaded faiss.
+2026-08-15 12:50:48,406 [sentence_transformers.base.model] No device provided, using cpu
+2026-08-15 12:50:48,991 [sentence_transformers.base.model] Loading SentenceTransformer model from BAAI/bge-base-en-v1.5.
+2026-08-15 12:50:57,124 [rag_pipeline] [RAG Retrieval] role=Full Stack | fetched=8 | returned=5 | topics=['security', 'react', 'system design', 'authentication', 'react'] | scores=[0.653, 0.64, 0.63, 0.619, 0.617]
+2026-08-15 12:50:59,711 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-15 12:50:59,742 [app.middleware.request_logging] POST /api/v1/interview/resume/upload -> 200 (27596.9 ms)
+2026-08-15 12:51:03,281 [app.middleware.request_logging] GET /api/v1/interview/pool/41 -> 200 (13.2 ms)
+2026-08-15 12:51:05,274 [app.middleware.request_logging] GET /api/v1/interview/pool/41 -> 200 (8.3 ms)
+2026-08-15 12:51:06,287 [app.middleware.request_logging] POST /api/v1/interview/session/start -> 200 (20.4 ms)
+2026-08-15 12:51:12,301 [app.services.sarvam_service] Redis TTS cache unavailable; continuing without cache: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it.
+2026-08-15 12:51:12,324 [app.services.sarvam_service] Sarvam client ready: True, key set: True
+2026-08-15 12:51:12,324 [app.services.sarvam_service] TTS request: text_len=133
+2026-08-15 12:51:15,667 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-15 12:51:15,770 [app.services.sarvam_service] TTS success: audios_count=1, bytes=331806, latency=3.44s
+2026-08-15 12:51:15,772 [app.services.sarvam_service] TTS request: text_len=133
+2026-08-15 12:51:19,024 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-15 12:51:19,108 [app.services.sarvam_service] TTS success: audios_count=1, bytes=366248, latency=3.33s
+2026-08-15 12:51:19,108 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (10979.8 ms)
+2026-08-15 12:51:19,110 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (3339.3 ms)
+2026-08-15 12:51:27,653 [app.modules.interview.routers.interview_router] Selected question 30329b2c4ffc: Can you describe your experience with React and ho... (asked_ids: 0)
+2026-08-15 12:51:31,765 [app.modules.interview.routers.interview_router] Redis cache unavailable; continuing without cache: Error 10061 connecting to localhost:6379. No connection could be made because the target machine actively refused it.
+2026-08-15 12:51:32,140 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-15 12:51:32,153 [app.middleware.request_logging] GET /api/v1/interview/session/38/next -> 200 (4528.9 ms)
+2026-08-15 12:51:32,176 [app.services.sarvam_service] TTS request: text_len=247
+2026-08-15 12:51:36,990 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-15 12:51:37,076 [app.services.sarvam_service] TTS success: audios_count=1, bytes=542200, latency=4.91s
+2026-08-15 12:51:37,078 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (4904.1 ms)
+2026-08-15 12:52:19,370 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2026-08-15 12:52:19,373 [app.middleware.request_logging] POST /api/v1/interview/stt -> 200 (545.9 ms)
+2026-08-15 12:52:19,636 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-15 12:52:19,931 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-15 12:52:19,977 [app.middleware.request_logging] POST /api/v1/interview/session/38/respond -> 200 (591.1 ms)
+2026-08-15 12:52:19,993 [app.services.sarvam_service] TTS request: text_len=283
+2026-08-15 12:52:25,940 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-15 12:52:26,170 [app.services.sarvam_service] TTS success: audios_count=1, bytes=628422, latency=6.17s
+2026-08-15 12:52:26,171 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (6179.0 ms)
+2026-08-15 12:53:09,394 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2026-08-15 12:53:09,399 [app.middleware.request_logging] POST /api/v1/interview/stt -> 200 (441.0 ms)
+2026-08-15 12:53:09,839 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-15 12:53:10,115 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-15 12:53:10,123 [app.middleware.request_logging] POST /api/v1/interview/session/38/respond -> 200 (710.5 ms)
+2026-08-15 12:53:10,136 [app.services.sarvam_service] TTS request: text_len=227
+2026-08-15 12:53:29,139 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-15 12:53:29,216 [app.services.sarvam_service] TTS success: audios_count=1, bytes=524946, latency=19.08s
+2026-08-15 12:53:29,217 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (19081.3 ms)
+2026-08-15 12:54:11,649 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2026-08-15 12:54:11,651 [app.middleware.request_logging] POST /api/v1/interview/stt -> 200 (513.8 ms)
+2026-08-15 12:54:11,958 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-15 12:54:12,305 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-15 12:54:12,317 [app.middleware.request_logging] POST /api/v1/interview/session/38/respond -> 200 (658.5 ms)
+2026-08-15 12:54:12,329 [app.services.sarvam_service] TTS request: text_len=177
+2026-08-15 12:54:16,958 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-15 12:54:17,080 [app.services.sarvam_service] TTS success: audios_count=1, bytes=499090, latency=4.75s
+2026-08-15 12:54:17,081 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (4753.2 ms)
+2026-08-15 12:55:53,056 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2026-08-15 12:55:53,059 [app.middleware.request_logging] POST /api/v1/interview/stt -> 200 (892.7 ms)
+2026-08-15 12:55:53,301 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-15 12:55:53,696 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-15 12:55:53,706 [app.middleware.request_logging] POST /api/v1/interview/session/38/respond -> 200 (633.3 ms)
+2026-08-15 12:55:53,734 [app.services.sarvam_service] TTS request: text_len=172
+2026-08-15 12:55:58,316 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-15 12:55:58,470 [app.services.sarvam_service] TTS success: audios_count=1, bytes=490438, latency=4.74s
+2026-08-15 12:55:58,472 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (4738.4 ms)
+2026-08-15 12:57:40,910 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2026-08-15 12:57:40,917 [app.middleware.request_logging] POST /api/v1/interview/stt -> 200 (511.6 ms)
+2026-08-15 12:57:41,163 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-15 12:57:41,526 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-15 12:57:41,538 [app.middleware.request_logging] POST /api/v1/interview/session/38/respond -> 200 (612.5 ms)
+2026-08-15 12:57:41,547 [app.services.sarvam_service] TTS request: text_len=288
+2026-08-15 12:57:47,369 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-15 12:57:47,482 [app.services.sarvam_service] TTS success: audios_count=1, bytes=633024, latency=5.94s
+2026-08-15 12:57:47,483 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (5937.4 ms)
+2026-08-15 12:59:36,460 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/audio/transcriptions "HTTP/1.1 200 OK"
+2026-08-15 12:59:36,463 [app.middleware.request_logging] POST /api/v1/interview/stt -> 200 (438.2 ms)
+2026-08-15 12:59:36,704 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-15 12:59:37,059 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-15 12:59:37,066 [app.middleware.request_logging] POST /api/v1/interview/session/38/respond -> 200 (590.7 ms)
+2026-08-15 12:59:37,079 [app.services.sarvam_service] TTS request: text_len=233
+2026-08-15 12:59:42,160 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-15 12:59:42,243 [app.services.sarvam_service] TTS success: audios_count=1, bytes=589612, latency=5.17s
+2026-08-15 12:59:42,244 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (5168.0 ms)
+2026-08-15 13:08:23,954 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (716.9 ms)
+2026-08-15 13:08:24,082 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (93.2 ms)
+2026-08-15 13:08:24,593 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (85.6 ms)
+2026-08-15 13:08:24,622 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (16.9 ms)
+2026-08-15 13:08:27,512 [app.middleware.request_logging] POST /api/v1/session/start -> 200 (10.1 ms)
+2026-08-15 13:08:38,932 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-15 13:08:43,650 [rag_pipeline] [RAG Retrieval] role=Full Stack | fetched=8 | returned=5 | topics=['security', 'react', 'system design', 'authentication', 'react'] | scores=[0.653, 0.64, 0.63, 0.619, 0.617]
+2026-08-15 13:08:46,824 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-15 13:08:46,873 [app.middleware.request_logging] POST /api/v1/interview/resume/upload -> 200 (9693.4 ms)
+2026-08-15 13:08:50,416 [app.middleware.request_logging] GET /api/v1/interview/pool/42 -> 200 (10.0 ms)
+2026-08-15 13:08:52,408 [app.middleware.request_logging] GET /api/v1/interview/pool/42 -> 200 (5.2 ms)
+2026-08-15 13:08:53,424 [app.middleware.request_logging] POST /api/v1/interview/session/start -> 200 (21.7 ms)
+2026-08-15 13:08:59,959 [app.services.sarvam_service] TTS request: text_len=133
+2026-08-15 13:09:03,232 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-15 13:09:03,333 [app.services.sarvam_service] TTS success: audios_count=1, bytes=335518, latency=3.38s
+2026-08-15 13:09:03,341 [app.services.sarvam_service] TTS request: text_len=133
+2026-08-15 13:09:06,092 [httpx] HTTP Request: POST https://api.sarvam.ai/text-to-speech "HTTP/1.1 200 OK"
+2026-08-15 13:09:06,149 [app.services.sarvam_service] TTS success: audios_count=1, bytes=323152, latency=2.81s
+2026-08-15 13:09:06,150 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (6196.3 ms)
+2026-08-15 13:09:06,155 [app.middleware.request_logging] POST /api/v1/interview/tts -> 200 (2819.5 ms)
+2026-08-15 13:09:11,578 [app.middleware.request_logging] POST /api/v1/interview/session/39/complete -> 200 (60.1 ms)
+2026-08-15 13:09:12,045 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-15 13:09:12,051 [app.middleware.request_logging] GET /api/v1/interview/session/39/report -> 200 (428.0 ms)
+2026-08-15 13:09:12,480 [httpx] HTTP Request: POST https://api.groq.com/openai/v1/chat/completions "HTTP/1.1 200 OK"
+2026-08-15 13:09:12,482 [app.middleware.request_logging] GET /api/v1/interview/session/39/report -> 200 (423.2 ms)
+2026-08-15 13:09:32,890 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (11.1 ms)
+2026-08-15 13:09:32,904 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (8.6 ms)
+2026-08-15 13:10:55,788 [app.middleware.request_logging] POST /api/v1/session/start -> 200 (11.3 ms)
+2026-08-15 13:10:55,829 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (15.0 ms)
+2026-08-15 13:10:56,226 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 200 (323.1 ms)
+2026-08-15 13:10:59,035 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (238.0 ms)
+2026-08-15 13:10:59,061 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (209.6 ms)
+2026-08-15 13:11:01,027 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (32.2 ms)
+2026-08-15 13:11:01,030 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (28.0 ms)
+2026-08-15 13:11:07,696 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (19.7 ms)
+2026-08-15 13:11:15,655 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (17.3 ms)
+2026-08-15 13:11:28,687 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (21.5 ms)
+2026-08-15 13:11:41,720 [app.middleware.request_logging] POST /api/v1/aptitude/submit-answer -> 200 (160.3 ms)
+2026-08-15 13:11:41,808 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 200 (17.2 ms)
+2026-08-15 13:11:49,468 [app.middleware.request_logging] POST /api/v1/aptitude/submit-answer -> 200 (44.3 ms)
+2026-08-15 13:11:49,490 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 200 (15.2 ms)
+2026-08-15 13:12:35,454 [app.middleware.request_logging] POST /api/v1/aptitude/submit-answer -> 200 (39.9 ms)
+2026-08-15 13:12:35,623 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 200 (17.9 ms)
+2026-08-15 13:12:45,456 [app.middleware.request_logging] POST /api/v1/aptitude/submit-answer -> 200 (47.4 ms)
+2026-08-15 13:12:45,479 [app.middleware.request_logging] GET /api/v1/aptitude/next-question -> 200 (13.3 ms)
+2026-08-15 13:12:58,219 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (14.8 ms)
+2026-08-15 13:13:06,130 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (23.8 ms)
+2026-08-15 13:13:12,539 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (18.0 ms)
+2026-08-15 13:13:12,665 [app.middleware.request_logging] POST /api/v1/aptitude/submit-answer -> 200 (34.9 ms)
+2026-08-15 13:13:14,832 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (24.9 ms)
+2026-08-15 13:13:15,745 [app.middleware.request_logging] POST /api/v1/coding/start-after-aptitude -> 200 (116.9 ms)
+2026-08-15 13:13:15,955 [app.middleware.request_logging] GET /api/v1/aptitude/result -> 200 (142.1 ms)
+2026-08-15 13:13:15,991 [app.middleware.request_logging] GET /api/v1/aptitude/result -> 200 (29.8 ms)
+2026-08-15 13:13:25,335 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (12.3 ms)
+2026-08-15 13:13:25,350 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (9.6 ms)
+2026-08-15 13:13:28,503 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (45.2 ms)
+2026-08-15 13:13:28,525 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (12.0 ms)
+2026-08-15 13:13:28,923 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (25.3 ms)
+2026-08-15 13:13:28,935 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (29.6 ms)
+2026-08-15 13:13:28,971 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (13.0 ms)
+2026-08-15 13:13:40,913 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 403 (10.9 ms)
+2026-08-15 13:13:41,106 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 403 (11.6 ms)
+2026-08-15 13:14:06,264 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (2119.7 ms)
+2026-08-15 13:14:11,889 [app.middleware.request_logging] POST /api/v1/coding/submit -> 200 (3512.6 ms)
+2026-08-15 13:14:33,002 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (659.0 ms)
+2026-08-15 13:14:40,333 [app.middleware.request_logging] POST /api/v1/coding/submit -> 200 (2928.9 ms)
+2026-08-15 13:15:07,839 [app.middleware.request_logging] POST /api/v1/coding/run -> 200 (1200.3 ms)
+2026-08-15 13:15:12,654 [app.middleware.request_logging] POST /api/v1/coding/submit -> 200 (2927.4 ms)
+2026-08-15 13:15:19,033 [app.middleware.request_logging] POST /api/v1/coding/finish -> 200 (57.8 ms)
+2026-08-15 13:15:19,128 [app.middleware.request_logging] GET /api/v1/coding/results -> 404 (71.8 ms)
+2026-08-15 13:15:19,143 [app.middleware.request_logging] GET /api/v1/coding/results -> 404 (2.0 ms)
+2026-08-15 13:29:06,427 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (1924.6 ms)
+2026-08-15 13:29:06,458 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (13.3 ms)
+2026-08-15 13:29:07,185 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (219.2 ms)
+2026-08-15 13:29:07,218 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (19.5 ms)
+2026-08-15 13:29:10,533 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (184.1 ms)
+2026-08-15 13:29:10,556 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (13.0 ms)
+2026-08-15 13:29:11,038 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (42.8 ms)
+2026-08-15 13:29:11,153 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (13.8 ms)
+2026-08-15 13:29:11,321 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (299.6 ms)
+2026-08-15 13:29:23,074 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 403 (31.9 ms)
+2026-08-15 13:29:24,179 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 403 (14.6 ms)
+2026-08-15 13:31:55,632 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (434.6 ms)
+2026-08-15 13:31:55,751 [app.middleware.request_logging] GET /api/v1/coding/problems -> 200 (91.0 ms)
+2026-08-15 13:31:55,980 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (27.4 ms)
+2026-08-15 13:32:09,919 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (25.4 ms)
+2026-08-15 13:32:09,939 [app.middleware.request_logging] GET /api/v1/coding/problems -> 200 (9.2 ms)
+2026-08-15 13:32:10,064 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (10.0 ms)
+2026-08-15 13:32:25,279 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (381.4 ms)
+2026-08-15 13:32:27,448 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (17.4 ms)
+2026-08-15 13:33:21,029 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (42.9 ms)
+2026-08-15 13:33:21,067 [app.middleware.request_logging] GET /api/v1/coding/problems -> 200 (17.0 ms)
+2026-08-15 13:33:21,170 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (20.8 ms)
+2026-08-15 13:39:03,125 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (3245.0 ms)
+2026-08-15 13:39:03,176 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (19.6 ms)
+2026-08-15 13:39:03,759 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (70.9 ms)
+2026-08-15 13:39:03,797 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (21.5 ms)
+2026-08-15 13:39:06,446 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (105.7 ms)
+2026-08-15 13:39:06,481 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (15.7 ms)
+2026-08-15 13:39:06,950 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (33.7 ms)
+2026-08-15 13:39:07,051 [app.middleware.request_logging] GET /api/v1/coding/problems -> 200 (88.9 ms)
+2026-08-15 13:39:07,444 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (512.2 ms)
+2026-08-15 13:39:07,452 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (26.6 ms)
+2026-08-15 13:39:07,530 [app.middleware.request_logging] GET /api/v1/coding/problems -> 200 (23.0 ms)
+2026-08-15 13:39:13,693 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (198.9 ms)
+2026-08-15 13:39:16,869 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (18.5 ms)
+2026-08-15 13:39:27,770 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (20.6 ms)
+2026-08-15 13:39:42,000 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (36.0 ms)
+2026-08-15 13:39:44,763 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (26.5 ms)
+2026-08-15 13:39:49,149 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (25.0 ms)
+2026-08-15 13:39:49,181 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (23.8 ms)
+2026-08-15 13:50:36,972 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (1314.3 ms)
+2026-08-15 13:50:37,005 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (14.5 ms)
+2026-08-15 13:50:37,564 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (44.1 ms)
+2026-08-15 13:50:37,589 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (13.0 ms)
+2026-08-15 13:50:40,976 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (71.0 ms)
+2026-08-15 13:50:40,992 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (8.0 ms)
+2026-08-15 13:50:41,444 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (27.9 ms)
+2026-08-15 13:50:41,493 [app.middleware.request_logging] GET /api/v1/coding/problems -> 200 (38.3 ms)
+2026-08-15 13:50:41,901 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (464.9 ms)
+2026-08-15 13:50:41,917 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (11.5 ms)
+2026-08-15 13:50:41,990 [app.middleware.request_logging] GET /api/v1/coding/problems -> 200 (8.8 ms)
+2026-08-15 13:50:48,003 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (180.6 ms)
+2026-08-15 13:51:24,565 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (56.3 ms)
+2026-08-15 13:51:27,068 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (15.7 ms)
+2026-08-15 13:52:00,308 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (102.4 ms)
+2026-08-15 13:52:00,315 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (106.4 ms)
+2026-08-15 13:52:00,353 [app.middleware.request_logging] GET /api/v1/coding/problems -> 200 (26.9 ms)
+2026-08-15 13:52:00,376 [app.middleware.request_logging] GET /api/v1/coding/problems -> 200 (12.7 ms)
+2026-08-15 13:52:00,443 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (16.7 ms)
+2026-08-15 13:52:04,141 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (91.5 ms)
+2026-08-15 13:52:08,645 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (19.2 ms)
+2026-08-15 13:53:02,551 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (19.9 ms)
+2026-08-15 14:06:01,148 [app.middleware.request_logging] POST /api/v1/coding/submit -> 404 (162.0 ms)
+2026-08-15 15:34:24,239 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (1056.2 ms)
+2026-08-15 15:34:24,269 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (11.3 ms)
+2026-08-15 15:34:24,830 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (33.9 ms)
+2026-08-15 15:34:24,850 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (8.9 ms)
+2026-08-15 15:34:38,319 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (133.0 ms)
+2026-08-15 15:34:38,346 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (16.2 ms)
+2026-08-15 15:34:38,843 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (54.4 ms)
+2026-08-15 15:34:38,884 [app.middleware.request_logging] GET /api/v1/coding/problems -> 200 (19.2 ms)
+2026-08-15 15:34:38,963 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (160.9 ms)
+2026-08-15 15:34:38,994 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (11.0 ms)
+2026-08-15 15:34:39,014 [app.middleware.request_logging] GET /api/v1/coding/problems -> 200 (11.8 ms)
+2026-08-15 15:34:42,328 [app.modules.advanced_proctoring.routers.advanced_proctoring_router] Proctoring session_id 169 doesn't match active session 170 for user 20
+2026-08-15 15:34:42,400 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (142.4 ms)
+2026-08-15 15:34:56,288 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (35.2 ms)
+2026-08-15 15:37:22,323 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (124.7 ms)
+2026-08-15 15:37:39,987 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (35.4 ms)
+2026-08-15 15:37:47,714 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (33.5 ms)
+2026-08-15 15:37:53,525 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (57.9 ms)
+2026-08-15 15:37:53,555 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (16.7 ms)
+2026-08-15 15:43:32,875 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (391.9 ms)
+2026-08-15 15:43:33,230 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (324.4 ms)
+2026-08-15 15:43:33,735 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (49.2 ms)
+2026-08-15 15:43:33,784 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (82.7 ms)
+2026-08-15 15:43:33,792 [app.middleware.request_logging] GET /api/v1/coding/problems -> 200 (33.5 ms)
+2026-08-15 15:43:33,822 [app.middleware.request_logging] GET /api/v1/coding/problems -> 200 (12.8 ms)
+2026-08-15 15:43:33,925 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (14.0 ms)
+2026-08-15 15:43:40,610 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (169.9 ms)
+2026-08-15 15:43:42,659 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (53.4 ms)
+2026-08-15 15:45:03,302 [app.middleware.request_logging] POST /api/v1/coding/finish -> 200 (304.4 ms)
+2026-08-15 15:45:03,604 [app.middleware.request_logging] GET /api/v1/coding/results -> 200 (217.8 ms)
+2026-08-15 15:45:03,638 [app.middleware.request_logging] GET /api/v1/coding/results -> 200 (22.8 ms)
+2026-08-15 15:45:05,486 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (19.7 ms)
+2026-08-15 15:45:05,520 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (16.2 ms)
+2026-08-15 15:48:52,305 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (390.2 ms)
+2026-08-15 15:48:52,343 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (22.7 ms)
+2026-08-15 15:49:46,581 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (702.7 ms)
+2026-08-15 15:49:46,616 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (18.9 ms)
+2026-08-15 15:49:47,130 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (17.6 ms)
+2026-08-15 15:49:47,154 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (15.8 ms)
+2026-08-15 15:50:15,555 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (382.7 ms)
+2026-08-15 15:50:29,888 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (580.2 ms)
+2026-08-15 15:50:29,944 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (21.9 ms)
+2026-08-15 15:50:30,454 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (12.5 ms)
+2026-08-15 15:50:30,478 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (13.8 ms)
+2026-08-15 15:50:38,136 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (592.7 ms)
+2026-08-15 15:50:38,163 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (10.7 ms)
+2026-08-15 15:50:38,697 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (16.0 ms)
+2026-08-15 15:50:38,721 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (12.6 ms)
+2026-08-15 15:50:56,511 [app.middleware.request_logging] POST /api/v1/auth/login -> 200 (572.2 ms)
+2026-08-15 15:50:56,538 [app.middleware.request_logging] GET /api/v1/auth/me -> 200 (9.2 ms)
+2026-08-15 15:50:57,073 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (12.3 ms)
+2026-08-15 15:50:57,098 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (11.8 ms)
+2026-08-15 15:50:59,535 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (168.1 ms)
+2026-08-15 15:50:59,568 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (16.6 ms)
+2026-08-15 15:51:00,074 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (61.9 ms)
+2026-08-15 15:51:00,119 [app.middleware.request_logging] GET /api/v1/coding/problems -> 200 (27.4 ms)
+2026-08-15 15:51:00,189 [app.middleware.request_logging] POST /api/v1/coding/start -> 200 (169.2 ms)
+2026-08-15 15:51:00,234 [app.middleware.request_logging] GET /api/v1/coding/problems -> 200 (16.8 ms)
+2026-08-15 15:51:00,245 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (17.0 ms)
+2026-08-15 15:51:04,517 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 403 (81.0 ms)
+2026-08-15 15:51:07,121 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (149.4 ms)
+2026-08-15 15:52:57,168 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (315.7 ms)
+2026-08-15 15:53:03,905 [app.middleware.request_logging] POST /api/v1/advanced-proctoring/log-event -> 200 (38.8 ms)
+2026-08-15 15:53:07,224 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (40.3 ms)
+2026-08-15 15:53:07,292 [app.middleware.request_logging] GET /api/v1/session/status -> 200 (21.8 ms)

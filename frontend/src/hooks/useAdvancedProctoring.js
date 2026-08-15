@@ -68,7 +68,7 @@ const PROCTORING_CONFIG = {
   // Detection thresholds
   FACE_DETECTION_CONFIDENCE: 0.5,
   FACE_PRESENCE_CONFIDENCE: 0.5,
-  MOUTH_MOVEMENT_THRESHOLD: 0.02,
+  MOUTH_MOVEMENT_THRESHOLD: 0.05,  // Increased from 0.02 to reduce false positives
   GAZE_DEVIATION_THRESHOLD: 0.3,
   HEAD_TURN_THRESHOLD: 35, // degrees
   
@@ -77,23 +77,23 @@ const PROCTORING_CONFIG = {
   VAD_FRAME_SIZE: 512,
   VOICE_ACTIVITY_THRESHOLD: 0.5,
   
-  // Violation thresholds
+  // Violation thresholds - STRICT for coding round
   VIOLATION_THRESHOLDS: {
-    TAB_SWITCH: { max: 5, riskWeight: 0.3 },
-    FULLSCREEN_EXIT: { max: 3, riskWeight: 0.4 },
-    PAGE_RELOAD: { max: 1, riskWeight: 0.8 },
-    IDLE_ACTIVITY: { max: 10, riskWeight: 0.2 },
-    COPY_PASTE: { max: 0, riskWeight: 0.6 },
-    NETWORK_DISCONNECT: { max: 0, riskWeight: 0.7 },
-    DEVICE_CHANGE: { max: 0, riskWeight: 0.7 },
-    MULTIPLE_PERSON_DETECTED: { max: 0, riskWeight: 0.9 },
-    FACE_NOT_VISIBLE: { max: 5, riskWeight: 0.7 },
-    MOUTH_MOVEMENT_DETECTED: { max: 8, riskWeight: 0.5 },
-    LOOKING_AWAY: { max: 15, riskWeight: 0.3 },
-    HEAD_TURN_DETECTED: { max: 10, riskWeight: 0.4 },
-    VOICE_ACTIVITY_DETECTED: { max: 5, riskWeight: 0.6 },
-    CAMERA_PERMISSION_DENIED: { max: 0, riskWeight: 0.8 },
-    MICROPHONE_PERMISSION_DENIED: { max: 0, riskWeight: 0.6 },
+    TAB_SWITCH: { max: 2, riskWeight: 0.4 },
+    FULLSCREEN_EXIT: { max: 2, riskWeight: 0.5 },
+    PAGE_RELOAD: { max: 1, riskWeight: 0.9 },
+    IDLE_ACTIVITY: { max: 3, riskWeight: 0.3 },
+    COPY_PASTE: { max: 1, riskWeight: 0.7 },
+    NETWORK_DISCONNECT: { max: 2, riskWeight: 0.8 },
+    DEVICE_CHANGE: { max: 1, riskWeight: 0.8 },
+    MULTIPLE_PERSON_DETECTED: { max: 0, riskWeight: 1.0 },
+    FACE_NOT_VISIBLE: { max: 3, riskWeight: 0.8 },
+    MOUTH_MOVEMENT_DETECTED: { max: 3, riskWeight: 0.6 },
+    LOOKING_AWAY: { max: 5, riskWeight: 0.4 },
+    HEAD_TURN_DETECTED: { max: 3, riskWeight: 0.5 },
+    VOICE_ACTIVITY_DETECTED: { max: 2, riskWeight: 0.7 },
+    CAMERA_PERMISSION_DENIED: { max: 0, riskWeight: 1.0 },
+    MICROPHONE_PERMISSION_DENIED: { max: 0, riskWeight: 0.8 },
   }
 };
 
@@ -367,7 +367,9 @@ export const useAdvancedProctoring = (sessionId, onViolation = null) => {
   }, []);
   
   const handleFullscreenChange = useCallback(() => {
-    if (!document.fullscreenElement) {
+    const isFullscreen = !!document.fullscreenElement;
+    console.log('[Proctoring] Fullscreen change:', isFullscreen ? 'entered' : 'exited');
+    if (!isFullscreen) {
       logProctoringEventRef.current(EVENT_TYPES.FULLSCREEN_EXIT, {
         timestamp: Date.now(),
         wasFullscreen: true,
@@ -419,7 +421,7 @@ export const useAdvancedProctoring = (sessionId, onViolation = null) => {
       const start = performance.now();
       const formData = new FormData();
       formData.append('frame', blob, 'frame.jpg');
-      const resp = await api.post(`/interview/advanced-proctoring/analyze-frame?session_id=${sessionId}`, formData, {
+      const resp = await api.post(`/advanced-proctoring/analyze-frame?session_id=${sessionId}`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       const data = resp.data;
@@ -991,9 +993,10 @@ export const useAdvancedProctoring = (sessionId, onViolation = null) => {
   // Initialize camera and video processing
   const initializeCamera = useCallback(async () => {
     try {
-      const videoEl = await waitForVideoElement();
+      const videoEl = await waitForVideoElement(8000); // Reduced timeout
       if (!videoEl) {
-        throw new Error('Video element not ready');
+        console.warn('⚠️ Video element not found, skipping camera init');
+        return; // Graceful skip instead of throwing
       }
 
       // Get camera access
@@ -1063,6 +1066,7 @@ export const useAdvancedProctoring = (sessionId, onViolation = null) => {
       
       addEventListenerOnce(document, 'visibilitychange', handleVisibilityChange);
       addEventListenerOnce(document, 'fullscreenchange', handleFullscreenChange);
+      addEventListenerOnce(window, 'resize', handleFullscreenChange); // Catch F11 fullscreen
       addEventListenerOnce(window, 'beforeunload', handleBeforeUnload);
       addEventListenerOnce(window, 'mousemove', handleUserActivity);
       addEventListenerOnce(window, 'keydown', handleUserActivity);
@@ -1181,6 +1185,7 @@ export const useAdvancedProctoring = (sessionId, onViolation = null) => {
     // Remove event listeners
     document.removeEventListener('visibilitychange', handleVisibilityChange);
     document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    window.removeEventListener('resize', handleFullscreenChange);
     window.removeEventListener('beforeunload', handleBeforeUnload);
     window.removeEventListener('mousemove', handleUserActivity);
     window.removeEventListener('keydown', handleUserActivity);
@@ -1293,6 +1298,7 @@ export const useAdvancedProctoring = (sessionId, onViolation = null) => {
     
     // Methods
     initializeProctoring,
+    startMonitoring: initializeProctoring, // alias used by CodingRoundV2
     stopMonitoring,
     cleanup,
     logProctoringEvent,

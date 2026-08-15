@@ -6,15 +6,27 @@ Tracks candidate behavior during assessment sessions for integrity monitoring.
 
 from datetime import datetime
 from typing import Optional
+import json
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, text
-try:
-    from sqlalchemy.dialects.postgresql import JSONB
-except Exception:
-    from sqlalchemy import JSON as JSONB
 from sqlalchemy.orm import relationship
 
 from app.database.base import Base
+
+
+def json_serializer(value: Optional[dict]) -> Optional[str]:
+    """Serialize dict to JSON string."""
+    return json.dumps(value) if value is not None else None
+
+
+def json_deserializer(value: Optional[str]) -> Optional[dict]:
+    """Deserialize JSON string to dict."""
+    if value is None:
+        return None
+    try:
+        return json.loads(value)
+    except (json.JSONDecodeError, TypeError):
+        return None
 
 
 class ProctoringEvent(Base):
@@ -33,7 +45,7 @@ class ProctoringEvent(Base):
         index=True,
     )
     event_type: str = Column(String(50), nullable=False, index=True)
-    event_metadata: Optional[dict] = Column(JSONB, nullable=True)
+    event_metadata: Optional[str] = Column(Text, nullable=True)
     created_at: datetime = Column(DateTime, server_default=text("NOW()"))
 
     # ── Relationships ─────────────────────────────────────────────────
@@ -41,6 +53,16 @@ class ProctoringEvent(Base):
         "AssessmentSession",
         back_populates="proctoring_events",
     )
+
+    @property
+    def metadata_dict(self) -> Optional[dict]:
+        """Get event_metadata as a dict."""
+        return json_deserializer(self.event_metadata)
+
+    @metadata_dict.setter
+    def metadata_dict(self, value: Optional[dict]) -> None:
+        """Set event_metadata from a dict."""
+        self.event_metadata = json_serializer(value)
 
     def __repr__(self) -> str:
         return (

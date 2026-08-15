@@ -165,7 +165,7 @@ async def upload_resume(
             question_pool=pool,
             admin_approved=True,
             approved_by=None,
-            approved_at=datetime.utcnow(),
+            approved_at=datetime.now(),
             detected_role=detected_role
         )
         db.add(pool_record)
@@ -311,7 +311,7 @@ async def approve_pool(
     pool.admin_approved = req.approved
     if req.approved:
         pool.approved_by = current_user.id
-        pool.approved_at = datetime.utcnow()
+        pool.approved_at = datetime.now()
 
     db.commit()
 
@@ -955,6 +955,61 @@ async def synthesize_speech(
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# ENDPOINT: POST /interview/session/{interview_id}/complete
+# Early interview completion - idempotent
+# ═══════════════════════════════════════════════════════════════════════════
+@router.post("/session/{interview_id}/complete")
+async def complete_interview(
+    interview_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Complete interview session early (user submitted before all questions).
+    
+    Idempotent: safe to call multiple times, returns existing completion data.
+    """
+    interview = db.query(InterviewSession).filter(InterviewSession.id == interview_id).first()
+    if not interview:
+        raise HTTPException(status_code=404, detail="Interview not found")
+
+    # Idempotent: if already completed, return existing computed values
+    if interview.status == "COMPLETED":
+        turns = db.query(InterviewTurn).filter(
+            InterviewTurn.interview_id == interview_id,
+            InterviewTurn.is_followup == False
+        ).all()
+        scores = [t.final_score for t in turns if t.final_score is not None]
+        return {
+            "status": "COMPLETED",
+            "completion_reason": interview.completion_reason,
+            "questions_attempted": len(turns),
+            "questions_total": interview.total_turns,
+            "performance_score": round(sum(scores) / max(len(scores), 1), 2),
+            "completion_ratio": round(len(turns) / max(interview.total_turns, 1), 2),
+        }
+
+    # Mark completed
+    interview.status = "COMPLETED"
+    interview.completion_reason = "USER_SUBMITTED"
+    interview.completed_at = datetime.now()
+    db.commit()
+
+    turns = db.query(InterviewTurn).filter(
+        InterviewTurn.interview_id == interview_id,
+        InterviewTurn.is_followup == False
+    ).all()
+    scores = [t.final_score for t in turns if t.final_score is not None]
+    return {
+        "status": "COMPLETED",
+        "completion_reason": "USER_SUBMITTED",
+        "questions_attempted": len(turns),
+        "questions_total": interview.total_turns,
+        "performance_score": round(sum(scores) / max(len(scores), 1), 2),
+        "completion_ratio": round(len(turns) / max(interview.total_turns, 1), 2),
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # ENDPOINT 9: GET /interview/session/{interview_id}/report
 # Grouped turns with follow-up rate
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1059,12 +1114,24 @@ async def get_report(
         for t in main_turns
     ]
     feedback = groq_service.generate_feedback_summary(turns_data)
+    
+    # Compute intent_score average
+    intent_scores = [t.intent for t in main_turns if t.intent]
+    intent_map = {"positive": 1.0, "neutral": 0.6, "negative": 0.2}
+    avg_intent = sum(intent_map.get(i, 0.6) for i in intent_scores) / max(len(intent_scores), 1) if intent_scores else None
+    
+    # Compute completion_ratio and get completion_reason
+    completion_ratio = len(main_turns) / max(interview.total_turns, 1)
+    completion_reason = interview.completion_reason
 
     return InterviewReportResponse(
         overall_score=round(overall_score, 2),
         content_score=round(avg_content, 2),
         behavior_score=round(avg_behavior, 2),
         final_score=round(avg_final, 2),
+        intent_score=round(avg_intent, 2) if avg_intent is not None else None,
+        completion_ratio=round(completion_ratio, 2),
+        completion_reason=completion_reason,
         feedback_summary=feedback,
         turn_reviews=turn_reviews,
         total_turns=len(main_turns),

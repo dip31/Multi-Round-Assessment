@@ -55,7 +55,7 @@ def test_evaluation_engine():
         print(f"Question: {case['question']}")
         print(f"Answer: {case['answer']}")
         
-        result = groq.evaluate_response(case['question'], case['answer'])
+        result = groq.classify_answer(case['question'], case['answer'])
         
         print(f"Quality: {result['quality']} (expected: {case['expected_quality']})")
         print(f"Content Score: {result['content_score']}")
@@ -96,10 +96,16 @@ def test_followup_generation():
         print(f"Quality: {case['quality']}")
         print(f"Missing: {case['missing_part']}")
         
-        followup = groq.generate_followup_message(
-            case['quality'],
-            case['missing_part'],
-            case['question']
+        followup = groq.generate_interviewer_response(
+            question=case['question'],
+            answer="Candidate answer here",
+            quality=case['quality'],
+            intent="NEUTRAL",
+            missing_part=case['missing_part'],
+            action="FOLLOWUP",
+            followup_type=case['quality'],
+            next_question=None,
+            conversation_history=[]
         )
         
         print(f"Follow-up: {followup}")

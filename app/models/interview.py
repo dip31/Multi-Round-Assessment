@@ -10,12 +10,10 @@ Maps to the following PostgreSQL tables:
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Optional, List, Dict, Any
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, text
-try:
-    from sqlalchemy.dialects.postgresql import JSONB
-except Exception:
-    from sqlalchemy import JSON as JSONB
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
@@ -40,7 +38,12 @@ class InterviewSession(Base):
     phase: Mapped[str] = mapped_column(String(20), server_default="HR", nullable=False)
     current_turn: Mapped[int] = mapped_column(Integer, server_default="0", nullable=False)
     total_turns: Mapped[int] = mapped_column(Integer, server_default="10", nullable=False)
-    rl_state: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'"), nullable=False)
+    rl_state: Mapped[Dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'"), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), server_default="ACTIVE", nullable=False)
+    completion_reason: Mapped[str | None] = mapped_column(
+        String(30), nullable=True
+    )  # ALL_QUESTIONS_COMPLETED | USER_SUBMITTED | TIME_EXPIRED
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
     created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), server_default=func.now(), nullable=True)
 
     # ── Relationships ─────────────────────────────────────────────────
@@ -50,6 +53,16 @@ class InterviewSession(Base):
         cascade="all, delete-orphan",
         lazy="select",
     )
+
+    @property
+    def rl_state_dict(self) -> Dict[str, Any]:
+        """Get rl_state as a dict."""
+        return self.rl_state or {}
+
+    @rl_state_dict.setter
+    def rl_state_dict(self, value: Dict[str, Any]) -> None:
+        """Set rl_state from a dict."""
+        self.rl_state = value
 
     def __repr__(self) -> str:
         return f"<InterviewSession id={self.id} session_id={self.session_id} phase={self.phase!r}>"
@@ -70,14 +83,38 @@ class ApprovedQuestionPool(Base):
         nullable=False,
         index=True,
     )
-    extracted_skills: Mapped[list] = mapped_column(JSONB, server_default=text("'[]'"), nullable=False)
-    extracted_projects: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'"), nullable=False)
-    question_pool: Mapped[list] = mapped_column(JSONB, nullable=False)
+    extracted_skills: Mapped[List[str]] = mapped_column(JSONB, server_default=text("'[]'"), nullable=False)
+    extracted_projects: Mapped[Dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'"), nullable=False)
+    question_pool: Mapped[List[Dict[str, Any]]] = mapped_column(JSONB, nullable=False)
     admin_approved: Mapped[bool] = mapped_column(Boolean, server_default=text("false"), nullable=False, index=True)
     approved_by: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
     detected_role: Mapped[str | None] = mapped_column(String(50), nullable=True)
     created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), server_default=func.now(), nullable=True)
+
+    @property
+    def extracted_skills_list(self) -> List[str]:
+        return self.extracted_skills or []
+
+    @extracted_skills_list.setter
+    def extracted_skills_list(self, value: List[str]) -> None:
+        self.extracted_skills = value
+
+    @property
+    def extracted_projects_dict(self) -> Dict[str, Any]:
+        return self.extracted_projects or {}
+
+    @extracted_projects_dict.setter
+    def extracted_projects_dict(self, value: Dict[str, Any]) -> None:
+        self.extracted_projects = value
+
+    @property
+    def question_pool_list(self) -> List[Dict[str, Any]]:
+        return self.question_pool or []
+
+    @question_pool_list.setter
+    def question_pool_list(self, value: List[Dict[str, Any]]) -> None:
+        self.question_pool = value
 
     def __repr__(self) -> str:
         return f"<ApprovedQuestionPool id={self.id} session_id={self.session_id} approved={self.admin_approved}>"
@@ -106,7 +143,7 @@ class InterviewTurn(Base):
     content_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     final_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     intent: Mapped[str | None] = mapped_column(String(10), nullable=True)
-    behavioral_snapshot: Mapped[dict] = mapped_column(JSONB, server_default=text("'{}'"), nullable=False)
+    behavioral_snapshot: Mapped[Dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'"), nullable=False)
     rl_reward: Mapped[float | None] = mapped_column(Float, nullable=True)
     is_followup: Mapped[bool] = mapped_column(Boolean, server_default=text("false"), nullable=False)
     followup_number: Mapped[int] = mapped_column(Integer, server_default=text("0"), nullable=False)
@@ -119,6 +156,14 @@ class InterviewTurn(Base):
         back_populates="turns",
         lazy="select",
     )
+
+    @property
+    def behavioral_snapshot_dict(self) -> Dict[str, Any]:
+        return self.behavioral_snapshot or {}
+
+    @behavioral_snapshot_dict.setter
+    def behavioral_snapshot_dict(self, value: Dict[str, Any]) -> None:
+        self.behavioral_snapshot = value
 
     def __repr__(self) -> str:
         return f"<InterviewTurn id={self.id} interview_id={self.interview_id} turn={self.turn_number}>"
@@ -142,12 +187,20 @@ class ProctoringViolation(Base):
     event_type: Mapped[str] = mapped_column(String(50), nullable=False)
     confidence_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     face_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    violation_metadata: Mapped[dict | None] = mapped_column("metadata", JSON, nullable=True)
+    violation_metadata: Mapped[Optional[Dict[str, Any]]] = mapped_column("metadata", JSONB, nullable=True)
     created_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=False),
         server_default=func.now(),
         nullable=True,
     )
+
+    @property
+    def metadata_dict(self) -> Optional[Dict[str, Any]]:
+        return self.violation_metadata
+
+    @metadata_dict.setter
+    def metadata_dict(self, value: Optional[Dict[str, Any]]) -> None:
+        self.violation_metadata = value
 
     def __repr__(self) -> str:
         return f"<ProctoringViolation id={self.id} session_id={self.session_id} event_type={self.event_type!r}>"

@@ -11,6 +11,7 @@ Language: en-IN (Indian English)
 import base64
 import hashlib
 import logging
+import time
 from typing import Any, Optional
 
 import redis
@@ -53,10 +54,12 @@ sarvam_client: Optional[Any] = None
 if SARVAM_AVAILABLE and SARVAM_API_KEY and _SarvamAI is not None:
     try:
         sarvam_client = _SarvamAI(api_subscription_key=SARVAM_API_KEY)
-        logger.info("Sarvam AI client initialized")
+        logger.info(f"Sarvam client ready: {sarvam_client is not None}, key set: {bool(SARVAM_API_KEY)}")
     except Exception as e:
         logger.error(f"Failed to initialize Sarvam client: {str(e)}")
         sarvam_client = None
+else:
+    logger.warning(f"Sarvam initialization skipped: available={SARVAM_AVAILABLE}, key_set={bool(SARVAM_API_KEY)}")
 
 
 def _cache_key(text: str) -> str:
@@ -108,12 +111,14 @@ async def text_to_speech(text: str) -> bytes:
             logger.warning(f"Redis cache get failed: {str(e)}")
     
     # Call Sarvam API
+    logger.info(f"TTS request: text_len={len(text)}")
+    t0 = time.monotonic()
+    
     try:
-        logger.debug(f"Calling Sarvam TTS for: {text[:50]}...")
         response = sarvam_client.text_to_speech.convert(
             text=text,
             model="bulbul:v3",
-            target_language_code="en-IN",
+            language_code="en-IN",
             speaker="shubh",  # Clear, professional male voice
             pace=0.95,        # Slightly slower for clarity
             speech_sample_rate=24000,
@@ -124,6 +129,8 @@ async def text_to_speech(text: str) -> bytes:
             raise Exception("Sarvam returned empty audio list")
         
         audio_bytes = base64.b64decode(response.audios[0])
+        
+        logger.info(f"TTS success: audios_count={len(response.audios)}, bytes={len(audio_bytes)}, latency={time.monotonic()-t0:.2f}s")
         
         # Cache in Redis for 24 hours
         if redis_client:
@@ -137,6 +144,7 @@ async def text_to_speech(text: str) -> bytes:
         
     except Exception as e:
         status_code = getattr(e, "status_code", None)
+        logger.error(f"Sarvam TTS failed: type={type(e).__name__}, status={status_code}")
         body = getattr(e, "body", str(e))
 
         if status_code == 429:
@@ -155,7 +163,7 @@ async def text_to_speech(text: str) -> bytes:
                 response = sarvam_client.text_to_speech.convert(
                     text=truncated,
                     model="bulbul:v3",
-                    target_language_code="en-IN",
+                    language_code="en-IN",
                     speaker="shubh",
                     pace=0.95,
                     speech_sample_rate=24000,
@@ -174,7 +182,6 @@ async def text_to_speech(text: str) -> bytes:
             except Exception as retry_e:
                 raise Exception(f"TTS failed even after truncation: {str(retry_e)}")
         else:
-            logger.error(f"Unexpected Sarvam TTS error: {str(e)}")
             raise Exception(f"Sarvam TTS error {status_code}: {str(body)}")
 
 

@@ -85,14 +85,35 @@ export const transcribeAudio = async (audioBlob) => {
  * @throws Error if TTS service fails (non-blocking to interview flow)
  */
 export const synthesizeSpeech = async (text) => {
-    const response = await api.post(
-        `/interview/tts?text=${encodeURIComponent(text)}`,
-        null,
-        { 
-            responseType: 'arraybuffer',  // Critical: fetch as binary, not string
-            timeout: 30000,               // 30s timeout for TTS
-        }
-    );
+    let response;
+    try {
+        response = await api.post(
+            `/interview/tts?text=${encodeURIComponent(text)}`,
+            null,
+            { 
+                responseType: 'arraybuffer',  // Critical: fetch as binary, not string
+                timeout: 30000,               // 30s timeout for TTS
+            }
+        );
+    } catch (err) {
+        // HTTP 4xx/5xx — decode the ArrayBuffer error body for diagnostics
+        const status = err.response?.status;
+        let detail = `HTTP ${status}`;
+        try {
+            const decoded = new TextDecoder().decode(err.response?.data);
+            const parsed = JSON.parse(decoded);
+            detail = parsed.detail || detail;
+        } catch (_) {}
+        throw new Error(`TTS failed: ${detail}`);
+    }
+
+    // Validate successful response
+    const contentType = response.headers?.['content-type'] || '';
+    const byteLen = response.data?.byteLength ?? 0;
+    if (!contentType.includes('audio') || byteLen < 1000) {
+        throw new Error(`TTS response invalid: content-type=${contentType}, bytes=${byteLen}`);
+    }
+
     return response.data; // Raw ArrayBuffer of WAV bytes
 };
 

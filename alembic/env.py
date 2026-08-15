@@ -25,6 +25,11 @@ import app.models.assessment  # noqa: F401
 import app.models.aptitude  # noqa: F401
 import app.models.proctoring  # noqa: F401
 import app.models.interview  # noqa: F401
+import app.models.coding  # noqa: F401
+import app.models.rl  # noqa: F401
+import app.models.session_problem  # noqa: F401
+import app.models.advanced_proctoring  # noqa: F401
+import app.models.admin_question_feedback  # noqa: F401
 
 # ── Alembic Config ────────────────────────────────────────────────────
 config = context.config

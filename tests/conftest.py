@@ -12,3 +12,6 @@ try:
 	_pg.JSONB = JSON
 except Exception:
 	pass
+
+# Enable pytest-asyncio
+pytest_plugins = ["pytest_asyncio"]

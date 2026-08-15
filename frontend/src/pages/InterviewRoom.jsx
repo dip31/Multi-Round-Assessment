@@ -35,12 +35,14 @@ export default function InterviewRoom() {
     const [liveTip, setLiveTip] = useState(''); // Real-time feedback tip
     
     const navigate = useNavigate();
-    const proctoring = useAdvancedProctoring({
-        idleThreshold: 30,
-        roundType: 'INTERVIEW',
-    });
     
+    // Fix: Get interviewId BEFORE hook call, parse as integer
     const interviewId = localStorage.getItem('interview_id');
+    const proctoring = useAdvancedProctoring(
+        interviewId ? parseInt(interviewId, 10) : null,
+        null
+    );
+    
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
     const startTimeRef = useRef(null);
@@ -80,6 +82,21 @@ export default function InterviewRoom() {
     const playAudio = async (arrayBuffer) => {
         try {
             const audioContext = getAudioContext();
+            
+            // Stop any currently playing audio
+            if (audioSourceRef.current) {
+                try {
+                    audioSourceRef.current.stop();
+                } catch (e) {
+                    // Already stopped
+                }
+                audioSourceRef.current = null;
+            }
+            
+            // Resume AudioContext if suspended (Chrome autoplay policy)
+            if (audioContext.state === 'suspended') {
+                await audioContext.resume();
+            }
             
             // Decode audio data
             const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
@@ -205,18 +222,15 @@ export default function InterviewRoom() {
         
         startup();
         
+        // Cleanup on unmount
         return () => {
-            if (timerIntervalRef.current) {
-                clearInterval(timerIntervalRef.current);
-            }
-            // Stop any playing audio on unmount
-            if (audioSourceRef.current) {
-                try {
-                    audioSourceRef.current.stop();
-                } catch (e) {
-                    // Ignore - source may already be stopped
-                }
-            }
+            clearInterval(timerIntervalRef.current);
+            clearInterval(tipPollingRef.current);
+            try { 
+                audioSourceRef.current?.stop(); 
+            } catch (_) {}
+            audioContextRef.current?.close();
+            proctoring.stopMonitoring?.();
         };
     }, [interviewId, playTTSWithRetry, fetchNextQuestion]);
     
@@ -372,6 +386,54 @@ export default function InterviewRoom() {
         navigate(`/interview/report/${interviewId}`);
     };
 
+    const handleSubmitInterview = async () => {
+        // Show confirmation dialog
+        const confirmed = window.confirm(
+            `Are you sure you want to submit the interview early?\n\n` +
+            `Progress: ${turnNumber} out of ${totalTurns} questions answered\n\n` +
+            `This action cannot be undone.`
+        );
+        
+        if (!confirmed) return;
+        
+        try {
+            // Stop recording if active
+            if (isRecording && mediaRecorderRef.current) {
+                mediaRecorderRef.current.stop();
+                clearInterval(timerIntervalRef.current);
+                setIsRecording(false);
+            }
+            
+            // Stop audio
+            try { 
+                audioSourceRef.current?.stop(); 
+            } catch (_) {}
+            
+            // Stop proctoring
+            proctoring.stopMonitoring?.();
+            
+            // Close AudioContext
+            audioContextRef.current?.close();
+            
+            // Clear all intervals
+            clearInterval(timerIntervalRef.current);
+            clearInterval(tipPollingRef.current);
+            
+            // Call complete endpoint
+            const response = await api.post(`/interview/session/${interviewId}/complete`);
+            console.log('Interview completed:', response.data);
+            
+            // Navigate to report
+            navigate(`/interview/report/${interviewId}`);
+        } catch (error) {
+            console.error('Failed to submit interview:', error);
+            setToast({
+                type: 'error',
+                message: error.response?.data?.detail || 'Failed to submit interview',
+            });
+        }
+    };
+
     // Get phase color
     const getPhaseColor = (p) => {
         switch (p?.toUpperCase()) {
@@ -416,8 +478,17 @@ export default function InterviewRoom() {
                     ))}
                 </div>
 
-                {/* Phase Badge & Timer & REC */}
+                {/* Phase Badge & Timer & REC & Submit */}
                 <div className="flex items-center gap-4">
+                    {/* Submit Interview Button */}
+                    <button
+                        onClick={handleSubmitInterview}
+                        disabled={roomState === STATES.COMPLETE || roomState === STATES.LOADING}
+                        className="flex-shrink-0 px-4 py-1.5 bg-red-600 hover:bg-red-700 disabled:bg-slate-700 disabled:text-slate-500 text-white text-xs font-semibold rounded-full transition-colors"
+                    >
+                        Finish Round
+                    </button>
+                    
                     {/* Phase Badge */}
                     <div className={`px-4 py-1.5 rounded-full text-xs font-semibold text-white ${getPhaseColor(phase)}`}>
                         {phase?.toUpperCase() || 'INTERVIEW'}

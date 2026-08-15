@@ -180,6 +180,9 @@ class InterviewReportResponse(BaseModel):
     content_score: float  # 0.0-1.0 (avg from main turns)
     behavior_score: float  # 0.0-1.0 (avg from behavioral)
     final_score: float  # 0.0-1.0 (avg final_score from main turns)
+    intent_score: Optional[float] = None  # 0.0-1.0 (avg intent-based score)
+    completion_ratio: Optional[float] = None  # attempted / total
+    completion_reason: Optional[str] = None  # ALL_QUESTIONS_COMPLETED | USER_SUBMITTED | TIME_EXPIRED
     feedback_summary: str
     turn_reviews: List[TurnReviewItem]
     total_turns: int

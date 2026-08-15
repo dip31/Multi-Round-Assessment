@@ -36,34 +36,76 @@ def check_database() -> Tuple[bool, str]:
 
 
 def check_api_routes() -> Tuple[bool, str]:
-    """Check if all API routes are registered."""
+    """Check if all API routes are registered by testing endpoints."""
     try:
         from app.main import app
+        from fastapi.testclient import TestClient
         
-        routes = [r for r in app.routes if hasattr(r, 'path')]
-        if len(routes) < 20:
-            return False, f"Only {len(routes)} routes found (expected 25+)"
+        client = TestClient(app)
         
-        return True, f"{len(routes)} API routes registered"
+        # Test a few key endpoints to verify routing works
+        test_endpoints = [
+            ("POST", "/api/v1/auth/register", {"name": "Test", "email": "healthcheck@test.com", "password": "test123456"}),
+            ("POST", "/api/v1/auth/login", {"email": "healthcheck@test.com", "password": "test123456"}),
+            ("POST", "/api/v1/session/start", {"user_id": 1, "assessment_type": "full"}),
+            ("GET", "/api/v1/aptitude/next-question", None),
+            ("POST", "/api/v1/interview/resume/upload", None),
+        ]
+        
+        working = 0
+        for method, path, data in test_endpoints:
+            try:
+                if method == "POST":
+                    if data:
+                        resp = client.post(path, json=data)
+                    else:
+                        resp = client.post(path)
+                else:
+                    resp = client.get(path)
+                # 200, 201, 401, 403, 422 all mean the route exists
+                if resp.status_code != 404:
+                    working += 1
+            except Exception:
+                pass
+        
+        if working < 3:
+            return False, f"Only {working}/{len(test_endpoints)} test endpoints responded (not 404)"
+        
+        return True, f"{working}/{len(test_endpoints)} API endpoints verified"
     except Exception as e:
         return False, f"Route check error: {str(e)}"
 
 
 def check_critical_endpoints() -> Tuple[bool, str]:
-    """Check if critical endpoints exist."""
+    """Check if critical endpoints exist by making actual requests."""
     try:
         from app.main import app
+        from fastapi.testclient import TestClient
+        
+        client = TestClient(app)
         
         critical_paths = [
-            '/api/v1/auth/register',
-            '/api/v1/auth/login',
-            '/api/v1/session/start',
-            '/api/v1/aptitude/next-question',
-            '/api/v1/interview/resume/upload',
+            ('POST', '/api/v1/auth/register', {"name": "Test", "email": "healthcheck2@test.com", "password": "test123456"}),
+            ('POST', '/api/v1/auth/login', {"email": "healthcheck2@test.com", "password": "test123456"}),
+            ('POST', '/api/v1/session/start', {"user_id": 1, "assessment_type": "full"}),
+            ('GET', '/api/v1/aptitude/next-question', None),
+            ('POST', '/api/v1/interview/resume/upload', None),
         ]
         
-        all_paths = [r.path for r in app.routes if hasattr(r, 'path')]
-        missing = [p for p in critical_paths if p not in all_paths]
+        missing = []
+        for method, path, data in critical_paths:
+            try:
+                if method == "POST":
+                    if data:
+                        resp = client.post(path, json=data)
+                    else:
+                        resp = client.post(path)
+                else:
+                    resp = client.get(path)
+                if resp.status_code == 404:
+                    missing.append(path)
+            except Exception:
+                missing.append(path)
         
         if missing:
             return False, f"Missing endpoints: {', '.join(missing)}"

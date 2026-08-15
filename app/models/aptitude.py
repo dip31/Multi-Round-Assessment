@@ -9,17 +9,29 @@ Maps to the following PostgreSQL tables:
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict, Any
+import json
 
 from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, text
-try:
-    from sqlalchemy.dialects.postgresql import JSONB
-except Exception:
-    from sqlalchemy import JSON as JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.database.base import Base
+
+
+def json_serializer(value: Optional[Dict[str, Any]]) -> Optional[str]:
+    """Serialize dict to JSON string."""
+    return json.dumps(value) if value is not None else None
+
+
+def json_deserializer(value: Optional[str], default: Any = None) -> Any:
+    """Deserialize JSON string to dict."""
+    if value is None:
+        return default
+    try:
+        return json.loads(value)
+    except (json.JSONDecodeError, TypeError):
+        return default
 
 
 class AptitudeTopic(Base):
@@ -62,7 +74,7 @@ class AptitudeQuestion(Base):
     difficulty: str = Column(String(10), nullable=False, index=True)
     topic_id: Optional[int] = Column(Integer, ForeignKey("aptitude_topics.id"), nullable=True)
     version: int = Column(Integer, nullable=False, server_default=text("1"))
-    is_active: bool = Column(Boolean, nullable=False, server_default=text("1"))
+    is_active: bool = Column(Boolean, nullable=False, server_default=text("true"))
     created_by: Optional[int] = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at: datetime = Column(DateTime, server_default=func.now())
 
@@ -131,8 +143,16 @@ class RLSession(Base):
     reward_received: Optional[float] = Column(Float, nullable=True)
     accuracy_so_far: Optional[float] = Column(Float, nullable=True)
     avg_response_time: Optional[float] = Column(Float, nullable=True)
-    q_values: Optional[dict] = Column(JSONB, nullable=True)
+    q_values: Optional[str] = Column(Text, nullable=True)
     created_at: datetime = Column(DateTime, server_default=func.now())
+
+    @property
+    def q_values_dict(self) -> Optional[Dict[str, Any]]:
+        return json_deserializer(self.q_values)
+
+    @q_values_dict.setter
+    def q_values_dict(self, value: Optional[Dict[str, Any]]) -> None:
+        self.q_values = json_serializer(value)
 
     def __repr__(self) -> str:
         return (

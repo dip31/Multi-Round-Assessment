@@ -14,25 +14,25 @@ const ProctoringWarning = ({ warning, onDismiss, onRetry }) => {
 
     const getIcon = (type) => {
         switch (type) {
-            case 'camera_permission_denied':
+            case 'CAMERA_PERMISSION_DENIED':
                 return (
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                     </svg>
                 );
-            case 'tab_switch':
+            case 'TAB_SWITCH':
                 return (
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
                 );
-            case 'fullscreen_exit':
+            case 'FULLSCREEN_EXIT':
                 return (
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
                     </svg>
                 );
-            case 'idle_activity':
+            case 'IDLE_ACTIVITY':
                 return (
                     <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -55,10 +55,10 @@ const ProctoringWarning = ({ warning, onDismiss, onRetry }) => {
                 </div>
                 <div className="ml-3 flex-1">
                     <h3 className="text-sm font-medium">
-                        {warning.type === 'camera_permission_denied' && 'Camera Access Required'}
-                        {warning.type === 'tab_switch' && 'Tab Switch Detected'}
-                        {warning.type === 'fullscreen_exit' && 'Fullscreen Mode Required'}
-                        {warning.type === 'idle_activity' && 'No Activity Detected'}
+                        {warning.type === 'CAMERA_PERMISSION_DENIED' && 'Camera Access Required'}
+                        {warning.type === 'TAB_SWITCH' && 'Tab Switch Detected'}
+                        {warning.type === 'FULLSCREEN_EXIT' && 'Fullscreen Mode Required'}
+                        {warning.type === 'IDLE_ACTIVITY' && 'No Activity Detected'}
                     </h3>
                     <div className="mt-1 text-sm">
                         <p>{warning.message}</p>

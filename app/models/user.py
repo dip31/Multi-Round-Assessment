@@ -30,8 +30,8 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(150), unique=True, nullable=False, index=True)
     password_hash: Mapped[str] = mapped_column(String, nullable=False)
     role: Mapped[str] = mapped_column(String(20), nullable=False, server_default=text("'student'"))
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("1"))
-    is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("0"))
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     # ── Relationships ─────────────────────────────────────────────────

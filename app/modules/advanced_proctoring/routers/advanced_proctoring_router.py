@@ -5,13 +5,14 @@ Handles computer vision events, audio analysis, and comprehensive violation dete
 with confidence scoring and risk assessment.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from app.database.db import get_db
 from app.core.auth import get_current_user
 from app.models.user import User
+from app.models.assessment import AssessmentSession
 from app.services.session_service import get_active_session
 from app.schemas.advanced_proctoring import (
     AdvancedProctorEventRequest,
@@ -19,6 +20,8 @@ from app.schemas.advanced_proctoring import (
     ProctoringSessionSummary
 )
 from app.services.advanced_proctoring_service import advanced_proctoring_service
+from app.services.phone_detection_service import detect_phones
+from app.services.proctoring_logger import log_violation
 
 router = APIRouter(
     prefix="/advanced-proctoring",
@@ -48,12 +51,25 @@ def log_advanced_proctoring_event(
     
     Supports computer vision events, audio analysis, and confidence scoring.
     """
-    # Verify session ownership
-    active_session = _require_active_session(db, current_user.id)
-    if event_data.session_id != active_session.id:
+    # Verify session ownership - check if session belongs to current user
+    session = db.query(AssessmentSession).filter(
+        AssessmentSession.id == event_data.session_id,
+        AssessmentSession.user_id == current_user.id
+    ).first()
+    
+    if not session:
         raise HTTPException(
             status_code=403,
-            detail="Cannot log events for other users' sessions"
+            detail="Session not found or access denied"
+        )
+    
+    # Optional: warn if session doesn't match active session (for debugging)
+    active_session = get_active_session(db, current_user.id)
+    if active_session and active_session.id != event_data.session_id:
+        # Log warning but don't block - allows proctoring to work during session transitions
+        import logging
+        logging.getLogger(__name__).warning(
+            f"Proctoring session_id {event_data.session_id} doesn't match active session {active_session.id} for user {current_user.id}"
         )
     
     try:
@@ -205,3 +221,41 @@ def _get_event_description(event_type: str) -> str:
         "PROCTORING_ERROR": "Error in proctoring system",
     }
     return descriptions.get(event_type, "Unknown event type")
+
+
+@router.post("/analyze-frame")
+async def analyze_frame_general(
+    frame: UploadFile = File(...),
+    session_id: int = Query(..., description="Assessment session ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Analyze a webcam frame for phone/object detection during coding or aptitude rounds.
+
+    Uses the same YOLO-based detection as the interview round but validates ownership
+    against AssessmentSession (not InterviewSession), so it works for all round types.
+    """
+    # Verify ownership against assessment session
+    session = db.query(AssessmentSession).filter(
+        AssessmentSession.id == session_id,
+        AssessmentSession.user_id == current_user.id,
+    ).first()
+    if not session:
+        raise HTTPException(status_code=403, detail="Session not found or access denied")
+
+    content = await frame.read()
+    detections = detect_phones(content)
+    phone_count = len(detections)
+
+    for det in detections:
+        await log_violation(
+            db,
+            session_id,
+            event_type="phone_detected",
+            confidence_score=det.get("confidence"),
+            face_count=None,
+            metadata={"bbox": det.get("bbox")},
+        )
+
+    return {"violations": detections, "phone_count": phone_count}

@@ -71,7 +71,7 @@ class RAGOrchestrator:
             doc.close()
             
             # Use Groq to extract structured information
-            extraction_prompt = PromptTemplate("""
+            extraction_prompt = """
             Analyze this resume and extract the following information in JSON format:
             {{
                 "skills": ["skill1", "skill2", ...],
@@ -94,9 +94,9 @@ class RAGOrchestrator:
             {resume_text}
             
             Return ONLY valid JSON, no additional text.
-            """)
+            """.format(resume_text=full_text)
             
-            response_text = self._complete(extraction_prompt.format(resume_text=full_text))
+            response_text = self._complete(extraction_prompt)
             
             # Clean up response text in case groq adds markdown ticks
             cleaned_text = response_text.strip()

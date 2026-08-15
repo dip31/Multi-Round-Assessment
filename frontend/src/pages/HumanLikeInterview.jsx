@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import api from '../services/api';
 import {
     getNextQuestion,
     submitResponse,
@@ -326,6 +327,48 @@ export default function HumanLikeInterview() {
         navigate(`/interview/report/${interviewId}`);
     };
 
+    const handleFinishInterview = async () => {
+        const confirmed = window.confirm(
+            `Are you sure you want to finish the interview early?\n\n` +
+            `Progress: ${turnNumber} out of ${totalTurns} questions answered\n\n` +
+            `This action cannot be undone.`
+        );
+        if (!confirmed) return;
+
+        try {
+            // Stop recording if active
+            if (mediaRecorderRef.current && interviewState === STATES.CANDIDATE_SPEAKING) {
+                mediaRecorderRef.current.stop();
+                clearInterval(timerIntervalRef.current);
+            }
+            // Stop audio
+            if (currentAudioRef.current) {
+                try { currentAudioRef.current.stop(); } catch (_) {}
+                currentAudioRef.current = null;
+            }
+            // Stop proctoring
+            if (proctoring.stopCamera) proctoring.stopCamera();
+            // Close AudioContext
+            if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+                audioContextRef.current.close();
+            }
+            clearInterval(timerIntervalRef.current);
+
+            // Call complete endpoint
+            const response = await api.post(`/interview/session/${interviewId}/complete`);
+            console.log('Interview completed:', response.data);
+
+            // Navigate to report
+            navigate(`/interview/report/${interviewId}`);
+        } catch (error) {
+            console.error('Failed to finish interview:', error);
+            setToast({
+                type: 'error',
+                message: error.response?.data?.detail || 'Failed to finish interview',
+            });
+        }
+    };
+
     return (
         <div className="h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white flex flex-col overflow-hidden">
             {/* Minimal Top Bar */}
@@ -354,6 +397,15 @@ export default function HumanLikeInterview() {
 
                 {/* Phase Badge + Follow-up */}
                 <div className="flex items-center gap-3">
+                    {/* Finish Interview Button */}
+                    <button
+                        onClick={handleFinishInterview}
+                        disabled={interviewState === STATES.COMPLETE || interviewState === STATES.LOADING}
+                        className="flex-shrink-0 px-4 py-1.5 bg-red-600 hover:bg-red-700 disabled:bg-slate-700 disabled:text-slate-500 text-white text-xs font-semibold rounded-full transition-colors"
+                    >
+                        Finish Round
+                    </button>
+                    
                     {isFollowup && (
                         <div className="bg-amber-900/50 text-amber-300 border border-amber-700/50 px-3 py-1 rounded-full text-xs font-medium">
                             Follow-up {followupType ? `· ${followupType}` : ''}

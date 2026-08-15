@@ -10,6 +10,7 @@ import ResultPage from './pages/ResultPage';
 import ResumeUpload from './pages/ResumeUpload';
 import HumanLikeInterview from './pages/HumanLikeInterview';
 import CodingRound from './pages/CodingRound';
+import CodingResultPage from './pages/CodingResultPage';
 import InterviewReport from './pages/InterviewReport';
 import LandingPage from './pages/LandingPage';
 import Analytics from './pages/Analytics';
@@ -117,6 +118,14 @@ export default function App() {
           element={
             <PrivateRoute>
               <CodingRound />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/coding/result"
+          element={
+            <PrivateRoute>
+              <CodingResultPage />
             </PrivateRoute>
           }
         />

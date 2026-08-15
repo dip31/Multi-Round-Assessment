@@ -1,7 +1,8 @@
 import { useMemo, useState, useEffect } from 'react';
 import { getProblems, startRound, runCode, submitCode } from '../services/codingService';
+import useAdvancedProctoring from '../hooks/useAdvancedProctoring';
 
-export default function CodingEditor() {
+export default function CodingEditor({ sessionId }) {
   const [problems, setProblems] = useState([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [code, setCode] = useState('');
@@ -11,6 +12,23 @@ export default function CodingEditor() {
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('problem');
   const [busyAction, setBusyAction] = useState('');
+
+  // Proctoring — single ownership via shared hook
+  const { startMonitoring, stopMonitoring } = useAdvancedProctoring(sessionId ?? null, null);
+
+  useEffect(() => {
+    startMonitoring?.();
+    return () => stopMonitoring?.();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Tab-visibility tracking (lightweight, hook-independent)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.hidden) console.warn('[Proctoring] TAB_SWITCH detected');
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,16 +87,12 @@ export default function CodingEditor() {
     { value: 'cpp', label: 'C++' },
   ];
 
-  const formatResult = (res) => {
-    if (!res) return null;
-
-    const lines = [];
-    if (res.status) lines.push(`Status: ${res.status}`);
-    if (typeof res.score !== 'undefined' && res.score !== null) lines.push(`Score: ${res.score}`);
-    if (typeof res.execution_time !== 'undefined' && res.execution_time !== null) lines.push(`Execution Time: ${res.execution_time}`);
-    if (typeof res.memory_used !== 'undefined' && res.memory_used !== null) lines.push(`Memory Used: ${res.memory_used}`);
-    if (typeof res.submission_id !== 'undefined' && res.submission_id !== null) lines.push(`Submission ID: ${res.submission_id}`);
-    return lines;
+  // Render a multiline text field without literal \n characters
+  const renderMultiline = (text) => {
+    if (!text) return null;
+    return text.split('\n').map((line, i) => (
+      <p key={i} className="leading-6">{line || '\u00A0'}</p>
+    ));
   };
 
   const normalizeProblemText = (text) => {
@@ -87,6 +101,107 @@ export default function CodingEditor() {
       .replace(/<[^>]+>/g, '')
       .replace(/\r\n/g, '\n')
       .trim();
+  };
+
+  const renderOutput = () => {
+    if (!output) {
+      return <p className="text-sm text-slate-400">Run your code to see evaluation output here.</p>;
+    }
+
+    const raw = output.raw;
+    const isRunResult = raw && Array.isArray(raw.test_case_results);
+    const isSubmitResult = raw && typeof raw.submission_id !== 'undefined';
+
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-sm font-semibold text-slate-100">{output.heading}</h3>
+          {raw?.status && (
+            <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] ${
+              raw.status === 'accepted'
+                ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-200'
+                : 'border-red-400/30 bg-red-400/10 text-red-300'
+            }`}>
+              {raw.status}
+            </span>
+          )}
+        </div>
+
+        {/* Aggregate summary line */}
+        {raw && (
+          <div className="grid grid-cols-2 gap-2 text-xs text-slate-300">
+            {typeof raw.test_cases_passed !== 'undefined' && (
+              <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                Tests passed: <span className="font-semibold text-white">{raw.test_cases_passed} / {raw.total_test_cases}</span>
+              </div>
+            )}
+            {typeof raw.score !== 'undefined' && raw.score !== null && (
+              <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+                Score: <span className="font-semibold text-white">{Math.round((raw.score ?? 0) * 100)}%</span>
+              </div>
+            )}
+            {isSubmitResult && (
+              <div className="col-span-2 rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-emerald-200">
+                Submission ID: <span className="font-semibold">{raw.submission_id}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Compiler/Error output sections */}
+        {raw?.compile_output && (
+          <div className="rounded-xl border border-red-400/30 bg-red-400/10 p-3">
+            <div className="text-xs font-semibold text-red-300 mb-1">Compilation Error</div>
+            <pre className="text-xs text-red-200 font-mono whitespace-pre-wrap overflow-auto">{raw.compile_output}</pre>
+          </div>
+        )}
+        {raw?.stderr && (
+          <div className="rounded-xl border border-orange-400/30 bg-orange-400/10 p-3">
+            <div className="text-xs font-semibold text-orange-300 mb-1">Runtime Error (stderr)</div>
+            <pre className="text-xs text-orange-200 font-mono whitespace-pre-wrap overflow-auto">{raw.stderr}</pre>
+          </div>
+        )}
+        {raw?.message && (
+          <div className="rounded-xl border border-yellow-400/30 bg-yellow-400/10 p-3">
+            <div className="text-xs font-semibold text-yellow-300 mb-1">Judge0 Message</div>
+            <pre className="text-xs text-yellow-200 font-mono whitespace-pre-wrap overflow-auto">{raw.message}</pre>
+          </div>
+        )}
+
+        {/* Per-case results table — only for /run (CodingRunResponse has test_case_results) */}
+        {isRunResult && raw.test_case_results.length > 0 && (
+          <div className="overflow-x-auto rounded-2xl border border-white/10">
+            <table className="w-full text-xs text-slate-200">
+              <thead className="border-b border-white/10 bg-white/5 text-[11px] uppercase tracking-[0.2em] text-slate-400">
+                <tr>
+                  <th className="px-3 py-2 text-left">#</th>
+                  <th className="px-3 py-2 text-left">Input</th>
+                  <th className="px-3 py-2 text-left">Expected</th>
+                  <th className="px-3 py-2 text-left">Actual</th>
+                  <th className="px-3 py-2 text-left">Result</th>
+                </tr>
+              </thead>
+              <tbody>
+                {raw.test_case_results.map((tc, idx) => (
+                  <tr key={idx} className={`border-b border-white/5 ${tc.passed ? 'bg-emerald-950/20' : 'bg-red-950/20'}`}>
+                    <td className="px-3 py-2 text-slate-400">{idx + 1}</td>
+                    <td className="max-w-[120px] truncate px-3 py-2 font-mono">{tc.input_data}</td>
+                    <td className="max-w-[120px] truncate px-3 py-2 font-mono">{tc.expected_output}</td>
+                    <td className="max-w-[120px] truncate px-3 py-2 font-mono">{tc.actual_output}</td>
+                    <td className="px-3 py-2">
+                      {tc.passed
+                        ? <span className="text-emerald-400 font-semibold">✓ Pass</span>
+                        : <span className="text-red-400 font-semibold">✗ Fail</span>
+                      }
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
   };
 
   if (loading) {
@@ -137,36 +252,6 @@ export default function CodingEditor() {
     } finally {
       setBusyAction('');
     }
-  };
-
-  const renderOutput = () => {
-    if (!output) {
-      return <p className="text-sm text-slate-400">Run your code to see evaluation output here.</p>;
-    }
-
-    const resultLines = formatResult(output.raw);
-    return (
-      <div className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="text-sm font-semibold text-slate-100">{output.heading}</h3>
-          <span className="rounded-full border border-cyan-400/30 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-200">
-            Live
-          </span>
-        </div>
-        {resultLines ? (
-          <div className="grid gap-2 text-sm text-slate-200">
-            {resultLines.map((line) => (
-              <div key={line} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-                {line}
-              </div>
-            ))}
-          </div>
-        ) : null}
-        <pre className="max-h-64 overflow-auto rounded-2xl border border-white/10 bg-slate-950 p-4 text-xs leading-6 text-slate-200">
-          {JSON.stringify(output.raw, null, 2)}
-        </pre>
-      </div>
-    );
   };
 
   return (
@@ -275,28 +360,34 @@ export default function CodingEditor() {
                 </div>
 
                 <div className={`${activeTab === 'problem' ? 'block' : 'hidden'} space-y-5 xl:block`}>
-                  <p className="whitespace-pre-wrap text-sm leading-7 text-slate-200">
-                    {normalizeProblemText(current.description)}
-                  </p>
+                  <div className="whitespace-pre-wrap text-sm leading-7 text-slate-200">
+                    {renderMultiline(normalizeProblemText(current.description))}
+                  </div>
 
                   {current.input_format ? (
                     <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                       <h5 className="mb-2 text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">Input Format</h5>
-                      <p className="whitespace-pre-wrap text-sm leading-6 text-slate-200">{normalizeProblemText(current.input_format)}</p>
+                      <div className="text-sm leading-6 text-slate-200">
+                        {renderMultiline(normalizeProblemText(current.input_format))}
+                      </div>
                     </div>
                   ) : null}
 
                   {current.output_format ? (
                     <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                       <h5 className="mb-2 text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">Output Format</h5>
-                      <p className="whitespace-pre-wrap text-sm leading-6 text-slate-200">{normalizeProblemText(current.output_format)}</p>
+                      <div className="text-sm leading-6 text-slate-200">
+                        {renderMultiline(normalizeProblemText(current.output_format))}
+                      </div>
                     </div>
                   ) : null}
 
                   {current.constraints ? (
                     <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                       <h5 className="mb-2 text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">Constraints</h5>
-                      <p className="whitespace-pre-wrap text-sm leading-6 text-slate-200">{normalizeProblemText(current.constraints)}</p>
+                      <div className="text-sm leading-6 text-slate-200">
+                        {renderMultiline(normalizeProblemText(current.constraints))}
+                      </div>
                     </div>
                   ) : null}
 
@@ -309,7 +400,23 @@ export default function CodingEditor() {
                             <span>Case {index + 1}</span>
                             <span>{testCase.is_hidden ? 'Hidden' : 'Visible'}</span>
                           </div>
-                          <pre className="overflow-auto whitespace-pre-wrap text-xs leading-6 text-slate-200">Input:\n{normalizeProblemText(testCase.input_data)}\n\nExpected:\n{normalizeProblemText(testCase.expected_output)}</pre>
+                          <div className="space-y-2 text-xs leading-6 text-slate-200">
+                            <div>
+                              <span className="text-slate-500 uppercase tracking-[0.15em]">Input:</span>
+                              <pre className="mt-1 overflow-auto rounded bg-slate-950/60 px-2 py-1 font-mono">
+                                {normalizeProblemText(testCase.input_data)}
+                              </pre>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 uppercase tracking-[0.15em]">Expected:</span>
+                              <pre className="mt-1 overflow-auto rounded bg-slate-950/60 px-2 py-1 font-mono">
+                                {normalizeProblemText(testCase.expected_output)}
+                              </pre>
+                            </div>
+                            {testCase.explanation ? (
+                              <p className="text-slate-400 italic">{testCase.explanation}</p>
+                            ) : null}
+                          </div>
                         </div>
                       ))}
                     </div>

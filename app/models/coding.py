@@ -9,13 +9,28 @@ Maps to the following PostgreSQL tables:
 
 from datetime import datetime
 from typing import List, Optional
+import json
 
 from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, text
-from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.database.base import Base
+
+
+def tags_serializer(tags: Optional[List[str]]) -> Optional[str]:
+    """Serialize tags list to JSON string."""
+    return json.dumps(tags) if tags is not None else None
+
+
+def tags_deserializer(value: Optional[str]) -> Optional[List[str]]:
+    """Deserialize JSON string to tags list."""
+    if value is None:
+        return None
+    try:
+        return json.loads(value)
+    except (json.JSONDecodeError, TypeError):
+        return None
 
 
 class CodingProblem(Base):
@@ -30,7 +45,7 @@ class CodingProblem(Base):
     title: str = Column(String(200), nullable=False)
     description: str = Column(Text, nullable=False)
     difficulty: Optional[str] = Column(String(10), nullable=True)
-    tags: Optional[List[str]] = Column(ARRAY(Text), nullable=True)
+    tags: Optional[List[str]] = Column(Text, nullable=True)
     input_format: Optional[str] = Column(Text, nullable=True)
     output_format: Optional[str] = Column(Text, nullable=True)
     constraints: Optional[str] = Column(Text, nullable=True)
@@ -49,6 +64,16 @@ class CodingProblem(Base):
         back_populates="problem",
         lazy="select",
     )
+
+    @property
+    def tags_list(self) -> Optional[List[str]]:
+        """Get tags as a list."""
+        return tags_deserializer(self.tags)
+
+    @tags_list.setter
+    def tags_list(self, value: Optional[List[str]]) -> None:
+        """Set tags from a list."""
+        self.tags = tags_serializer(value)
 
     def __repr__(self) -> str:
         return f"<CodingProblem id={self.id} title={self.title!r}>"
@@ -70,7 +95,7 @@ class CodingTestCase(Base):
     )
     input_data: str = Column(Text, nullable=False)
     expected_output: str = Column(Text, nullable=False)
-    is_hidden: bool = Column(Boolean, nullable=False, server_default=text("1"))
+    is_hidden: bool = Column(Boolean, nullable=False, server_default=text("true"))
     case_order: int = Column(Integer, nullable=False, server_default=text("0"))
     explanation: Optional[str] = Column(Text, nullable=True)
 

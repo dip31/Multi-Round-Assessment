@@ -181,12 +181,11 @@ def _fetch_latest_completed_aptitude_round(db: Session, user_id: int) -> tuple[O
         .join(AssessmentRound, AssessmentRound.session_id == AssessmentSession.id)
         .filter(
             AssessmentSession.user_id == user_id,
-            AssessmentSession.status == "completed",
             AssessmentRound.round_type == "aptitude",
             AssessmentRound.status == "completed",
         )
         .order_by(
-            AssessmentSession.completed_at.desc().nullslast(),
+            AssessmentRound.completed_at.desc().nullslast(),
             AssessmentSession.id.desc(),
         )
         .first()

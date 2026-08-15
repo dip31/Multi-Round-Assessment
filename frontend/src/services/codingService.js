@@ -24,3 +24,8 @@ export async function getSubmission(id) {
   const resp = await api.get(`/coding/submission/${id}`);
   return resp.data;
 }
+
+export async function finishRound() {
+  const resp = await api.post('/coding/finish');
+  return resp.data;
+}
