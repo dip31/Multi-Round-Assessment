@@ -122,31 +122,55 @@ export default function InterviewReport() {
                         <p className="text-xs text-slate-500">Knowledge accuracy</p>
                     </div>
 
+                    {/* Intent/Communication */}
+                    <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm text-center">
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Communication</p>
+                        <div className="text-4xl font-bold text-emerald-600 mb-1">
+                            {report.intent_score != null ? `${Math.round(report.intent_score * 100)}%` : '—'}
+                        </div>
+                        <p className="text-xs text-slate-500">Intent & clarity</p>
+                    </div>
+
                     {/* Behavior */}
                     <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm text-center">
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Behavior</p>
                         <div className="text-4xl font-bold text-purple-600 mb-1">{Math.round(report.behavior_score * 100)}%</div>
                         <p className="text-xs text-slate-500">Eye contact & stability</p>
                     </div>
-
-                    {/* Follow-up Rate */}
-                    <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm text-center">
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Follow-up Rate</p>
-                        <div className={`text-4xl font-bold mb-1 ${getFollowupRateColor(report.followup_rate)}`}>
-                            {report.followup_rate.toFixed(0)}%
-                        </div>
-                        <p className="text-xs text-slate-500">{report.followup_interpretation}</p>
-                    </div>
                 </div>
 
+                {/* Completion info */}
+                {report.completion_ratio != null && (
+                    <div className="mb-8 flex items-center gap-4 text-sm text-slate-600">
+                        <span className="font-semibold">Completion:</span>
+                        <span>{report.total_turns} questions attempted ({Math.round(report.completion_ratio * 100)}%)</span>
+                        {report.completion_reason && (
+                            <span className="ml-2 px-3 py-1 rounded-full bg-slate-100 text-xs font-medium">
+                                {report.completion_reason.replace(/_/g, ' ')}
+                            </span>
+                        )}
+                    </div>
+                )}
+
                 {/* AI Feedback */}
-                <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm mb-12">
+                <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm mb-8">
                     <div className="flex items-start gap-4">
                         <div className="text-3xl flex-shrink-0">✨</div>
                         <div>
                             <h2 className="text-lg font-bold text-slate-900 mb-3">AI Feedback & Insights</h2>
                             <p className="text-slate-700 leading-relaxed text-base">{report.feedback_summary}</p>
                         </div>
+                    </div>
+                </div>
+
+                {/* Follow-up Summary */}
+                <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm mb-12 flex items-center justify-between">
+                    <div>
+                        <h2 className="text-sm font-bold text-slate-700 uppercase tracking-wider mb-1">Follow-up Rate</h2>
+                        <p className="text-xs text-slate-500">{report.followup_interpretation}</p>
+                    </div>
+                    <div className={`text-4xl font-bold ${getFollowupRateColor(report.followup_rate)}`}>
+                        {report.followup_rate.toFixed(0)}%
                     </div>
                 </div>
 

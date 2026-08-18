@@ -9,6 +9,8 @@ passlib[bcrypt]
 bcrypt<4.1
 email-validator
 redis
+celery>=5.3,<6
+minio>=7.2
 sentence-transformers
 faiss-cpu
 torch

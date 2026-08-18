@@ -69,6 +69,17 @@ async def lifespan(app: FastAPI):
     else:
         print("[Startup] Heavy model warmups skipped for fast local auth/login startup")
 
+    # Stage 3 / Stage 4: orchestrate shared infra health in one place.
+    # Redis is required by Celery broker/backend (Stage 4) but optional for the
+    # request path (cache-only). Log status; never fail startup so the existing
+    # assessment flow keeps working even if Redis is briefly unavailable.
+    try:
+        from app.services.redis_client import get_redis_client, redis_available
+        get_redis_client()
+        print(f"[Startup] Redis: {'ready' if redis_available() else 'unavailable (continuing)'}")
+    except Exception as e:
+        print(f"[Startup] Redis health check failed: {e}")
+
     yield
 
 

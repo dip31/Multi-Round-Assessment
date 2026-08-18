@@ -6,6 +6,7 @@ from .proctoring import ProctoringEvent
 from .advanced_proctoring import AdvancedProctoringEvent
 from .interview import InterviewSession, ApprovedQuestionPool, InterviewTurn, ProctoringViolation
 from .admin_question_feedback import AdminQuestionFeedback
+from .resume_processing import ResumeProcessingJob
 
 __all__ = [
     "User",
@@ -20,4 +21,5 @@ __all__ = [
     "InterviewTurn",
     "ProctoringViolation",
     "AdminQuestionFeedback",
+    "ResumeProcessingJob",
 ]

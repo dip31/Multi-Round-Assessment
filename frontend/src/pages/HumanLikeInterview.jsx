@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import {
@@ -7,7 +7,7 @@ import {
     transcribeAudio,
     synthesizeSpeech,
 } from '../services/interviewService';
-import useBasicProctoring from '../hooks/useBasicProctoring';
+import useAdvancedProctoring from '../hooks/useAdvancedProctoring';
 import TimerComponent from '../components/TimerComponent';
 import { Toast } from '../components/Toast';
 
@@ -34,7 +34,21 @@ export default function HumanLikeInterview() {
     const [summary, setSummary] = useState(null);
 
     const navigate = useNavigate();
-    const proctoring = useBasicProctoring();
+
+    // Use advanced proctoring (MediaPipe FaceMesh + browser monitoring) instead of basic camera-only
+    const sessionId = parseInt(localStorage.getItem('coding_round_id') || '0', 10) || null;
+    const proctoring = useAdvancedProctoring(sessionId, (violation) => {
+        if (violation.terminate) {
+            setToast({ type: 'error', message: 'Proctoring violation threshold exceeded. Interview may be flagged.' });
+            return;
+        }
+        const type = String(violation.eventType || '');
+        if (type === 'FACE_NOT_VISIBLE') {
+            setToast({ type: 'warning', message: 'Face not detected. Keep your face visible.' });
+        } else if (type === 'TAB_SWITCH') {
+            setToast({ type: 'warning', message: 'Tab switching detected during interview.' });
+        }
+    });
 
     const interviewId = localStorage.getItem('interview_id');
     const mediaRecorderRef = useRef(null);
@@ -70,40 +84,51 @@ export default function HumanLikeInterview() {
         // Any previous in-flight request becomes stale
         const requestId = ++audioRequestIdRef.current;
 
-        try {
-            // Network request — may take 600ms+
-            const arrayBuffer = await synthesizeSpeech(text);
+        const tryPlay = async (isRetry = false) => {
+            try {
+                // Network request — may take 600ms+
+                const arrayBuffer = await synthesizeSpeech(text);
 
-            // Check 1: after network await
-            // If a newer playAudio call started while we waited,
-            // our response is stale — discard silently
-            if (requestId !== audioRequestIdRef.current) return;
+                // Check 1: after network await
+                if (requestId !== audioRequestIdRef.current) return;
 
-            const audioContext = getAudioContext();
+                const audioContext = getAudioContext();
 
-            if (audioContext.state === 'suspended') {
-                await audioContext.resume();
+                if (audioContext.state === 'suspended') {
+                    await audioContext.resume();
+                }
+
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
+
+                // Check 2: after decode await
+                if (requestId !== audioRequestIdRef.current) return;
+
+                const source = audioContext.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(audioContext.destination);
+                
+                currentAudioRef.current = source;
+                source.start(0);
+
+                return new Promise((resolve) => {
+                    source.onended = () => {
+                        currentAudioRef.current = null;
+                        resolve();
+                    };
+                });
+            } catch (error) {
+                if (!isRetry && error.message?.includes('HTTP 5')) {
+                    // Retry once on 5xx server errors
+                    console.warn('TTS transient failure, retrying...', error.message);
+                    await new Promise(r => setTimeout(r, 1000));
+                    return tryPlay(true);
+                }
+                throw error;
             }
+        };
 
-            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
-
-            // Check 2: after decode await
-            // Check again in case another call started during decode
-            if (requestId !== audioRequestIdRef.current) return;
-
-            const source = audioContext.createBufferSource();
-            source.buffer = audioBuffer;
-            source.connect(audioContext.destination);
-            
-            currentAudioRef.current = source;
-            source.start(0);
-
-            return new Promise((resolve) => {
-                source.onended = () => {
-                    currentAudioRef.current = null;
-                    resolve();
-                };
-            });
+        try {
+            return await tryPlay(false);
         } catch (error) {
             currentAudioRef.current = null;
             // Non-blocking — interview continues without audio
@@ -128,9 +153,20 @@ export default function HumanLikeInterview() {
             if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
                 audioContextRef.current.close();
             }
-            if (proctoring.stopCamera) proctoring.stopCamera();
+            if (proctoring.stopMonitoring) proctoring.stopMonitoring();
+            else if (proctoring.stopCamera) proctoring.stopCamera();
         };
     }, []);
+
+    // Start advanced proctoring when the interview starts
+    const { startMonitoring, stopMonitoring, isMonitoring } = proctoring;
+    useEffect(() => {
+        if (sessionId) {
+            startMonitoring?.();
+        }
+        return () => stopMonitoring?.();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [sessionId]);
 
     // ── Initial load: fetch first question via GET /next ───────────────
     useEffect(() => {
@@ -253,11 +289,14 @@ export default function HumanLikeInterview() {
                 }
             }
 
-            // Behavioral snapshot
+            // Behavioral snapshot — from real proctoring metrics (not hardcoded)
+            const snapshot = proctoring.getBehaviorSnapshot?.() || {};
             const behavioralSnapshot = {
-                eye_contact_pct: 0.5,
-                head_stability: 0.7,
+                eye_contact_pct: snapshot.eye_contact_pct ?? 0.5,
+                head_stability: snapshot.head_stability ?? 0.5,
             };
+            // Reset metrics for next answer
+            proctoring.resetMetrics?.();
 
             // Submit to /respond — single response contains everything
             const data = await submitResponse(
@@ -310,7 +349,8 @@ export default function HumanLikeInterview() {
                 setSummary(data.interview_summary);
 
                 // Stop camera
-                if (proctoring.stopCamera) proctoring.stopCamera();
+            if (proctoring.stopMonitoring) proctoring.stopMonitoring();
+            else if (proctoring.stopCamera) proctoring.stopCamera();
 
                 try { await playAudio(data.message); } catch (e) { }
                 setInterviewState(STATES.COMPLETE);
@@ -347,7 +387,8 @@ export default function HumanLikeInterview() {
                 currentAudioRef.current = null;
             }
             // Stop proctoring
-            if (proctoring.stopCamera) proctoring.stopCamera();
+            if (proctoring.stopMonitoring) proctoring.stopMonitoring();
+            else if (proctoring.stopCamera) proctoring.stopCamera();
             // Close AudioContext
             if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
                 audioContextRef.current.close();

@@ -129,22 +129,22 @@ def submit_code(payload: CodingSubmissionRequest, db: Session = Depends(get_db),
 
 @router.post("/start")
 def start_round(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-	"""Start a coding round for the authenticated user's active session."""
+	"""Start a coding round for the authenticated user's active session.
+
+	Returns the full payload: {round, assigned, problems} so the frontend
+	can extract session_id and problems in one call.
+	"""
 	try:
 		payload = start_coding_round(db, current_user.id)
 	except ValueError as e:
 		raise HTTPException(status_code=400, detail=str(e))
 
-	# Return assigned problems (visible test cases filtered by service)
-	problems = payload.get("problems")
-	if problems is not None:
-		return problems
-
-	assigned_problem_ids = [sp.problem_id for sp in payload.get("assigned", [])]
-	problems = db.query(CodingProblem).filter(CodingProblem.id.in_(assigned_problem_ids)).all()
+	# Ensure hidden test cases are never exposed to the frontend
+	problems = payload.get("problems") or []
 	for p in problems:
 		p.test_cases = [t for t in p.test_cases if not t.is_hidden]
-	return problems
+
+	return payload
 
 
 @router.post("/start-after-aptitude")
@@ -152,6 +152,7 @@ def start_after_aptitude(db: Session = Depends(get_db), current_user=Depends(get
 	"""Finalize the user's aptitude round and ensure coding round is available next.
 
 	This keeps the session active, unlocks the coding round, and is safe to call more than once.
+	Returns the full payload: {round, assigned, problems}.
 	"""
 	active_aptitude = session_service.get_user_active_round(db, current_user.id, round_type="aptitude")
 	if active_aptitude is not None:
@@ -162,15 +163,12 @@ def start_after_aptitude(db: Session = Depends(get_db), current_user=Depends(get
 	except ValueError as e:
 		raise HTTPException(status_code=400, detail=str(e))
 
-	problems = payload.get("problems")
-	if problems is not None:
-		return problems
-
-	assigned_problem_ids = [sp.problem_id for sp in payload.get("assigned", [])]
-	problems = db.query(CodingProblem).filter(CodingProblem.id.in_(assigned_problem_ids)).all()
+	# Ensure hidden test cases are never exposed to the frontend
+	problems = payload.get("problems") or []
 	for p in problems:
 		p.test_cases = [t for t in p.test_cases if not t.is_hidden]
-	return problems
+
+	return payload
 
 
 @router.get("/results")

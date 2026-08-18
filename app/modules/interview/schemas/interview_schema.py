@@ -17,6 +17,42 @@ class ResumeUploadResponse(BaseModel):
     detected_role: Optional[str] = None
 
 
+# ── Async Resume Upload (Stage 6A) ─────────────────────────────────────
+# The async endpoints introduce an ENTIRELY NEW response contract. The
+# existing POST /interview/resume/upload response (ResumeUploadResponse
+# above) is NOT touched; callers of the original sync endpoint continue
+# to receive { status, pool_id, question_count, pending_approval,
+# detected_role }.
+
+class AsyncResumeUploadResponse(BaseModel):
+    """Response from POST /interview/resume/upload-async.
+
+    Carries ONLY the job identifier + initial status; the resume is parsed
+    asynchronously by a Celery worker. The frontend polls
+    GET /interview/resume/processing/{job_id} until status == COMPLETED.
+    """
+    job_id: int
+    status: str  # "PENDING"
+
+
+class ResumeProcessingJobStatus(BaseModel):
+    """Safe status payload returned by GET /interview/resume/processing/{job_id}.
+
+    Only fields that are safe to expose to the candidate are included.
+    NEVER expose internal error stack traces; ``error_message`` carries a
+    safe user-facing message only (see Celery task).
+    """
+    job_id: int
+    status: str  # PENDING | PROCESSING | COMPLETED | FAILED
+    progress_step: Optional[str] = None
+    detected_role: Optional[str] = None
+    pool_id: Optional[int] = None
+    question_count: Optional[int] = None
+    error_message: Optional[str] = None
+    created_at: Optional[str] = None
+    completed_at: Optional[str] = None
+
+
 # ── Question Pool ──────────────────────────────────────────────────────
 class QuestionItem(BaseModel):
     """Single interview question."""

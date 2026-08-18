@@ -22,7 +22,7 @@ import tempfile
 from datetime import datetime
 from typing import Optional
 
-import redis
+import redis  # noqa: F401  (kept for type compatibility / clarity of intent)
 from fastapi import (
     APIRouter,
     Depends,
@@ -46,6 +46,7 @@ from app.models.interview import (
 from app.models.assessment import AssessmentSession
 from app.services.resume_service import parse_resume
 from app.services.groq_service import GroqService
+from app.services.redis_client import get_redis_client as _shared_get_redis_client
 from app.modules.interview.schemas.interview_schema import (
     ResumeUploadResponse,
     QuestionPoolResponse,
@@ -90,31 +91,16 @@ class LogEventRequest(BaseModel):
 ml_models = {}  # To be populated by app/main.py
 groq_service = GroqService(settings.GROQ_API_KEY)
 
-redis_client: Optional[redis.Redis] = None
-
 
 def _get_redis_client() -> Optional[redis.Redis]:
-    """Lazily initialize Redis so the interview flow still works without Docker."""
-    global redis_client
+    """Return the shared Redis client (lazy singleton), or None if unavailable.
 
-    if redis_client is not None:
-        return redis_client
-
-    redis_url = settings.REDIS_URL
-    if not redis_url:
-        logger.info("Redis cache disabled: REDIS_URL not configured")
-        return None
-
-    try:
-        client = redis.from_url(redis_url, decode_responses=False)
-        client.ping()
-        redis_client = client
-        logger.info("Redis cache connected for interview question caching")
-        return redis_client
-    except Exception as e:
-        logger.info(f"Redis cache unavailable; continuing without cache: {str(e)}")
-        redis_client = None
-        return None
+    Delegates to ``app.services.redis_client`` so Redis configuration is
+    consolidated. Behaviour is identical to the previous local implementation:
+    returns ``None`` when Redis is not configured or unreachable, so the
+    interview cache silently skips and the assessment flow continues.
+    """
+    return _shared_get_redis_client()
 
 
 # ── ENDPOINT 1: POST /interview/resume/upload ──────────────────────────
@@ -259,8 +245,9 @@ async def analyze_frame(
     interview = db.query(InterviewSession).filter(InterviewSession.id == session_id).first()
     if not interview:
         raise HTTPException(status_code=400, detail="Invalid session_id")
-    # Ensure current_user owns the session or is admin
-    if interview.session_id != current_user.id and current_user.role != "admin":
+    # Ensure current_user owns the session (via AssessmentSession.user_id) or is admin
+    owner_session = db.query(AssessmentSession).filter(AssessmentSession.id == interview.session_id).first()
+    if (owner_session is None or owner_session.user_id != current_user.id) and current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Not authorized for this session")
 
     content = await frame.read()
@@ -284,7 +271,8 @@ async def log_event(
     interview = db.query(InterviewSession).filter(InterviewSession.id == req.session_id).first()
     if not interview:
         raise HTTPException(status_code=400, detail="Invalid session_id")
-    if interview.session_id != current_user.id and current_user.role != "admin":
+    owner_session = db.query(AssessmentSession).filter(AssessmentSession.id == interview.session_id).first()
+    if (owner_session is None or owner_session.user_id != current_user.id) and current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Not authorized for this session")
 
     success = await log_violation(db, req.session_id, req.event_type, req.confidence_score, req.face_count, req.metadata)

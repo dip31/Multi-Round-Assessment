@@ -6,6 +6,8 @@ import asyncio
 import sys
 from pathlib import Path
 
+import pytest
+
 # Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
@@ -18,6 +20,7 @@ from app.services.proctoring_service import log_proctoring_event, get_session_pr
 from sqlalchemy import text
 
 
+@pytest.mark.asyncio
 async def test_proctoring_system():
     """Test the proctoring system components."""
     

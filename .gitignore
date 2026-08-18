@@ -31,3 +31,13 @@ alembic/versions/__pycache__/
 # mypy / Pyre
 .mypy_cache/
 .pyre/
+
+# Local SQLite dev artifact (the application is PostgreSQL-only; this file is
+# only created by legacy root-level debug/seed scripts and must never be used
+# by the application or committed to the repository).
+database.db
+*.db
+
+
+# Application logs
+logs/

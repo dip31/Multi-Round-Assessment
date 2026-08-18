@@ -8,6 +8,7 @@ from app.modules.proctoring.routers.proctoring_router import router as proctorin
 from app.modules.session.routers.session_router import router as session_router
 from app.modules.advanced_proctoring.routers.advanced_proctoring_router import router as advanced_proctoring_router
 from app.modules.interview.routers.interview_router import router as interview_router
+from app.modules.interview.routers.async_resume_router import router as async_resume_router
 from app.modules.report.routers.report_router import router as report_router
 from app.modules.report.routers.candidate_report_router import router as candidate_report_router
 
@@ -21,5 +22,6 @@ api_router.include_router(coding_router)
 api_router.include_router(proctoring_router)
 api_router.include_router(advanced_proctoring_router)
 api_router.include_router(interview_router)
+api_router.include_router(async_resume_router)
 api_router.include_router(report_router)
 api_router.include_router(candidate_report_router)

@@ -6,6 +6,8 @@ import asyncio
 import sys
 from pathlib import Path
 
+import pytest
+
 # Add project root to path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
@@ -21,6 +23,7 @@ from app.models.assessment import AssessmentSession
 from app.models.aptitude import RLSession
 
 
+@pytest.mark.asyncio
 async def test_adaptive_difficulty():
     """Test that difficulty changes after submitting answers."""
     

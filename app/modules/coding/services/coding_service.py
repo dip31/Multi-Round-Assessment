@@ -105,6 +105,7 @@ def run_and_evaluate(
             raise ValueError("round_id is required for submissions")
         
         submission = CodingSubmission(
+            round_id=round_id,
             problem_id=problem_id,
             code=code,
             language=language,

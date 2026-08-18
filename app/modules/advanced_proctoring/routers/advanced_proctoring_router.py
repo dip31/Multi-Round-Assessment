@@ -21,7 +21,6 @@ from app.schemas.advanced_proctoring import (
 )
 from app.services.advanced_proctoring_service import advanced_proctoring_service
 from app.services.phone_detection_service import detect_phones
-from app.services.proctoring_logger import log_violation
 
 router = APIRouter(
     prefix="/advanced-proctoring",
@@ -130,9 +129,9 @@ def get_high_risk_sessions(
     
     Returns sessions exceeding the specified risk threshold, ordered by risk level.
     """
-    # TODO: Add admin role check in production
-    # if current_user.role != "admin":
-    #     raise HTTPException(status_code=403, detail="Admin access required")
+    # Admin-only endpoint - prevents students from enumerating flagged sessions
+    if getattr(current_user, "role", None) != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
     
     try:
         high_risk_sessions = advanced_proctoring_service.get_high_risk_sessions(
@@ -249,13 +248,12 @@ async def analyze_frame_general(
     phone_count = len(detections)
 
     for det in detections:
-        await log_violation(
-            db,
-            session_id,
-            event_type="phone_detected",
-            confidence_score=det.get("confidence"),
-            face_count=None,
+        event_data = AdvancedProctorEventRequest(
+            session_id=session_id,
+            event_type="PHONE_DETECTED",
+            confidence=det.get("confidence"),
             metadata={"bbox": det.get("bbox")},
         )
+        advanced_proctoring_service.log_advanced_event(db, event_data)
 
     return {"violations": detections, "phone_count": phone_count}

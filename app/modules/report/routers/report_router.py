@@ -169,6 +169,18 @@ def get_skill_gaps(
     if not turns:
         return SkillGapsResponse(topics=[], total_turns_analyzed=0)
 
+    # Build a batched map: interview_id -> user_id (via AssessmentSession)
+    interview_ids = {t.interview_id for t in turns}
+    interviews = db.query(InterviewSession.id, InterviewSession.session_id).filter(
+        InterviewSession.id.in_(interview_ids)
+    ).all()
+    assessment_ids = {i.session_id for i in interviews}
+    assessments = db.query(AssessmentSession.id, AssessmentSession.user_id).filter(
+        AssessmentSession.id.in_(assessment_ids)
+    ).all()
+    assess_map = {a.id: a.user_id for a in assessments}
+    session_map = {i.id: assess_map.get(i.session_id) for i in interviews}
+
     # Step 3: Group turns by topic
     topic_data = defaultdict(lambda: {
         "scores": [],
@@ -180,12 +192,10 @@ def get_skill_gaps(
         score = turn.final_score or 0.0
         topic_data[topic]["scores"].append(score)
         
-        # Get candidate id via interview session
-        session = db.query(InterviewSession).filter(
-            InterviewSession.id == turn.interview_id
-        ).first()
-        if session:
-            topic_data[topic]["candidate_ids"].add(session.session_id)
+        # Get candidate id via interview -> assessment session -> user_id
+        uid = session_map.get(turn.interview_id)
+        if uid is not None:
+            topic_data[topic]["candidate_ids"].add(uid)
 
     # Step 4: Compute metrics per topic
     results = []
@@ -223,32 +233,46 @@ def get_all_candidates(
     """
     check_admin(current_user)
 
-    # Subquery to get the latest session score for each student
-    candidates_raw = db.query(
-        User.id,
-        User.name,
-        User.email,
-        func.max(AssessmentSession.total_score).label("top_score"),
-        func.max(AssessmentSession.status).label("status")
-    ).outerjoin(
-        AssessmentSession, User.id == AssessmentSession.user_id
-    ).filter(User.role == "student").group_by(User.id).all()
+    # Get all students
+    students = db.query(User).filter(User.role == "student").all()
+    student_ids = [s.id for s in students]
 
-    total_count = len(candidates_raw)
-    
+    total_count = len(students)
     if total_count == 0:
         return AllCandidatesResponse(candidates=[])
 
-    # Build list with scores
+    # Get all sessions for these students (batch fetch)
+    sessions = db.query(AssessmentSession).filter(
+        AssessmentSession.user_id.in_(student_ids)
+    ).all()
+
+    # Group sessions by user
+    user_sessions_map = defaultdict(list)
+    for s in sessions:
+        user_sessions_map[s.user_id].append(s)
+
+    # Build list with scores: best score + latest session status per user
     candidates_with_scores = []
-    for user_id, name, email, score, status in candidates_raw:
-        candidates_with_scores.append({
-            "user_id": user_id,
-            "name": name or "Unknown",
-            "email": email,
-            "overall_score": float(score) if score else 0.0,
-            "status": status or "not_started"
-        })
+    for student in students:
+        user_sess = user_sessions_map.get(student.id, [])
+        if user_sess:
+            best = max(user_sess, key=lambda s: s.total_score or 0)
+            latest = max(user_sess, key=lambda s: s.id)
+            candidates_with_scores.append({
+                "user_id": student.id,
+                "name": student.name or "Unknown",
+                "email": student.email,
+                "overall_score": float(best.total_score) if best.total_score else 0.0,
+                "status": latest.status or "not_started"
+            })
+        else:
+            candidates_with_scores.append({
+                "user_id": student.id,
+                "name": student.name or "Unknown",
+                "email": student.email,
+                "overall_score": 0.0,
+                "status": "not_started"
+            })
 
     # Compute percentiles using correct formula
     def compute_percentiles(candidates: list) -> list:

@@ -30,6 +30,7 @@ import app.models.rl  # noqa: F401
 import app.models.session_problem  # noqa: F401
 import app.models.advanced_proctoring  # noqa: F401
 import app.models.admin_question_feedback  # noqa: F401
+import app.models.resume_processing  # noqa: F401
 
 # ── Alembic Config ────────────────────────────────────────────────────
 config = context.config
