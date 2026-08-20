@@ -1,0 +1,132 @@
+[
+  {
+    "id": "c_001",
+    "concept": "CAP Theorem",
+    "role": "SDE",
+    "topic": "distributed systems",
+    "explanation": "CAP theorem states that a distributed system cannot simultaneously guarantee Consistency, Availability, and Partition tolerance. Since network partitions are unavoidable, systems must choose between CP (consistent but may be unavailable during partitions) or AP (available but may return stale data).",
+    "key_points": [
+      "Consistency: all nodes see same data simultaneously",
+      "Availability: every request receives a response",
+      "Partition tolerance: system works despite network splits",
+      "Real systems: CP (HBase, Zookeeper) vs AP (Cassandra, DynamoDB)"
+    ]
+  },
+  {
+    "id": "c_002",
+    "concept": "ACID Properties",
+    "role": "SDE",
+    "topic": "databases",
+    "explanation": "ACID properties ensure reliable database transactions. Atomicity means transactions are all-or-nothing. Consistency ensures the database moves from one valid state to another. Isolation means concurrent transactions do not interfere. Durability guarantees committed data survives failures.",
+    "key_points": [
+      "Atomicity: all operations succeed or all fail",
+      "Consistency: constraints are maintained",
+      "Isolation: transactions appear sequential",
+      "Durability: data persists after commit"
+    ]
+  },
+  {
+    "id": "c_003",
+    "concept": "Transformer Architecture",
+    "role": "Data Science",
+    "topic": "deep learning",
+    "explanation": "The transformer uses self-attention mechanisms instead of recurrence. Multi-head attention allows the model to attend to different positions simultaneously. Positional encoding preserves sequence order. The encoder processes input and the decoder generates output, with cross-attention connecting them.",
+    "key_points": [
+      "Self-attention: each token attends to all others",
+      "Multi-head: multiple attention perspectives",
+      "Positional encoding: preserves token order",
+      "Encoder-decoder or encoder-only (BERT) or decoder-only (GPT)"
+    ]
+  },
+  {
+    "id": "c_004",
+    "concept": "Bias-Variance Tradeoff",
+    "role": "Data Science",
+    "topic": "machine learning fundamentals",
+    "explanation": "Bias measures error from incorrect assumptions in the model. Variance measures sensitivity to training data fluctuations. High bias causes underfitting, high variance causes overfitting. Total error equals bias squared plus variance plus irreducible noise. Regularization reduces variance at the cost of slight bias increase.",
+    "key_points": [
+      "Bias: systematic error from wrong assumptions",
+      "Variance: error from sensitivity to training data",
+      "Total error = bias² + variance + noise",
+      "Regularization trades variance for bias"
+    ]
+  },
+  {
+    "id": "c_005",
+    "concept": "React Reconciliation",
+    "role": "Full Stack",
+    "topic": "react",
+    "explanation": "React's reconciliation algorithm determines the minimum set of DOM operations needed when state changes. It builds a virtual DOM tree, diffs it with the previous tree, and applies only the necessary updates. Keys help React identify which list items changed, improving diff performance.",
+    "key_points": [
+      "Virtual DOM diffing algorithm",
+      "Keys for list item identification",
+      "Component type changes cause full remount",
+      "Batched updates reduce DOM operations"
+    ]
+  },
+  {
+    "id": "c_006",
+    "concept": "Consistent Hashing",
+    "role": "SDE",
+    "topic": "distributed systems",
+    "explanation": "Consistent hashing minimizes key remapping when nodes are added or removed. A hash ring maps both nodes and keys to positions. Each key is served by the first node clockwise on the ring. Virtual nodes improve load distribution.",
+    "key_points": [
+      "Hash ring with nodes and keys",
+      "Only K/N keys remapped when node added",
+      "Virtual nodes for uniform distribution",
+      "Used in distributed caches and databases"
+    ]
+  },
+  {
+    "id": "c_007",
+    "concept": "Gradient Descent Variants",
+    "role": "Data Science",
+    "topic": "optimization",
+    "explanation": "Batch gradient descent uses all samples per update (stable but slow). Stochastic uses one sample (fast but noisy). Mini-batch balances both. Adam optimizer combines momentum and adaptive learning rates, making it the default choice for most deep learning tasks.",
+    "key_points": [
+      "Batch: stable gradients, slow updates",
+      "SGD: noisy but fast, good generalization",
+      "Mini-batch: best of both worlds",
+      "Adam: adaptive per-parameter learning rates"
+    ]
+  },
+  {
+    "id": "c_008",
+    "concept": "JWT Authentication",
+    "role": "Full Stack",
+    "topic": "authentication",
+    "explanation": "JSON Web Tokens contain three Base64-encoded parts: header (algorithm), payload (claims), and signature. The server signs tokens with a secret key. Clients store tokens and send them in the Authorization header. Stateless: the server verifies the signature without database lookup.",
+    "key_points": [
+      "Header: algorithm and token type",
+      "Payload: claims (user id, role, expiry)",
+      "Signature: HMAC-SHA256 of header and payload",
+      "Stateless: no session storage needed"
+    ]
+  },
+  {
+    "id": "c_009",
+    "concept": "Random Forest",
+    "role": "Data Science",
+    "topic": "ensemble methods",
+    "explanation": "Random forest builds multiple decision trees on bootstrap samples with random feature subsets. Predictions are aggregated by majority vote (classification) or averaging (regression). The randomness decorrelates trees, reducing variance significantly compared to a single tree.",
+    "key_points": [
+      "Bagging: bootstrap sampling of training data",
+      "Random feature subset at each split",
+      "Decorrelated trees reduce variance",
+      "OOB error as free validation estimate"
+    ]
+  },
+  {
+    "id": "c_010",
+    "concept": "WebSocket vs HTTP",
+    "role": "Full Stack",
+    "topic": "networking",
+    "explanation": "HTTP is request-response: client always initiates. WebSocket provides full-duplex communication over a persistent connection. After HTTP upgrade handshake, both sides can send messages freely. WebSocket is ideal for real-time features like chat, live updates, and collaborative tools.",
+    "key_points": [
+      "HTTP: request-response, stateless",
+      "WebSocket: persistent bidirectional connection",
+      "Upgrade handshake from HTTP",
+      "Lower latency than polling for real-time"
+    ]
+  }
+]

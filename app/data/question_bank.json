@@ -1,0 +1,821 @@
+{
+  "SDE": {
+    "easy": [
+      {
+        "id": "q_sde_easy_001",
+        "text": "What is the difference between stack and queue?",
+        "role": "SDE",
+        "difficulty": "easy",
+        "topic": "data structures",
+        "expected_points": [
+          "LIFO vs FIFO ordering",
+          "Stack uses push and pop operations",
+          "Queue uses enqueue and dequeue operations",
+          "Stack use cases: recursion, undo operations",
+          "Queue use cases: BFS, task scheduling"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_sde_easy_002",
+        "text": "Explain the four principles of OOP with examples.",
+        "role": "SDE",
+        "difficulty": "easy",
+        "topic": "object oriented programming",
+        "expected_points": [
+          "Encapsulation: bundling data and methods",
+          "Inheritance: child class inherits from parent",
+          "Polymorphism: same interface different behavior",
+          "Abstraction: hiding implementation details"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_sde_easy_003",
+        "text": "What is the difference between an array and a linked list?",
+        "role": "SDE",
+        "difficulty": "easy",
+        "topic": "data structures",
+        "expected_points": [
+          "Array: contiguous memory, O(1) access",
+          "Linked list: non-contiguous, O(n) access",
+          "Array: fixed size, linked list: dynamic",
+          "Insertion/deletion: O(1) linked list vs O(n) array"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_sde_easy_004",
+        "text": "Explain what a binary search tree is.",
+        "role": "SDE",
+        "difficulty": "easy",
+        "topic": "data structures",
+        "expected_points": [
+          "Left child < parent < right child",
+          "Search, insert, delete: O(log n) average",
+          "Degenerate case: O(n) for sorted input",
+          "In-order traversal gives sorted output"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_sde_easy_005",
+        "text": "What is the difference between a process and a thread?",
+        "role": "SDE",
+        "difficulty": "easy",
+        "topic": "operating systems",
+        "expected_points": [
+          "Process: independent memory space",
+          "Thread: shared memory within process",
+          "Context switching: heavier for processes",
+          "Communication: IPC vs shared memory"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_sde_easy_006",
+        "text": "What is the purpose of a constructor in OOP?",
+        "role": "SDE",
+        "difficulty": "easy",
+        "topic": "object oriented programming",
+        "expected_points": [
+          "Initializes object state",
+          "Called automatically on object creation",
+          "Can be overloaded",
+          "Default constructor vs parameterized"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_sde_easy_007",
+        "text": "What is the difference between SQL and NoSQL databases?",
+        "role": "SDE",
+        "difficulty": "easy",
+        "topic": "databases",
+        "expected_points": [
+          "SQL: structured, schema-based, ACID",
+          "NoSQL: flexible schema, BASE properties",
+          "SQL: joins and relations",
+          "NoSQL: horizontal scaling, document/key-value"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_sde_easy_008",
+        "text": "What is a hash function and where is it used?",
+        "role": "SDE",
+        "difficulty": "easy",
+        "topic": "data structures",
+        "expected_points": [
+          "Maps input to fixed-size output",
+          "Used in hash maps, hash sets",
+          "Used in cryptography and checksums",
+          "Good hash: uniform distribution, fast"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_sde_easy_009",
+        "text": "What is recursion and when would you use it?",
+        "role": "SDE",
+        "difficulty": "easy",
+        "topic": "algorithms",
+        "expected_points": [
+          "Function calling itself",
+          "Base case and recursive case",
+          "Use for tree traversal, divide and conquer",
+          "Stack overflow risk with deep recursion"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_sde_easy_010",
+        "text": "What is the difference between TCP and UDP?",
+        "role": "SDE",
+        "difficulty": "easy",
+        "topic": "networking",
+        "expected_points": [
+          "TCP: connection-oriented, reliable",
+          "UDP: connectionless, faster but unreliable",
+          "TCP: HTTP, FTP, email",
+          "UDP: video streaming, gaming, DNS"
+        ],
+        "type": "technical"
+      }
+    ],
+    "medium": [
+      {
+        "id": "q_sde_med_001",
+        "text": "Explain the time complexity of quicksort in best, average, and worst cases.",
+        "role": "SDE",
+        "difficulty": "medium",
+        "topic": "algorithms",
+        "expected_points": [
+          "Best case: O(n log n) balanced partitions",
+          "Average case: O(n log n)",
+          "Worst case: O(n²) sorted input, bad pivot",
+          "In-place sorting, O(log n) space"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_sde_med_002",
+        "text": "What is a deadlock and how can it be prevented?",
+        "role": "SDE",
+        "difficulty": "medium",
+        "topic": "operating systems",
+        "expected_points": [
+          "Four conditions: mutual exclusion, hold and wait, no preemption, circular wait",
+          "Prevention: break one of the four conditions",
+          "Detection and recovery strategies",
+          "Banker's algorithm for avoidance"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_sde_med_003",
+        "text": "Explain database normalization and why it matters.",
+        "role": "SDE",
+        "difficulty": "medium",
+        "topic": "databases",
+        "expected_points": [
+          "1NF: atomic values, no repeating groups",
+          "2NF: no partial dependencies",
+          "3NF: no transitive dependencies",
+          "Reduces redundancy and anomalies"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_sde_med_004",
+        "text": "What is the difference between BFS and DFS and when would you use each?",
+        "role": "SDE",
+        "difficulty": "medium",
+        "topic": "algorithms",
+        "expected_points": [
+          "BFS: level-by-level, uses queue",
+          "DFS: depth-first, uses stack or recursion",
+          "BFS: shortest path in unweighted graph",
+          "DFS: topological sort, cycle detection"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_sde_med_005",
+        "text": "Explain what ACID properties are in databases.",
+        "role": "SDE",
+        "difficulty": "medium",
+        "topic": "databases",
+        "expected_points": [
+          "Atomicity: all or nothing",
+          "Consistency: valid state transitions",
+          "Isolation: concurrent transactions independent",
+          "Durability: committed data persists"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_sde_med_006",
+        "text": "What is the difference between monolithic and microservices architecture?",
+        "role": "SDE",
+        "difficulty": "medium",
+        "topic": "system design",
+        "expected_points": [
+          "Monolithic: single deployable unit",
+          "Microservices: independent services",
+          "Microservices: better scalability, harder ops",
+          "Trade-offs: complexity vs flexibility"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_sde_med_007",
+        "text": "Explain what caching is and describe an LRU cache.",
+        "role": "SDE",
+        "difficulty": "medium",
+        "topic": "system design",
+        "expected_points": [
+          "Caching: storing frequently accessed data",
+          "LRU: evicts least recently used item",
+          "Implementation: hashmap + doubly linked list",
+          "O(1) get and put operations"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_sde_med_008",
+        "text": "What is a race condition and how do you prevent it?",
+        "role": "SDE",
+        "difficulty": "medium",
+        "topic": "operating systems",
+        "expected_points": [
+          "Multiple threads accessing shared resource",
+          "Outcome depends on execution order",
+          "Prevention: mutex, semaphore, locks",
+          "Atomic operations and synchronization"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_sde_med_009",
+        "text": "Explain what dependency injection is and its benefits.",
+        "role": "SDE",
+        "difficulty": "medium",
+        "topic": "software design",
+        "expected_points": [
+          "Passing dependencies instead of creating them",
+          "Inversion of control principle",
+          "Improves testability and modularity",
+          "Types: constructor, setter, interface injection"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_sde_med_010",
+        "text": "What is eventual consistency in distributed systems?",
+        "role": "SDE",
+        "difficulty": "medium",
+        "topic": "distributed systems",
+        "expected_points": [
+          "All replicas converge to same value eventually",
+          "Trade-off: availability over consistency",
+          "Used in DNS, shopping carts, social feeds",
+          "Contrast with strong consistency"
+        ],
+        "type": "technical"
+      }
+    ],
+    "hard": [
+      {
+        "id": "q_sde_hard_001",
+        "text": "Design a URL shortener like bit.ly. Walk through your architecture.",
+        "role": "SDE",
+        "difficulty": "hard",
+        "topic": "system design",
+        "expected_points": [
+          "Base62 encoding for short codes",
+          "Database: key-value store for mappings",
+          "Caching layer for popular URLs",
+          "Load balancer and horizontal scaling",
+          "Handling redirects and analytics"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_sde_hard_002",
+        "text": "Explain consistent hashing and where it is used.",
+        "role": "SDE",
+        "difficulty": "hard",
+        "topic": "distributed systems",
+        "expected_points": [
+          "Hash ring with nodes and virtual nodes",
+          "Minimal key remapping when nodes added/removed",
+          "Used in distributed caches like Memcached",
+          "Load balancing and partitioning"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_sde_hard_003",
+        "text": "Explain the CAP theorem with examples.",
+        "role": "SDE",
+        "difficulty": "hard",
+        "topic": "distributed systems",
+        "expected_points": [
+          "Consistency: all nodes see same data",
+          "Availability: every request gets response",
+          "Partition tolerance: works despite network splits",
+          "CA: traditional RDBMS",
+          "CP: HBase, Zookeeper",
+          "AP: Cassandra, DynamoDB"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_sde_hard_004",
+        "text": "How would you design a notification system for millions of users?",
+        "role": "SDE",
+        "difficulty": "hard",
+        "topic": "system design",
+        "expected_points": [
+          "Message queue for async delivery",
+          "Push vs pull notification models",
+          "Fan-out on write vs fan-out on read",
+          "Rate limiting and throttling",
+          "Multiple channels: push, email, SMS"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_sde_hard_005",
+        "text": "How would you implement database sharding?",
+        "role": "SDE",
+        "difficulty": "hard",
+        "topic": "databases",
+        "expected_points": [
+          "Horizontal partitioning of data",
+          "Shard key selection strategy",
+          "Range vs hash sharding",
+          "Cross-shard queries and joins",
+          "Rebalancing when adding shards"
+        ],
+        "type": "technical"
+      }
+    ]
+  },
+  "Data Science": {
+    "easy": [
+      {
+        "id": "q_ds_easy_001",
+        "text": "What is the difference between supervised and unsupervised learning?",
+        "role": "Data Science",
+        "difficulty": "easy",
+        "topic": "machine learning fundamentals",
+        "expected_points": [
+          "Supervised: labeled training data",
+          "Unsupervised: no labels, finds patterns",
+          "Supervised: classification and regression",
+          "Unsupervised: clustering and dimensionality reduction"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_ds_easy_002",
+        "text": "Explain what overfitting is and how to prevent it.",
+        "role": "Data Science",
+        "difficulty": "easy",
+        "topic": "machine learning fundamentals",
+        "expected_points": [
+          "Model memorizes training data",
+          "High training accuracy, low test accuracy",
+          "Prevention: regularization, dropout, early stopping",
+          "More training data and cross-validation"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_ds_easy_003",
+        "text": "What is a confusion matrix and what does it tell you?",
+        "role": "Data Science",
+        "difficulty": "easy",
+        "topic": "model evaluation",
+        "expected_points": [
+          "True positive, false positive, true negative, false negative",
+          "Precision: TP / (TP + FP)",
+          "Recall: TP / (TP + FN)",
+          "F1 score: harmonic mean of precision and recall"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_ds_easy_004",
+        "text": "Explain gradient descent and how it works.",
+        "role": "Data Science",
+        "difficulty": "easy",
+        "topic": "optimization",
+        "expected_points": [
+          "Minimizes loss function iteratively",
+          "Learning rate controls step size",
+          "Computes gradient of loss w.r.t. parameters",
+          "Updates parameters in negative gradient direction"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_ds_easy_005",
+        "text": "What is the difference between classification and regression?",
+        "role": "Data Science",
+        "difficulty": "easy",
+        "topic": "machine learning fundamentals",
+        "expected_points": [
+          "Classification: predicts discrete categories",
+          "Regression: predicts continuous values",
+          "Classification: accuracy, F1 score",
+          "Regression: MSE, RMSE, MAE"
+        ],
+        "type": "technical"
+      }
+    ],
+    "medium": [
+      {
+        "id": "q_ds_med_001",
+        "text": "Explain how random forest works and why it reduces overfitting.",
+        "role": "Data Science",
+        "difficulty": "medium",
+        "topic": "ensemble methods",
+        "expected_points": [
+          "Ensemble of decision trees",
+          "Bagging: bootstrap sampling",
+          "Random feature selection per split",
+          "Averaging reduces variance",
+          "Out-of-bag error estimation"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_ds_med_002",
+        "text": "What is the bias-variance tradeoff?",
+        "role": "Data Science",
+        "difficulty": "medium",
+        "topic": "machine learning fundamentals",
+        "expected_points": [
+          "Bias: error from wrong assumptions",
+          "Variance: error from sensitivity to training data",
+          "High bias: underfitting",
+          "High variance: overfitting",
+          "Total error = bias² + variance + noise"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_ds_med_003",
+        "text": "Explain how XGBoost differs from regular gradient boosting.",
+        "role": "Data Science",
+        "difficulty": "medium",
+        "topic": "ensemble methods",
+        "expected_points": [
+          "Regularization: L1 and L2 terms",
+          "Second-order gradient approximation",
+          "Parallel tree construction",
+          "Handling missing values natively",
+          "Column subsampling"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_ds_med_004",
+        "text": "What is PCA and when would you use it?",
+        "role": "Data Science",
+        "difficulty": "medium",
+        "topic": "dimensionality reduction",
+        "expected_points": [
+          "Principal component analysis",
+          "Finds directions of maximum variance",
+          "Reduces dimensions while preserving variance",
+          "Use: visualization, noise reduction, speed up training",
+          "Limitation: linear, loses interpretability"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_ds_med_005",
+        "text": "Explain what transfer learning is and give an example.",
+        "role": "Data Science",
+        "difficulty": "medium",
+        "topic": "deep learning",
+        "expected_points": [
+          "Reuse pretrained model for new task",
+          "Fine-tuning vs feature extraction",
+          "Example: ResNet for image classification",
+          "Example: BERT for text classification",
+          "Works well with limited labeled data"
+        ],
+        "type": "technical"
+      }
+    ],
+    "hard": [
+      {
+        "id": "q_ds_hard_001",
+        "text": "Explain the transformer architecture in detail.",
+        "role": "Data Science",
+        "difficulty": "hard",
+        "topic": "deep learning",
+        "expected_points": [
+          "Self-attention mechanism",
+          "Multi-head attention",
+          "Positional encoding",
+          "Encoder-decoder structure",
+          "Feed-forward layers and layer normalization"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_ds_hard_002",
+        "text": "How would you handle class imbalance in a fraud detection system?",
+        "role": "Data Science",
+        "difficulty": "hard",
+        "topic": "applied machine learning",
+        "expected_points": [
+          "Oversampling: SMOTE",
+          "Undersampling: random or Tomek links",
+          "Class weights in loss function",
+          "Evaluation: precision-recall curve not accuracy",
+          "Threshold tuning for business requirements"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_ds_hard_003",
+        "text": "How would you detect and handle data drift in production?",
+        "role": "Data Science",
+        "difficulty": "hard",
+        "topic": "mlops",
+        "expected_points": [
+          "Feature drift vs label drift",
+          "Statistical tests: KS test, PSI",
+          "Monitoring dashboards",
+          "Retraining triggers",
+          "Shadow deployment for new models"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_ds_hard_004",
+        "text": "Explain how reinforcement learning works with a real example.",
+        "role": "Data Science",
+        "difficulty": "hard",
+        "topic": "reinforcement learning",
+        "expected_points": [
+          "Agent, environment, state, action, reward",
+          "Policy: mapping from state to action",
+          "Value function: expected cumulative reward",
+          "Q-learning: off-policy TD learning",
+          "Example: game playing, robotics, recommendation"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_ds_hard_005",
+        "text": "How would you implement a retrieval-augmented generation system?",
+        "role": "Data Science",
+        "difficulty": "hard",
+        "topic": "nlp",
+        "expected_points": [
+          "Document chunking and embedding",
+          "Vector store for similarity search",
+          "Query embedding and retrieval",
+          "Prompt augmentation with retrieved context",
+          "Evaluation: groundedness and relevance"
+        ],
+        "type": "technical"
+      }
+    ]
+  },
+  "Full Stack": {
+    "easy": [
+      {
+        "id": "q_fs_easy_001",
+        "text": "What is the difference between client-side and server-side rendering?",
+        "role": "Full Stack",
+        "difficulty": "easy",
+        "topic": "web fundamentals",
+        "expected_points": [
+          "CSR: browser renders using JavaScript",
+          "SSR: server sends complete HTML",
+          "CSR: faster after initial load",
+          "SSR: better SEO and initial load time"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_fs_easy_002",
+        "text": "What is the difference between cookies and JWT tokens?",
+        "role": "Full Stack",
+        "difficulty": "easy",
+        "topic": "authentication",
+        "expected_points": [
+          "Cookies: stored by browser, sent automatically",
+          "JWT: self-contained token with claims",
+          "JWT: stateless authentication",
+          "Cookies: can be httpOnly and secure flags"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_fs_easy_003",
+        "text": "What is CORS and why does it exist?",
+        "role": "Full Stack",
+        "difficulty": "easy",
+        "topic": "web fundamentals",
+        "expected_points": [
+          "Cross-Origin Resource Sharing",
+          "Browser security: same-origin policy",
+          "Server sets Access-Control headers",
+          "Preflight OPTIONS request"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_fs_easy_004",
+        "text": "What is the virtual DOM in React and why does it exist?",
+        "role": "Full Stack",
+        "difficulty": "easy",
+        "topic": "react",
+        "expected_points": [
+          "In-memory representation of actual DOM",
+          "Diffing algorithm compares old and new",
+          "Batches DOM updates for performance",
+          "Reconciliation process"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_fs_easy_005",
+        "text": "What is the difference between localStorage and sessionStorage?",
+        "role": "Full Stack",
+        "difficulty": "easy",
+        "topic": "web fundamentals",
+        "expected_points": [
+          "localStorage: persists across sessions",
+          "sessionStorage: cleared when tab closes",
+          "Both: same-origin only, ~5MB limit",
+          "Neither for sensitive data"
+        ],
+        "type": "technical"
+      }
+    ],
+    "medium": [
+      {
+        "id": "q_fs_med_001",
+        "text": "Explain how React's useEffect hook works with dependencies.",
+        "role": "Full Stack",
+        "difficulty": "medium",
+        "topic": "react",
+        "expected_points": [
+          "Runs after render",
+          "Empty array: run once on mount",
+          "Dependencies: run when deps change",
+          "Cleanup function for subscriptions",
+          "Avoid stale closures"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_fs_med_002",
+        "text": "How does JWT authentication work end to end?",
+        "role": "Full Stack",
+        "difficulty": "medium",
+        "topic": "authentication",
+        "expected_points": [
+          "User logs in, server creates JWT",
+          "JWT: header.payload.signature",
+          "Signature: HMAC or RSA",
+          "Client stores and sends in Authorization header",
+          "Server verifies signature on each request"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_fs_med_003",
+        "text": "What is the N+1 query problem and how do you fix it?",
+        "role": "Full Stack",
+        "difficulty": "medium",
+        "topic": "databases",
+        "expected_points": [
+          "1 query for list + N queries for each item",
+          "Common in ORM lazy loading",
+          "Fix: eager loading / JOIN query",
+          "Fix: DataLoader pattern for batching"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_fs_med_004",
+        "text": "Explain what CI/CD is and how you would set it up.",
+        "role": "Full Stack",
+        "difficulty": "medium",
+        "topic": "devops",
+        "expected_points": [
+          "CI: automated testing on every commit",
+          "CD: automated deployment after passing tests",
+          "Tools: GitHub Actions, Jenkins, CircleCI",
+          "Stages: build, test, deploy",
+          "Feature branches and main branch strategy"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_fs_med_005",
+        "text": "What is Redis and how would you use it in a web application?",
+        "role": "Full Stack",
+        "difficulty": "medium",
+        "topic": "backend",
+        "expected_points": [
+          "In-memory key-value store",
+          "Session storage",
+          "Caching database query results",
+          "Rate limiting",
+          "Pub/sub messaging"
+        ],
+        "type": "technical"
+      }
+    ],
+    "hard": [
+      {
+        "id": "q_fs_hard_001",
+        "text": "How would you design a real-time collaborative whiteboard application?",
+        "role": "Full Stack",
+        "difficulty": "hard",
+        "topic": "system design",
+        "expected_points": [
+          "WebSocket for real-time sync",
+          "Operational transformation or CRDT",
+          "Conflict resolution strategy",
+          "Presence indicators",
+          "Persistence and undo history"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_fs_hard_002",
+        "text": "How would you implement role-based access control in a web application?",
+        "role": "Full Stack",
+        "difficulty": "hard",
+        "topic": "security",
+        "expected_points": [
+          "Roles and permissions model",
+          "Middleware for authorization checks",
+          "JWT claims for role encoding",
+          "Frontend route guarding",
+          "Resource-level permissions"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_fs_hard_003",
+        "text": "How would you optimize a slow React application?",
+        "role": "Full Stack",
+        "difficulty": "hard",
+        "topic": "react",
+        "expected_points": [
+          "Profiler to identify bottlenecks",
+          "React.memo for component memoization",
+          "useMemo and useCallback",
+          "Code splitting and lazy loading",
+          "Virtualization for long lists"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_fs_hard_004",
+        "text": "How would you build a resilient microservices architecture?",
+        "role": "Full Stack",
+        "difficulty": "hard",
+        "topic": "system design",
+        "expected_points": [
+          "Circuit breaker pattern",
+          "Service discovery",
+          "API gateway",
+          "Distributed tracing",
+          "Health checks and retry logic"
+        ],
+        "type": "technical"
+      },
+      {
+        "id": "q_fs_hard_005",
+        "text": "How would you implement a real-time notification system?",
+        "role": "Full Stack",
+        "difficulty": "hard",
+        "topic": "system design",
+        "expected_points": [
+          "WebSocket or Server-Sent Events",
+          "Message queue for reliability",
+          "Fan-out pattern",
+          "Read receipts and delivery tracking",
+          "Fallback to polling"
+        ],
+        "type": "technical"
+      }
+    ]
+  }
+}

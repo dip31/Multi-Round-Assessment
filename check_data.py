@@ -1,0 +1,10 @@
+import sqlite3
+conn = sqlite3.connect('database.db')
+cursor = conn.cursor()
+cursor.execute('SELECT * FROM assessment_sessions LIMIT 5')
+print('Sessions:', cursor.fetchall())
+cursor.execute('SELECT * FROM assessment_rounds WHERE round_type="coding" LIMIT 5')
+print('Coding rounds:', cursor.fetchall())
+cursor.execute('SELECT * FROM coding_submissions LIMIT 5')
+print('Submissions:', cursor.fetchall())
+conn.close()

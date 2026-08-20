@@ -2,13 +2,19 @@
 SQLAlchemy ORM model for the ``users`` table.
 """
 
-from datetime import datetime
+from __future__ import annotations
 
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, text
+from datetime import datetime
+from typing import TYPE_CHECKING
+
+from sqlalchemy import Boolean, DateTime, Integer, String, text
 from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.base import Base
+
+if TYPE_CHECKING:
+    from app.models.assessment import AssessmentSession
 
 
 class User(Base):
@@ -19,17 +25,17 @@ class User(Base):
 
     __tablename__ = "users"
 
-    id: int = Column(Integer, primary_key=True, index=True)
-    name: str = Column(String(100), nullable=False)
-    email: str = Column(String(150), unique=True, nullable=False, index=True)
-    password_hash: str = Column(String, nullable=False)
-    role: str = Column(String(20), nullable=False, server_default=text("'student'"))
-    is_active: bool = Column(Boolean, nullable=False, server_default=text("1"))
-    is_verified: bool = Column(Boolean, nullable=False, server_default=text("0"))
-    created_at: datetime = Column(DateTime, server_default=func.now())
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    email: Mapped[str] = mapped_column(String(150), unique=True, nullable=False, index=True)
+    password_hash: Mapped[str] = mapped_column(String, nullable=False)
+    role: Mapped[str] = mapped_column(String(20), nullable=False, server_default=text("'student'"))
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"))
+    is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     # ── Relationships ─────────────────────────────────────────────────
-    assessment_sessions = relationship(
+    assessment_sessions: Mapped[list["AssessmentSession"]] = relationship(
         "AssessmentSession",
         back_populates="user",
         lazy="select",

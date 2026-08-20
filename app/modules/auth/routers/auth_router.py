@@ -8,9 +8,11 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.config.security import create_access_token, decode_access_token
+from app.core.auth import get_current_user
 from app.database.db import get_db
+from app.models.user import User
 from app.schemas.user import TokenResponse, UserCreate, UserLogin, UserResponse
-from app.services.user_service import create_user, get_user_by_email, verify_user_credentials
+from app.services.auth_service import create_user, get_user_by_email, verify_user_credentials
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -56,7 +58,7 @@ def login(payload: UserLogin, db: Session = Depends(get_db)) -> TokenResponse:
             detail="Invalid email or password",
         )
 
-    access_token = create_access_token(data={"sub": str(user.id)})
+    access_token = create_access_token(data={"sub": str(user.id), "is_admin": user.role == "admin"})
     return TokenResponse(access_token=access_token)
 
 
@@ -81,5 +83,15 @@ def refresh(token: str, db: Session = Depends(get_db)) -> TokenResponse:
             detail="Invalid or expired token",
         )
 
-    new_token = create_access_token(data={"sub": payload["sub"]})
+    new_token = create_access_token(data={"sub": payload["sub"], "is_admin": payload.get("is_admin", False)})
     return TokenResponse(access_token=new_token)
+
+
+@router.get(
+    "/me",
+    response_model=UserResponse,
+    summary="Get the currently authenticated user",
+)
+def me(current_user: User = Depends(get_current_user)) -> UserResponse:
+    """Return profile details for the user represented by the JWT bearer token."""
+    return current_user

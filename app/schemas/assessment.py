@@ -52,6 +52,7 @@ class SessionResponse(BaseModel):
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     total_score: float
+    time_remaining_seconds: Optional[int] = 1800
     rounds: List[RoundResponse] = []
 
     model_config = {"from_attributes": True}

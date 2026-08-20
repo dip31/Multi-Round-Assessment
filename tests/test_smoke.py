@@ -82,11 +82,12 @@ assert session_data["status"] == "in_progress"
 passed += 1
 print("6. Session start: PASS")
 
-# 7. Duplicate session → 409
+# 7. Duplicate session → returns existing (idempotent)
 r = client.post("/api/v1/session/start", headers=headers)
-assert r.status_code == 409, f"Duplicate session should be 409: {r.status_code}"
+assert r.status_code == 200, f"Duplicate session should return existing: {r.status_code}"
+assert r.json()["id"] == session_data["id"]
 passed += 1
-print("7. Duplicate session 409: PASS")
+print("7. Duplicate session returns existing: PASS")
 
 # 8. Session status
 r = client.get("/api/v1/session/status", headers=headers)

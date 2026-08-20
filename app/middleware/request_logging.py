@@ -26,7 +26,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         duration_ms = (time.perf_counter() - start) * 1000
 
         logger.info(
-            "%s %s → %s (%.1f ms)",
+            "%s %s -> %s (%.1f ms)",
             request.method,
             request.url.path,
             response.status_code,
