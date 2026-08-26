@@ -7,10 +7,11 @@ storage is disabled). Calling sites should always code-defensively for a
 environments where storage isn't configured yet.
 
 Resolution order:
-    STORAGE_BACKEND="none"   -> None  (default, current assessment flow)
-    STORAGE_BACKEND="minio"  -> MinIOStorageClient (lazily instantiated)
+    STORAGE_BACKEND="none"   -> None  (current assessment flow / local dev)
+    STORAGE_BACKEND="minio"  -> MinIOStorageClient (local dev / rollback)
+    STORAGE_BACKEND="gcs"    -> GCSStorageClient   (production; Firebase/GCS)
 
-If a future backend ("s3", "gcs") is added, it is plugged in here ONLY,
+If a future backend ("s3") is added, it is plugged in here ONLY,
 with NO changes to :class:`StorageClient` consumers.
 """
 
@@ -68,6 +69,24 @@ def get_storage_client() -> Optional[StorageClient]:
             # other Stage-3 helpers.
             logger.warning(
                 "Storage backend 'minio' failed to initialize: %s — "
+                "calls to get_storage_client() return None until corrected.", e
+            )
+            _client = None
+    elif backend == "gcs":
+        from app.services.storage.gcs_backend import GCSStorageClient
+        try:
+            _client = GCSStorageClient()
+            logger.info(
+                "Storage backend initialized: gcs (bucket=%s)",
+                getattr(settings, "GCS_BUCKET_NAME", "n/a"),
+            )
+        except Exception as e:
+            # Same graceful-degradation contract as the minio branch: log the
+            # failure and return None rather than crashing the process.
+            # Callers (async resume router / Celery worker) already handle a
+            # None storage client with safe, user-visible degradation paths.
+            logger.warning(
+                "Storage backend 'gcs' failed to initialize: %s — "
                 "calls to get_storage_client() return None until corrected.", e
             )
             _client = None
