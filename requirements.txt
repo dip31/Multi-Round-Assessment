@@ -11,6 +11,7 @@ email-validator
 redis
 celery>=5.3,<6
 minio>=7.2
+google-cloud-storage>=2.0
 sentence-transformers
 faiss-cpu
 torch

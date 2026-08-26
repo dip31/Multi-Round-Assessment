@@ -79,8 +79,9 @@ class Settings(BaseSettings):
     CELERY_TASK_ALWAYS_EAGER: bool = False  # run tasks synchronously (tests/dev)
     # ── Object storage (Stage 5) ─────────────────────────────────────
     # Sets the active backend used by app.services.storage.get_storage_client().
-    # Values: "none" (default — no storage wired, existing sync flow unaffected)
-    #       | "minio" (S3-compatible; future-proofed for AWS S3 / GCS).
+    # Values: "none" (no storage wired, existing sync flow unaffected)
+    #       | "minio" (S3-compatible; local development / rollback)
+    #       | "gcs"   (Google Cloud Storage / Firebase Storage; production).
     STORAGE_BACKEND: str = "none"
     # The MinIO endpoint "host:port" (without scheme). Used when STORAGE_BACKEND = minio.
     MINIO_ENDPOINT: str = "localhost:9000"
@@ -90,7 +91,22 @@ class Settings(BaseSettings):
     MINIO_SECURE: bool = False
     # Optional region string. Empty is fine for local MinIO (non-AWS).
     MINIO_REGION: str = ""
+    # ── Google Cloud Storage / Firebase Storage (production backend) ──
+    # ONE physical bucket; resumes/audio/reports are key prefixes inside it.
+    # Accepts either "my-bucket" or "gs://my-bucket".
+    GCS_BUCKET_NAME: str = ""
+    # Optional explicit project id. When GCS_CREDENTIALS_JSON carries a
+    # service account, project_id is inferred from it if this is empty.
+    GCS_PROJECT_ID: str = ""
+    # Full service-account JSON supplied as a single environment variable.
+    # Preferred on Render: store the whole JSON file content as a Secret.
+    # NEVER committed to Git, NEVER logged.
+    GCS_CREDENTIALS_JSON: str = ""
+    # Alternative for local dev: path to a downloaded service-account key file.
+    # Leave empty on Render (use GCS_CREDENTIALS_JSON instead).
+    GCS_CREDENTIALS_FILE: str = ""
     # Default buckets segregated by object kind so retention can be scoped later.
+    # With STORAGE_BACKEND=gcs these are PREFIXES inside GCS_BUCKET_NAME.
     STORAGE_RESUMES_BUCKET: str = "resumes"
     STORAGE_AUDIO_BUCKET: str = "audio"
     STORAGE_REPORTS_BUCKET: str = "reports"
@@ -170,7 +186,8 @@ class Settings(BaseSettings):
             if self.STORAGE_BACKEND.strip().lower() == "none":
                 raise ValueError(
                     "STORAGE_BACKEND must not be 'none' in production — set "
-                    "'minio' and configure MINIO_ENDPOINT/ACCESS_KEY/SECRET_KEY."
+                    "'gcs' (production/Firebase) or 'minio' (local/rollback) "
+                    "and configure the matching credentials."
                 )
             if self.STORAGE_BACKEND.strip().lower() == "minio":
                 if not self.MINIO_ENDPOINT:
@@ -179,6 +196,22 @@ class Settings(BaseSettings):
                     raise ValueError(
                         "MINIO_ACCESS_KEY and MINIO_SECRET_KEY must be set "
                         "when STORAGE_BACKEND=minio."
+                    )
+            if self.STORAGE_BACKEND.strip().lower() == "gcs":
+                if not self.GCS_BUCKET_NAME:
+                    raise ValueError(
+                        "GCS_BUCKET_NAME must be set when STORAGE_BACKEND=gcs."
+                    )
+                if not (
+                    self.GCS_CREDENTIALS_JSON
+                    or self.GCS_CREDENTIALS_FILE
+                    or self.GCS_PROJECT_ID
+                ):
+                    raise ValueError(
+                        "GCS credentials must be configured when "
+                        "STORAGE_BACKEND=gcs. Set GCS_CREDENTIALS_JSON "
+                        "(Render secret), GCS_CREDENTIALS_FILE, or rely on "
+                        "Application Default Credentials via GCS_PROJECT_ID."
                     )
         return self
 
