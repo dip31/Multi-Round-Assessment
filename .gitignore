@@ -41,3 +41,5 @@ database.db
 
 # Application logs
 logs/
+
+node_modules/
