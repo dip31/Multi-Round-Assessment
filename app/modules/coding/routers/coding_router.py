@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 
-from app.core.auth import get_current_user
+from app.core.auth import get_current_user	
 from app.database.db import get_db
 from app.models.session_problem import SessionProblem
 from app.models.coding import CodingProblem
@@ -39,8 +39,28 @@ router = APIRouter(prefix="/coding", tags=["Coding Round"])
 @router.get("/problems", response_model=List[CodingProblemResponse])
 def get_problems(db: Session = Depends(get_db)):
 	"""List assigned coding problems for the current round (visible test cases only)."""
-	# Return problems for the user's active coding round if one exists
-	return list_problems(db)
+	problems = list_problems(db)
+	
+	response = []
+	for problem in problems:
+		tags = []
+		if problem.tags:
+			tags = [tag.strip() for tag in problem.tags.split(",") if tag.strip()]
+			
+		response.append(
+			CodingProblemResponse(
+				id=problem.id,
+				title=problem.title,
+				description=problem.description,
+				difficulty=problem.difficulty,
+				tags=tags,
+				input_format=problem.input_format,
+				output_format=problem.output_format,
+				constraints=problem.constraints,
+				test_cases=problem.test_cases,
+			)
+		)
+	return response
 
 
 @router.post("/run", response_model=CodingRunResponse)
