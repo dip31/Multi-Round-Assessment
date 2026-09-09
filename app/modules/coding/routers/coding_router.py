@@ -29,6 +29,7 @@ from app.modules.coding.services.coding_service import (
 	finalize_coding_round,
     
 )
+from app.modules.coding.helpers import serialize_tags, serialize_coding_problem
 from app.services import session_service
 from app.config.settings import settings
 
@@ -40,27 +41,7 @@ router = APIRouter(prefix="/coding", tags=["Coding Round"])
 def get_problems(db: Session = Depends(get_db)):
 	"""List assigned coding problems for the current round (visible test cases only)."""
 	problems = list_problems(db)
-	
-	response = []
-	for problem in problems:
-		tags = []
-		if problem.tags:
-			tags = [tag.strip() for tag in problem.tags.split(",") if tag.strip()]
-			
-		response.append(
-			CodingProblemResponse(
-				id=problem.id,
-				title=problem.title,
-				description=problem.description,
-				difficulty=problem.difficulty,
-				tags=tags,
-				input_format=problem.input_format,
-				output_format=problem.output_format,
-				constraints=problem.constraints,
-				test_cases=problem.test_cases,
-			)
-		)
-	return response
+	return [serialize_coding_problem(problem) for problem in problems]
 
 
 @router.post("/run", response_model=CodingRunResponse)
@@ -159,10 +140,9 @@ def start_round(db: Session = Depends(get_db), current_user=Depends(get_current_
 	except ValueError as e:
 		raise HTTPException(status_code=400, detail=str(e))
 
-	# Ensure hidden test cases are never exposed to the frontend
+	# Ensure hidden test cases are excluded and problems are serialized with List[str] tags
 	problems = payload.get("problems") or []
-	for p in problems:
-		p.test_cases = [t for t in p.test_cases if not t.is_hidden]
+	payload["problems"] = [serialize_coding_problem(p) for p in problems]
 
 	return payload
 
@@ -183,10 +163,9 @@ def start_after_aptitude(db: Session = Depends(get_db), current_user=Depends(get
 	except ValueError as e:
 		raise HTTPException(status_code=400, detail=str(e))
 
-	# Ensure hidden test cases are never exposed to the frontend
+	# Ensure hidden test cases are excluded and problems are serialized with List[str] tags
 	problems = payload.get("problems") or []
-	for p in problems:
-		p.test_cases = [t for t in p.test_cases if not t.is_hidden]
+	payload["problems"] = [serialize_coding_problem(p) for p in problems]
 
 	return payload
 

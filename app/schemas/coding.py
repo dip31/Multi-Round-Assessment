@@ -5,7 +5,9 @@ Pydantic schemas for coding round request/response payloads.
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.modules.coding.helpers import serialize_tags
 
 
 # ── Request schemas ───────────────────────────────────────────────────
@@ -39,13 +41,18 @@ class CodingProblemResponse(BaseModel):
     title: str
     description: str
     difficulty: Optional[str] = None
-    tags: Optional[List[str]] = None
+    tags: List[str] = Field(default_factory=list)
     input_format: Optional[str] = None
     output_format: Optional[str] = None
     constraints: Optional[str] = None
     test_cases: List[CodingTestCaseResponse] = []
 
     model_config = {"from_attributes": True}
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def validate_tags(cls, v):
+        return serialize_tags(v)
 
 
 class CodingTestCaseResult(BaseModel):
