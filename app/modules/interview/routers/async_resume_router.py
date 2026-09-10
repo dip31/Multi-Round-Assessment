@@ -8,10 +8,10 @@ parsing:
         - Multipart upload of the resume PDF
         - Validates type + size
         - Generates a safe storage key
-        - Uploads raw bytes to MinIO via StorageClient
+        - Uploads raw bytes to storage via StorageClient (local in demo, GCS in production)
         - Inserts a resume_processing_jobs row with status=PENDING
-        - Enqueues a Celery task carrying ONLY { job_id, storage_key }
-        - Responds with { job_id, status: "PENDING" }
+        - Delegates processing to the appropriate strategy (sync in demo, Celery in production)
+        - Responds with { job_id, status }
 
     GET /api/v1/interview/resume/processing/{job_id}
         - Authenticates the user
@@ -20,15 +20,16 @@ parsing:
 
 The existing synchronous endpoint
 ``POST /api/v1/interview/resume/upload`` is NOT modified. Clients can
-continue calling it unchanged; it does not depend on MinIO or Celery.
+continue calling it unchanged; it does not depend on storage or Celery.
 
 Design constraints honored:
 - HTTP body is READ DIRECTLY from UploadFile and only used to put bytes
-  into MinIO. The raw bytes are NEVER forwarded to the worker — only the
+  into storage. The raw bytes are NEVER forwarded to the worker — only the
   storage_key is. This keeps HTTP, storage, and async processing decoupled.
 - No Celery import happens at module import time; enqueue is done lazily
   inside the request handler so the FastAPI app stack does not depend on
   Celery/Redis being available to serve the sync flow.
+- Processing strategy is selected via DEPLOYMENT_MODE configuration.
 """
 
 from __future__ import annotations
@@ -53,6 +54,8 @@ from app.modules.interview.schemas.interview_schema import (
     AsyncResumeUploadResponse,
     ResumeProcessingJobStatus,
 )
+from app.services.groq_service import GroqService
+from app.services.resume_strategy import get_resume_processing_strategy
 from app.services.storage import get_storage_client
 
 logger = logging.getLogger(__name__)
@@ -149,17 +152,19 @@ async def upload_resume_async(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Upload a resume PDF and enqueue asynchronous processing.
+    """Upload a resume PDF and process asynchronously or synchronously based on DEPLOYMENT_MODE.
 
     Steps:
       1. Authenticate the user (via ``get_current_user``).
       2. Validate file type and size.
       3. Determine assessment session_id (explicit or latest in_progress).
       4. Generate a safe storage_key.
-      5. Upload raw bytes to MinIO via StorageClient.
+      5. Upload raw bytes to storage via StorageClient (local in demo, GCS in production).
       6. Insert a resume_processing_jobs row with status=PENDING.
-      7. Enqueue the Celery worker task carrying ONLY { job_id, storage_key }.
-      8. Return { job_id, status: "PENDING" } immediately.
+      7. Delegate processing to the appropriate strategy:
+         - Demo: synchronous processing, returns COMPLETED/FAILED
+         - Production: enqueues Celery task, returns PENDING
+      8. Return { job_id, status } immediately.
 
     The original synchronous resume-upload endpoint is NOT modified.
     """
@@ -184,14 +189,12 @@ async def upload_resume_async(
             )
         session_id = active_session.id
 
-    storage = get_storage_client()
+    # Get storage client for resume bucket type
+    storage = get_storage_client(bucket_type="resumes")
     if storage is None:
-        # MinIO not configured. We fail loud here because the async flow
-        # cannot work without object storage — silent fallback would let the
-        # candidate believe the upload succeeded.
         raise HTTPException(
             status_code=503,
-            detail="Object storage is not configured. Resume upload unavailable.",
+            detail="Object storage is not configured for resumes. Resume upload unavailable.",
         )
 
     storage_key = _build_storage_key(current_user.id, session_id, file.filename)
@@ -203,7 +206,6 @@ async def upload_resume_async(
             content_type="application/pdf",
         )
     except Exception as e:
-        # Log full exception with stack for ops; surface only safe text.
         logger.exception("Storage put failed for user_id=%s session_id=%s", current_user.id, session_id)
         raise HTTPException(
             status_code=503,
@@ -225,25 +227,22 @@ async def upload_resume_async(
     db.commit()
     db.refresh(job)
 
-    # Enqueue the worker task lazily so web-serving does not import Celery
-    # at boot. The task carries ONLY { job_id, storage_key } — never bytes.
-    try:
-        from app.worker.tasks import process_resume_job
-        process_resume_job.delay(job_id=job.id, storage_key=storage_key)
-    except Exception as e:
-        # If the broker is unreachable we mark the job FAILED with a safe
-        # message rather than leaving it stuck in PENDING forever. The
-        # candidate sees a friendly error in the status endpoint.
-        logger.exception("Enqueue failed for job_id=%s", job.id)
-        job.status = "FAILED"
-        job.error_message = "Could not queue resume for processing. Please retry."
-        db.commit()
+    # Delegate processing to the appropriate strategy
+    groq_service = GroqService(settings.GROQ_API_KEY)
+    strategy = get_resume_processing_strategy(db, groq_service)
+
+    logger.info("Processing resume job %s using strategy: %s", job.id, strategy.get_strategy_name())
+    result = strategy.process(job, content)
+
+    # Handle result based on strategy
+    if result.status == "failed":
         raise HTTPException(
             status_code=503,
-            detail="Could not queue resume for processing. Please retry.",
-        ) from e
+            detail=result.error_message or "Resume processing failed. Please try again.",
+        )
 
-    return AsyncResumeUploadResponse(job_id=job.id, status="PENDING")
+    # Return response - status reflects actual job state
+    return AsyncResumeUploadResponse(job_id=job.id, status=job.status)
 
 
 def _sanitize_filename(name: Optional[str]) -> str:

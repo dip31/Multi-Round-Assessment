@@ -46,6 +46,7 @@ from app.models.interview import (
 from app.models.assessment import AssessmentSession
 from app.services.resume_service import parse_resume
 from app.services.groq_service import GroqService
+from app.services.resume_processor import ResumeProcessor, ResumeProcessingError
 from app.services.redis_client import get_redis_client as _shared_get_redis_client
 from app.modules.interview.schemas.interview_schema import (
     ResumeUploadResponse,
@@ -132,38 +133,32 @@ async def upload_resume(
     content = None
     try:
         content = await file.read()
-        extracted = parse_resume(content)
-        pool = groq_service.generate_question_pool(
-            extracted["skills"],
-            extracted["projects"],
-            count=12,
-        )
-
-        # Extract detected_role from generated pool
-        detected_role = "SDE"
-        if pool and len(pool) > 0:
-            detected_role = pool[0].get("role", "SDE")
-
-        pool_record = ApprovedQuestionPool(
+        
+        # Use shared ResumeProcessor for consistent logic
+        processor = ResumeProcessor(db, groq_service)
+        
+        # Create a temporary job for tracking (not persisted, just for status tracking)
+        from app.models.resume_processing import ResumeProcessingJob
+        temp_job = ResumeProcessingJob(
+            user_id=current_user.id,
             session_id=session_id,
-            extracted_skills=extracted["skills"],
-            extracted_projects=extracted["projects"],
-            question_pool=pool,
-            admin_approved=True,
-            approved_by=None,
-            approved_at=datetime.now(),
-            detected_role=detected_role
+            storage_key="sync_upload",
+            original_filename=file.filename,
+            status="PROCESSING",
+            progress_step="parsing_resume",
         )
-        db.add(pool_record)
-        db.commit()
-        db.refresh(pool_record)
-        return ResumeUploadResponse(
-            status="pool_generated",
-            pool_id=pool_record.id,
-            question_count=len(pool),
-            detected_role=detected_role,
-            pending_approval=True,
-        )
+        
+        try:
+            result = processor.process_resume_bytes(content, temp_job)
+            return ResumeUploadResponse(
+                status="pool_generated",
+                pool_id=result.pool_id,
+                question_count=result.question_count,
+                detected_role=result.detected_role,
+                pending_approval=True,
+            )
+        except ResumeProcessingError as e:
+            raise HTTPException(status_code=400, detail=str(e))
     finally:
         if content:
             del content

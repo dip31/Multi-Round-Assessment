@@ -96,6 +96,7 @@ def test_factory_selects_gcs_when_configured(monkeypatch):
     original = sm.settings
     sm.settings = original.model_copy(
         update={
+            "DEPLOYMENT_MODE": "production",
             "STORAGE_BACKEND": "gcs",
             "GCS_BUCKET_NAME": "sample-bbf6c.firebasestorage.app",
         }
@@ -117,7 +118,7 @@ def test_factory_gcs_failure_degrades_gracefully():
 
     original = sm.settings
     # No bucket name -> GCSStorageClient.__init__ raises StorageError.
-    sm.settings = original.model_copy(update={"STORAGE_BACKEND": "gcs"})
+    sm.settings = original.model_copy(update={"DEPLOYMENT_MODE": "production", "STORAGE_BACKEND": "gcs"})
     factory.reset_storage_client()
     try:
         assert factory.get_storage_client() is None
@@ -133,6 +134,7 @@ def test_factory_still_selects_minio_when_configured():
     original = sm.settings
     sm.settings = original.model_copy(
         update={
+            "DEPLOYMENT_MODE": "production",
             "STORAGE_BACKEND": "minio",
             "MINIO_ENDPOINT": "localhost:9000",
             "MINIO_ACCESS_KEY": "test-access",
@@ -154,7 +156,7 @@ def test_factory_disabled_when_none():
     import app.services.storage.factory as factory
 
     original = sm.settings
-    sm.settings = original.model_copy(update={"STORAGE_BACKEND": "none"})
+    sm.settings = original.model_copy(update={"DEPLOYMENT_MODE": "production", "STORAGE_BACKEND": "none"})
     factory.reset_storage_client()
     try:
         assert factory.get_storage_client() is None
@@ -297,6 +299,7 @@ def test_production_gcs_requires_bucket_name():
         SECRET_KEY="x" * 40,
         DATABASE_URL="postgresql://u:p@h/db",
         APP_ENV="production",
+        DEPLOYMENT_MODE="production",
         DB_POOL_SIZE=10,
         STORAGE_BACKEND="gcs",
     )

@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     # "development" (default) allows looser local defaults.
     APP_ENV: str = "development"
 
+    # ── Deployment Mode ────────────────────────────────────────────────
+    # "demo"      = synchronous resume processing, local temp storage, no Celery/Redis/GCS required for resumes
+    # "production" = asynchronous Celery + Redis + GCS (existing architecture)
+    DEPLOYMENT_MODE: str = "demo"
+
     # ── Database ──────────────────────────────────────────────────────
     DATABASE_URL: str = "postgresql://postgres:password@localhost/ai_placement_platform"
     # Connection-pool tuning (PHASE 3). Defaults are conservative for a small
@@ -159,10 +164,41 @@ class Settings(BaseSettings):
             )
         return v
 
+    @field_validator("DEPLOYMENT_MODE")
+    @classmethod
+    def _validate_deployment_mode(cls, v: str) -> str:
+        allowed = {"demo", "production"}
+        v = (v or "demo").strip().lower()
+        if v not in allowed:
+            raise ValueError(
+                f"DEPLOYMENT_MODE must be one of {sorted(allowed)}, got '{v}'"
+            )
+        return v
+
+    @property
+    def is_demo(self) -> bool:
+        return self.DEPLOYMENT_MODE == "demo"
+
+    @property
+    def is_production(self) -> bool:
+        return self.DEPLOYMENT_MODE == "production"
+
+    @property
+    def celery_enabled(self) -> bool:
+        return self.is_production
+
+    @property
+    def resume_processing_mode(self) -> str:
+        return "sync" if self.is_demo else "celery"
+
     @model_validator(mode="after")
     def _enforce_production_mode(self) -> "Settings":
-        """Strict guard for APP_ENV=production that fails fast on misconfig."""
-        if self.APP_ENV == "production":
+        """Strict guard for production deployment that fails fast on misconfig."""
+        # Check both APP_ENV=production (general hardening) and DEPLOYMENT_MODE=production (resume async pipeline)
+        is_prod_env = self.APP_ENV == "production"
+        is_prod_deployment = self.is_production
+
+        if is_prod_env:
             # Require an explicit SSL mode in production unless explicitly disabled
             # by setting DB_SSL_MODE=disable (e.g. behind a TLS-terminating proxy).
             if self.DB_SSL_MODE is None:
@@ -174,6 +210,8 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "DB_POOL_SIZE must be >= 5 in production (APP_ENV=production)."
                 )
+
+        if is_prod_deployment:
             # Eager mode in production is almost always a mistake
             if self.CELERY_TASK_ALWAYS_EAGER:
                 raise ValueError(
@@ -185,7 +223,7 @@ class Settings(BaseSettings):
             # so persistent files cannot silently land on container-local fs.
             if self.STORAGE_BACKEND.strip().lower() == "none":
                 raise ValueError(
-                    "STORAGE_BACKEND must not be 'none' in production — set "
+                    "STORAGE_BACKEND must not be 'none' in production (DEPLOYMENT_MODE=production) — set "
                     "'gcs' (production/Firebase) or 'minio' (local/rollback) "
                     "and configure the matching credentials."
                 )
@@ -213,6 +251,16 @@ class Settings(BaseSettings):
                         "(Render secret), GCS_CREDENTIALS_FILE, or rely on "
                         "Application Default Credentials via GCS_PROJECT_ID."
                     )
+            # Production resume processing requires Celery broker and result backend
+            if not self.CELERY_BROKER_URL and not self.REDIS_URL:
+                raise ValueError(
+                    "CELERY_BROKER_URL or REDIS_URL must be set for production resume processing (DEPLOYMENT_MODE=production)."
+                )
+            if not self.CELERY_RESULT_BACKEND and not self.REDIS_URL:
+                raise ValueError(
+                    "CELERY_RESULT_BACKEND or REDIS_URL must be set for production resume processing (DEPLOYMENT_MODE=production)."
+                )
+
         return self
 
 

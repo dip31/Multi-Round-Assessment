@@ -82,7 +82,7 @@ def test_storage_factory_disabled_by_default():
 
     # Force "none" + reset so we're testing the factory path, not a cached result.
     original = sm.settings.STORAGE_BACKEND
-    sm.settings = sm.settings.model_copy(update={"STORAGE_BACKEND": "none"})
+    sm.settings = sm.settings.model_copy(update={"DEPLOYMENT_MODE": "production", "STORAGE_BACKEND": "none"})
     factory.reset_storage_client()
     try:
         assert factory.get_storage_client() is None
@@ -102,6 +102,7 @@ def test_storage_factory_returns_minio_when_configured():
     original = sm.settings
     sm.settings = sm.settings.model_copy(
         update={
+            "DEPLOYMENT_MODE": "production",
             "STORAGE_BACKEND": "minio",
             "MINIO_ENDPOINT": "localhost:9000",
             "MINIO_ACCESS_KEY": "test-access",
@@ -139,9 +140,10 @@ def test_production_mode_rejects_storage_none():
     from app.config.settings import Settings
 
     # Snapshot & override env; restore on exit.
-    orig_env = os.environ.get("APP_ENV"), os.environ.get("STORAGE_BACKEND")
+    orig_env = os.environ.get("APP_ENV"), os.environ.get("STORAGE_BACKEND"), os.environ.get("DEPLOYMENT_MODE")
     os.environ["APP_ENV"] = "production"
     os.environ["STORAGE_BACKEND"] = "none"
+    os.environ["DEPLOYMENT_MODE"] = "production"
     try:
         try:
             Settings()
@@ -150,7 +152,7 @@ def test_production_mode_rejects_storage_none():
             msgs = " ".join(err["msg"] for err in e.errors())
             assert "STORAGE_BACKEND" in msgs
     finally:
-        for k, v in zip(("APP_ENV", "STORAGE_BACKEND"), orig_env):
+        for k, v in zip(("APP_ENV", "STORAGE_BACKEND", "DEPLOYMENT_MODE"), orig_env):
             if v is None:
                 os.environ.pop(k, None)
             else:
