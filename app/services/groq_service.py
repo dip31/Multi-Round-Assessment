@@ -42,6 +42,9 @@ class GroqService:
         detected_role = detect_role(skills, projects)
 
         # Step 2: Retrieve relevant knowledge
+        from app.services.memory_diagnostics import log_memory
+
+        log_memory("before RAG")
         try:
             retrieved_docs = retrieve(
                 skills=skills,
@@ -55,6 +58,7 @@ class GroqService:
             print(f"[RAG] Retrieval failed: {e}")
             context = "No additional context available."
             retrieved_docs = []
+        log_memory("after RAG")
 
         # Step 3: Build grounded prompt
         prompt = f"""
@@ -96,6 +100,7 @@ class GroqService:
       """
 
         try:
+            log_memory("before Groq")
             result = _safe_json(
                 self.client.chat.completions.create(
                     model=GROQ_MODEL,
@@ -107,6 +112,7 @@ class GroqService:
                     max_tokens=2000
                 ).choices[0].message.content
             )
+            log_memory("after Groq")
         except Exception as e:
             print(f"[RAG] Groq call failed: {e}")
             result = None

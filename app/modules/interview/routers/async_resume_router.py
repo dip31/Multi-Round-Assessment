@@ -55,6 +55,7 @@ from app.modules.interview.schemas.interview_schema import (
     ResumeProcessingJobStatus,
 )
 from app.services.groq_service import GroqService
+from app.services.memory_diagnostics import log_memory
 from app.services.resume_strategy import get_resume_processing_strategy
 from app.services.storage import get_storage_client
 
@@ -232,6 +233,7 @@ async def upload_resume_async(
     strategy = get_resume_processing_strategy(db, groq_service)
 
     logger.info("Processing resume job %s using strategy: %s", job.id, strategy.get_strategy_name())
+    log_memory("before resume processing")
     result = strategy.process(job, content)
 
     # Handle result based on strategy

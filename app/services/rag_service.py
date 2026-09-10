@@ -16,6 +16,8 @@ from groq import Groq
 
 import fitz  # PyMuPDF
 
+from app.services.memory_diagnostics import log_memory
+
 logger = logging.getLogger(__name__)
 
 
@@ -69,6 +71,7 @@ class RAGOrchestrator:
                 page = doc[page_num]
                 full_text += str(page.get_text())
             doc.close()
+            log_memory("after PDF extraction")
             
             # Use Groq to extract structured information
             extraction_prompt = """
@@ -116,6 +119,7 @@ class RAGOrchestrator:
                 extracted_data = self._fallback_extraction(full_text)
             
             extracted_data["full_content"] = full_text
+            log_memory("after skill/project extraction")
             return extracted_data
             
         except Exception as e:

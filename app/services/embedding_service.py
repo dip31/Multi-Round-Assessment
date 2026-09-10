@@ -1,5 +1,6 @@
 from sentence_transformers import SentenceTransformer
 import numpy as np
+from app.services.memory_diagnostics import log_memory
 
 # Module-level singleton
 # Loads ONCE when module is first imported
@@ -15,7 +16,9 @@ def get_embedding_model() -> SentenceTransformer:
     global _model
     if _model is None:
         print("[Embeddings] Loading BAAI/bge-base-en-v1.5...")
+        log_memory("before embedding model load")
         _model = SentenceTransformer("BAAI/bge-base-en-v1.5")
+        log_memory("after embedding model load")
         print("[Embeddings] Model loaded and ready")
     return _model
 

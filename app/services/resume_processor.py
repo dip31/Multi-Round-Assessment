@@ -26,6 +26,7 @@ from app.config.settings import settings
 from app.models.interview import ApprovedQuestionPool
 from app.models.resume_processing import ResumeProcessingJob
 from app.services.groq_service import GroqService
+from app.services.memory_diagnostics import log_memory
 from app.services.resume_service import parse_resume
 
 logger = logging.getLogger(__name__)
@@ -105,6 +106,7 @@ class ResumeProcessor:
                     _safe_failure_message("unparsable"),
                     error_type="unparsable"
                 )
+            log_memory("after skill/project extraction")
         except ResumeProcessingError:
             raise
         except Exception as e:
@@ -140,6 +142,7 @@ class ResumeProcessor:
         # 4. Create ApprovedQuestionPool
         detected_role = pool[0].get("role", "SDE") if pool else "SDE"
         try:
+            log_memory("before DB save")
             pool_record = ApprovedQuestionPool(
                 session_id=job.session_id,
                 extracted_skills=extracted["skills"],
@@ -167,6 +170,7 @@ class ResumeProcessor:
             job.completed_at = datetime.utcnow()
             job.error_message = None
             self.db.commit()
+            log_memory("after DB save")
 
             return ProcessingResult(
                 job_id=job.id,
