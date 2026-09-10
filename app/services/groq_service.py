@@ -15,9 +15,8 @@ from groq import Groq
 
 logger = logging.getLogger(__name__)
 
-# Current Groq production model (as of March 2026)
-GROQ_MODEL = "llama-3.3-70b-versatile"
-
+# Current Groq production model
+GROQ_MODEL = "openai/gpt-oss-120b"
 
 class GroqService:
     """Groq API client for interview-related operations."""
