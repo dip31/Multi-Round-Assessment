@@ -4,8 +4,12 @@ from pathlib import Path
 from threading import Lock
 from typing import List, Dict, Optional
 
+from app.services.memory_diagnostics import log_memory
+
+log_memory("startup: before CV/YOLO imports")
 import cv2
 import numpy as np
+log_memory("startup: after OpenCV import")
 
 # Public constants expected by tests
 CELL_PHONE_CLASS_ID = 67
@@ -15,6 +19,7 @@ try:
     from ultralytics import YOLO
 except Exception:  # pragma: no cover - optional runtime dependency
     YOLO = None
+log_memory("startup: after Ultralytics import")
 
 _MODEL = None
 _MODEL_LOCK = Lock()

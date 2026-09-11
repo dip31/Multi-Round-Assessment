@@ -11,17 +11,8 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
-
-from app.api.v1.router import api_router
-from app.config.settings import settings
-from app.middleware.cors import add_cors_middleware
-from app.middleware.rate_limit import add_rate_limit_middleware
-from app.middleware.request_logging import add_request_logging_middleware
-
-logger = logging.getLogger(__name__)
-
-# Configure RAG logging
+# Configure logging before the earliest startup checkpoint so RSS diagnostics
+# are emitted even during module import.
 os.makedirs("logs", exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
@@ -31,6 +22,21 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+
+from app.services.memory_diagnostics import log_memory
+
+log_memory("startup: early")
+
+from fastapi import FastAPI
+
+from app.api.v1.router import api_router
+from app.config.settings import settings
+from app.middleware.cors import add_cors_middleware
+from app.middleware.rate_limit import add_rate_limit_middleware
+from app.middleware.request_logging import add_request_logging_middleware
+
+logger = logging.getLogger(__name__)
+log_memory("startup: after app imports")
 
 
 @asynccontextmanager
@@ -69,6 +75,11 @@ async def lifespan(app: FastAPI):
     else:
         print("[Startup] Heavy model warmups skipped for fast local auth/login startup")
 
+    log_memory("startup: after CV/YOLO initialization")
+    log_memory("startup: after audio initialization")
+    log_memory("startup: after RAG initialization")
+    log_memory("startup: after embedding initialization")
+
     # Stage 3 / Stage 4: orchestrate shared infra health in one place.
     # Redis is required by Celery broker/backend (Stage 4) but optional for the
     # request path (cache-only). Log status; never fail startup so the existing
@@ -101,6 +112,8 @@ add_cors_middleware(app)
 
 # ── Routers ───────────────────────────────────────────────────────────
 app.include_router(api_router)
+log_memory("startup: after router initialization")
+log_memory("startup: application ready")
 
 
 # ── Health check ──────────────────────────────────────────────────────
