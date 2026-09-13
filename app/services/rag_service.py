@@ -33,7 +33,10 @@ class RAGOrchestrator:
             openai_api_key: Optional OpenAI API key for embeddings (defaults to local)
         """
         self.client = Groq(api_key=groq_api_key)
-        self.model = "llama-3.3-70b-versatile"
+        # Keep resume parsing on the same currently supported Groq model used
+        # by GroqService. The old Llama model was retired by Groq and returns
+        # a 404 before any resume extraction can happen.
+        self.model = "openai/gpt-oss-120b"
         self.groq_llm = None
         
         self.index = None

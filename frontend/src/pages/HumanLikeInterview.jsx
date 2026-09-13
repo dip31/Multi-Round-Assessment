@@ -115,6 +115,7 @@ export default function HumanLikeInterview() {
                         currentAudioRef.current = null;
                         resolve();
                     };
+
                 });
             } catch (error) {
                 if (!isRetry && error.message?.includes('HTTP 5')) {
@@ -136,6 +137,13 @@ export default function HumanLikeInterview() {
             console.warn('Audio unavailable:', error.message);
         }
     };
+
+    // Never block the interview state machine indefinitely on TTS or audio
+    // playback. The question remains visible when audio is slow/unavailable.
+    const playAudioWithTimeout = (text, timeoutMs = 15000) => Promise.race([
+        playAudio(text),
+        new Promise((resolve) => setTimeout(resolve, timeoutMs)),
+    ]);
 
     // ── Cleanup on unmount ─────────────────────────────────────────────
     useEffect(() => {
@@ -187,7 +195,7 @@ export default function HumanLikeInterview() {
                 // AI introduction
                 const introText = "Hello! I'm your AI interviewer today. Let's have a natural conversation about your background and skills. Are you ready? Let's begin.";
                 try {
-                    await playAudio(introText);
+                    await playAudioWithTimeout(introText);
                 } catch (e) {
                     console.warn('Intro TTS unavailable');
                 }
@@ -202,9 +210,14 @@ export default function HumanLikeInterview() {
                     setIsFollowup(false);
 
                     // Speak the first question
-                    const questionText = `Let's start with an easy one. ${res.question}`;
+                    const difficultyIntro = {
+                        EASY: "Let's start with an easy question.",
+                        MEDIUM: "Let's start with a medium-difficulty question.",
+                        HARD: "Let's start with a challenging question.",
+                    }[String(res.difficulty || 'MEDIUM').toUpperCase()];
+                    const questionText = `${difficultyIntro || "Let's begin with a question."} ${res.question}`;
                     try {
-                        await playAudio(questionText);
+                        await playAudioWithTimeout(questionText);
                     } catch (e) {
                         console.warn('Question TTS failed');
                     }
@@ -311,7 +324,7 @@ export default function HumanLikeInterview() {
             if (data.action === 'RETRY') {
                 // Silence retry — stay on same question
                 setInterviewState(STATES.LISTENING_TO_AI);
-                try { await playAudio(data.message); } catch (e) { }
+                try { await playAudioWithTimeout(data.message); } catch (e) { }
                 setInterviewState(STATES.WAITING_FOR_CANDIDATE);
             }
 
@@ -321,7 +334,7 @@ export default function HumanLikeInterview() {
                 setCurrentQuestion(data.message);
                 setIsFollowup(true);
                 setFollowupType(data.followup_type);
-                try { await playAudio(data.message); } catch (e) { }
+                try { await playAudioWithTimeout(data.message); } catch (e) { }
                 setInterviewState(STATES.WAITING_FOR_CANDIDATE);
             }
 
@@ -339,7 +352,7 @@ export default function HumanLikeInterview() {
                 }
 
                 // Brain message includes transition + next question
-                try { await playAudio(data.message); } catch (e) { }
+                try { await playAudioWithTimeout(data.message); } catch (e) { }
                 setInterviewState(STATES.WAITING_FOR_CANDIDATE);
             }
 
@@ -352,7 +365,7 @@ export default function HumanLikeInterview() {
             if (proctoring.stopMonitoring) proctoring.stopMonitoring();
             else if (proctoring.stopCamera) proctoring.stopCamera();
 
-                try { await playAudio(data.message); } catch (e) { }
+                try { await playAudioWithTimeout(data.message); } catch (e) { }
                 setInterviewState(STATES.COMPLETE);
             }
 

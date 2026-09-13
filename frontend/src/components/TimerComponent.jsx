@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 const formatTime = (seconds) => {
   const m = Math.floor(seconds / 60);
@@ -15,15 +15,20 @@ export default function TimerComponent({
   recordingSeconds,
 }) {
   const [secondsLeft, setSecondsLeft] = useState(duration || 0);
+  const completionCalledRef = useRef(false);
 
   useEffect(() => {
+    completionCalledRef.current = false;
     setSecondsLeft(duration || 0);
   }, [duration]);
 
   useEffect(() => {
     if (mode !== "thinking") return;
     if (secondsLeft <= 0) {
-      onThinkingComplete && onThinkingComplete();
+      if (!completionCalledRef.current) {
+        completionCalledRef.current = true;
+        onThinkingComplete && onThinkingComplete();
+      }
       return;
     }
     const t = setTimeout(() => setSecondsLeft((p) => p - 1), 1000);

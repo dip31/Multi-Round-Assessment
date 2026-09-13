@@ -41,7 +41,7 @@ log_memory("startup: after app imports")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if not settings.SKIP_HEAVY_STARTUP:
+    if not settings.SKIP_HEAVY_STARTUP or settings.PRELOAD_RAG_MODELS:
         # Warm up embedding model at startup
         # Prevents 30s delay on first resume upload
         try:

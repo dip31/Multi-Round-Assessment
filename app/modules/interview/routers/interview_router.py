@@ -454,7 +454,8 @@ async def get_next_question(
     interview.rl_state = rl_engine.to_dict()
     db.commit()
 
-    # Rephrase using Groq (with Redis cache)
+    # Pool questions are already conversational. Avoid a second Groq request
+    # because it adds latency and can return an incomplete fragment.
     cache_key = f"question:{hashlib.md5(question_text.encode()).hexdigest()}:{difficulty}"
     rephrased = None
 
@@ -470,7 +471,7 @@ async def get_next_question(
             logger.warning(f"Redis get failed: {str(e)}")
 
     if not rephrased:
-        rephrased = groq_service.rephrase_question(question_text, difficulty)
+        rephrased = question_text
         if redis_cache:
             try:
                 redis_cache.setex(cache_key, 86400, rephrased)

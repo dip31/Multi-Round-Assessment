@@ -20,6 +20,7 @@ import AdminCandidateReports from './pages/AdminCandidateReports';
 import AdminReview from './pages/AdminReview';
 import AdminPools from './pages/AdminPools';
 import AdminProctoringDashboard from './pages/AdminProctoringDashboard';
+import StudentDashboard from './pages/StudentDashboard';
 import AdminRoute from './components/AdminRoute';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
@@ -158,6 +159,21 @@ export default function App() {
           element={
             <PrivateRoute>
               <InterviewReport />
+            </PrivateRoute>
+          }
+        />
+        {/* EDI5 role dashboards. New, additive, and isolated from the
+            assessment flows above. Note: these share the student
+            PrivateRoute, so any logged-in student can open any role's
+            dashboard — acceptable for UI-only mock data, but these need a
+            role-aware guard before they serve real, role-scoped data. */}
+        <Route
+          path="/student/dashboard"
+          element={
+            <PrivateRoute>
+              <ErrorBoundary>
+                <StudentDashboard />
+              </ErrorBoundary>
             </PrivateRoute>
           }
         />

@@ -125,6 +125,12 @@ class ResumeProcessor:
                 extracted["skills"],
                 extracted["projects"],
                 count=12,
+                candidate_context=(
+                    f"Summary: {extracted.get('summary', '')}\n"
+                    f"Experience: {extracted.get('experience', '')}\n"
+                    f"Education: {extracted.get('education', '')}\n"
+                    f"Resume text: {extracted.get('full_content', '')}"
+                ),
             )
         except Exception as e:
             logger.exception("generate_question_pool raised for job_id=%s", job.id)

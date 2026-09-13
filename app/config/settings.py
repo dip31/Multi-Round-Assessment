@@ -62,6 +62,9 @@ class Settings(BaseSettings):
     # Skip expensive model warmups during local development so auth/session
     # endpoints become available immediately after startup.
     SKIP_HEAVY_STARTUP: bool = True
+    # RAG is used on the first resume upload. Preloading avoids making that
+    # request wait for the sentence-transformer model download/load.
+    PRELOAD_RAG_MODELS: bool = True
     # ── Async resume upload (Stage 6A) ────────────────────────────────
     # Hard size cap enforced by the endpoint on every async resume upload;
     # streamed-chunk validated so a too-large body is rejected before it

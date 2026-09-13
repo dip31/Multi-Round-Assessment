@@ -1,7 +1,7 @@
 """
 Groq AI service for interview question generation, classification, and brain responses.
 
-Uses the Groq API (llama-3.3-70b-versatile model) with fallback responses
+Uses the Groq API with fallback responses
 to ensure robustness against API failures.
 """
 
@@ -27,7 +27,13 @@ class GroqService:
 
     # ── Question Pool Generation (UNCHANGED) ────────────────────────────
 
-    def generate_question_pool(self, skills: List[str], projects: Dict[str, str], count: int = 12) -> List[Dict]:
+    def generate_question_pool(
+        self,
+        skills: List[str],
+        projects: Dict[str, str],
+        count: int = 12,
+        candidate_context: str = "",
+    ) -> List[Dict]:
         """
         Generate personalized interview question pool using Groq.
 
@@ -69,6 +75,8 @@ class GroqService:
       Technical Skills: {skills}
       Projects: {projects}
       Detected Role: {detected_role}
+      Resume-specific context:
+      {candidate_context[:6000]}
 
       RETRIEVED KNOWLEDGE BASE:
       {context}
@@ -76,7 +84,9 @@ class GroqService:
       INSTRUCTIONS:
       - Generate exactly {count} interview questions
       - PRIORITIZE retrieved knowledge above
-      - MUST reference candidate specific skills/projects
+      - MUST reference this candidate's specific skills, projects, or experience
+      - Do not reuse generic questions word-for-word; make each question
+        meaningfully specific to this resume
       - If retrieved context is insufficient, minimally
         extend using general {detected_role} domain knowledge
       - Mix HR (4 questions) and Technical (8 questions)
@@ -108,8 +118,9 @@ class GroqService:
                         "role": "user",
                         "content": prompt
                     }],
-                    temperature=0.3,
-                    max_tokens=2000
+                    temperature=0.6,
+                    max_tokens=4000,
+                    response_format={"type": "json_object"},
                 ).choices[0].message.content
             )
             log_memory("after Groq")
@@ -117,8 +128,20 @@ class GroqService:
             print(f"[RAG] Groq call failed: {e}")
             result = None
 
-        if result and "questions" in result:
-            questions = result["questions"]
+        if result and isinstance(result.get("questions"), list):
+            questions = [
+                q for q in result["questions"]
+                if isinstance(q, dict)
+                and isinstance(q.get("question"), str)
+                and len(q["question"].strip()) >= 20
+                and q["question"].strip()[-1] in "?!."
+            ][:count]
+            if len(questions) < count:
+                questions = []
+        else:
+            questions = []
+
+        if questions:
             # Add unique IDs and role to each question
             for idx, q in enumerate(questions, 1):
                 q["role"] = detected_role
@@ -142,21 +165,32 @@ class GroqService:
                 "role": detected_role
             })
 
-        # Pad with HR questions if fallback is short
-        hr_idx = len(fallback) + 1
+        # Pad with distinct, complete candidate-oriented questions.
+        skill = skills[0] if skills else "your technical background"
+        fallback_templates = [
+            (f"Could you introduce yourself and explain how your experience with {skill} supports this role?", "EASY", "HR"),
+            ("Which project on your resume best represents your strengths, and what was your contribution?", "MEDIUM", "HR"),
+            ("Tell me about a difficult decision you made while working on a project.", "MEDIUM", "HR"),
+            ("What would you improve if you had another opportunity to build your most important project?", "HARD", "HR"),
+            (f"How did you apply {skill} in a real project, and what trade-offs did you make?", "MEDIUM", "TECHNICAL"),
+            ("How did you test the most important feature in your project and handle failures?", "MEDIUM", "TECHNICAL"),
+            ("What performance or scalability problem did you face, and how did you measure the improvement?", "HARD", "TECHNICAL"),
+            ("How would you redesign one part of your project for significantly more users?", "HARD", "TECHNICAL"),
+        ]
+        template_idx = 0
         while len(fallback) < count:
-            question_text = "Tell me about a challenging project you worked on."
+            question_text, difficulty, phase = fallback_templates[template_idx % len(fallback_templates)]
+            template_idx += 1
             fallback.append({
-                "id": f"hr_fallback_{hr_idx}",
+                "id": hashlib.md5(f"{detected_role}:{question_text}".encode()).hexdigest()[:12],
                 "question": question_text,
-                "difficulty": "MEDIUM",
+                "difficulty": difficulty,
                 "topic": "experience",
-                "phase": "HR",
-                "grounded_in": "default HR question",
+                "phase": phase,
+                "grounded_in": "candidate-specific fallback",
                 "personalized": False,
                 "role": detected_role
             })
-            hr_idx += 1
 
         return fallback[:count]
 
@@ -164,23 +198,9 @@ class GroqService:
 
     def rephrase_question(self, question: str, difficulty: str) -> str:
         """Rephrase a question naturally for the given difficulty level."""
-        prompt = f"""Rephrase this interview question naturally and conversationally for a {difficulty} level candidate. 
-Make it sound like a human interviewer is asking it. Return only the rephrased question, nothing else:
-
-{question}"""
-
-        try:
-            completion = self.client.chat.completions.create(
-                model=GROQ_MODEL,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.5,
-                max_tokens=200,
-            )
-            response_text = completion.choices[0].message.content.strip()
-            return response_text if response_text else question
-        except Exception as e:
-            logger.error(f"Groq rephrasing failed: {str(e)}, returning original question")
-            return question
+        # Pool generation already creates conversational questions. A second
+        # request adds latency and can return a truncated question fragment.
+        return question.strip()
 
     # ── Classifier (NEW — spec step 2) ───────────────────────────────────
 
@@ -330,10 +350,12 @@ No labels, no formatting, no quotes."""
                     {"role": "user", "content": "Generate your response as the interviewer."},
                 ],
                 temperature=0.7,
-                max_tokens=150,
+                max_tokens=220,
             )
 
             response = completion.choices[0].message.content.strip()
+            if action == "NEXT" and next_question and not response.endswith(("?", "!", ".")):
+                return self._brain_fallback(action, followup_type, missing_part, next_question)
             return response if response else self._brain_fallback(action, followup_type, missing_part, next_question)
         except Exception as e:
             logger.error(f"Interviewer brain failed: {str(e)}")
@@ -474,7 +496,7 @@ def _safe_json(raw: str) -> dict or None:
     """
     Safely parse JSON from raw text, stripping markdown code fences.
     """
-    cleaned = raw.strip()
+    cleaned = (raw or "").strip()
     if cleaned.startswith("```json"):
         cleaned = cleaned[7:]
     if cleaned.startswith("```"):
@@ -487,7 +509,14 @@ def _safe_json(raw: str) -> dict or None:
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
-        logger.warning(f"Failed to parse JSON: {raw[:100]}...")
+        start = cleaned.find("{")
+        end = cleaned.rfind("}")
+        if start >= 0 and end > start:
+            try:
+                return json.loads(cleaned[start:end + 1])
+            except json.JSONDecodeError:
+                pass
+        logger.warning(f"Failed to parse JSON: {cleaned[:100]}...")
         return None
 
 
