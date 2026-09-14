@@ -133,7 +133,7 @@ export default function Instructions() {
                         {/* Action Builder */}
                         <div className="mt-12 border-t border-outline-variant/20 pt-8 flex items-center justify-between">
                             <button
-                                onClick={() => navigate('/dashboard')}
+                                onClick={() => navigate('/student/dashboard')}
                                 className="rounded-lg px-6 py-3 text-sm font-semibold text-on-surface-variant transition hover:text-on-surface hover:bg-surface-container-high"
                             >
                                 ← Back to Dashboard

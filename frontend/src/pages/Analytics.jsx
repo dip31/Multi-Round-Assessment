@@ -75,7 +75,7 @@ export default function Analytics() {
                         <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>analytics</span>
                         AIPlacement
                     </div>
-                    <Link to="/dashboard" className="text-[#adaaad] hover:text-[#f9f5f8] transition-colors">← Back to Dashboard</Link>
+                    <Link to="/student/dashboard" className="text-[#adaaad] hover:text-[#f9f5f8] transition-colors">← Back to Dashboard</Link>
                 </nav>
                 
                 <main className="pt-28 pb-20 px-8 max-w-3xl mx-auto text-center">
@@ -87,8 +87,8 @@ export default function Analytics() {
                         <p className="text-on-surface-variant mb-8 max-w-md mx-auto">
                             Complete at least one assessment round to see your performance analytics and insights.
                         </p>
-                        <Link 
-                            to="/dashboard" 
+                        <Link
+                            to="/student/dashboard"
                             className="inline-flex items-center gap-2 bg-primary text-on-primary px-8 py-3 rounded-full font-bold"
                         >
                             Start an Assessment
@@ -119,7 +119,7 @@ export default function Analytics() {
                     AIPlacement
                 </div>
                 <div className="hidden md:flex gap-8 items-center font-['Inter'] tracking-tight">
-                    <Link to="/dashboard" className="text-[#adaaad] hover:text-[#f9f5f8] transition-colors">Dashboard</Link>
+                    <Link to="/student/dashboard" className="text-[#adaaad] hover:text-[#f9f5f8] transition-colors">Dashboard</Link>
                     <Link to="/analytics" className="text-[#ba9eff] border-b-2 border-[#ba9eff] pb-1">Analytics</Link>
                 </div>
                 <div className="flex items-center gap-4">
@@ -144,7 +144,7 @@ export default function Analytics() {
                     </div>
                     <div className="flex gap-3">
                         <Link 
-                            to="/dashboard"
+                            to="/student/dashboard"
                             className="bg-surface-container-high text-on-surface px-6 py-3 rounded-full border border-outline-variant/20 hover:bg-surface-bright transition-all flex items-center gap-2 text-sm font-semibold"
                         >
                             <span className="material-symbols-outlined text-sm">arrow_back</span> Dashboard

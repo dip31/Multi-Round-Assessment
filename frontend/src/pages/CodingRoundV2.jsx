@@ -359,7 +359,7 @@ export default function CodingRoundV2() {
               You have exceeded the maximum limit for proctoring violations. Your coding session has been halted.
             </p>
             <button
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate('/student/dashboard')}
               className="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-xl font-bold text-white transition-colors"
             >
               Return to Dashboard

@@ -154,7 +154,7 @@ export default function CodingResultPage() {
         {/* Actions */}
         <div className="flex flex-col gap-3 sm:flex-row">
           <button
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate('/student/dashboard')}
             className="flex-1 rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-sm font-semibold text-slate-200 transition hover:bg-white/10"
           >
             Back to Dashboard

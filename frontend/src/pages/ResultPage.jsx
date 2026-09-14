@@ -293,13 +293,13 @@ export default function ResultPage() {
                         </div>
                         <div className="flex flex-wrap gap-3">
                             <button
-                                onClick={() => navigate('/dashboard')}
+                                onClick={() => navigate('/student/dashboard')}
                                 className="rounded-full border border-slate-200/10 bg-white px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-slate-200"
                             >
                                 Retake Test
                             </button>
                             <button
-                                onClick={() => navigate('/dashboard')}
+                                onClick={() => navigate('/student/dashboard')}
                                 className="rounded-full border border-slate-200/10 bg-slate-950/40 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-950/70"
                             >
                                 Go to Dashboard

@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import PrivateRoute from './components/PrivateRoute';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
 import Instructions from './pages/Instructions';
 import AptitudeTest from './pages/AptitudeTest';
@@ -20,7 +19,14 @@ import AdminCandidateReports from './pages/AdminCandidateReports';
 import AdminReview from './pages/AdminReview';
 import AdminPools from './pages/AdminPools';
 import AdminProctoringDashboard from './pages/AdminProctoringDashboard';
+<<<<<<< Updated upstream
+=======
+import StudentDashboard from './pages/StudentDashboard';
+import FacultyDashboard from './pages/FacultyDashboard';
+import TPODashboard from './pages/TPODashboard';
+>>>>>>> Stashed changes
 import AdminRoute from './components/AdminRoute';
+import RoleRoute from './components/RoleRoute';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 export default function App() {
@@ -73,11 +79,7 @@ export default function App() {
         />
         <Route
           path="/dashboard"
-          element={
-            <PrivateRoute>
-              <Dashboard />
-            </PrivateRoute>
-          }
+          element={<Navigate to="/student/dashboard" replace />}
         />
         <Route
           path="/profile"
@@ -161,6 +163,38 @@ export default function App() {
             </PrivateRoute>
           }
         />
+<<<<<<< Updated upstream
+=======
+        {/* Role dashboards are the primary authenticated entry points.
+            RoleRoute resolves the backend-authenticated role and prevents
+            users from opening another role's dashboard. */}
+        <Route
+          path="/student/dashboard"
+          element={
+            <RoleRoute role="student">
+              <ErrorBoundary>
+                <StudentDashboard />
+              </ErrorBoundary>
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/faculty/dashboard"
+          element={
+            <RoleRoute role="faculty">
+              <FacultyDashboard />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/tpo/dashboard"
+          element={
+            <RoleRoute role="tpo">
+              <TPODashboard />
+            </RoleRoute>
+          }
+        />
+>>>>>>> Stashed changes
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>

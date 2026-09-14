@@ -43,7 +43,7 @@ export default function InterviewReport() {
                 <div className="mx-auto max-w-5xl px-6 py-16 text-center">
                     <p className="text-slate-700 text-lg">Report not found</p>
                     <button
-                        onClick={() => navigate('/dashboard')}
+                        onClick={() => navigate('/student/dashboard')}
                         className="mt-6 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-xl transition-all"
                     >
                         Back to Dashboard
@@ -92,7 +92,7 @@ export default function InterviewReport() {
                 <div className="mb-12">
                     <div className="flex items-center gap-4 mb-4">
                         <button
-                            onClick={() => navigate('/dashboard')}
+                            onClick={() => navigate('/student/dashboard')}
                             className="text-slate-600 hover:text-slate-900 text-sm font-medium flex items-center gap-1 transition-colors"
                         >
                             <span>←</span> Back
@@ -285,7 +285,7 @@ export default function InterviewReport() {
                 {/* Action Buttons */}
                 <div className="flex items-center justify-center gap-4">
                     <button
-                        onClick={() => navigate('/dashboard')}
+                        onClick={() => navigate('/student/dashboard')}
                         className="px-8 py-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-900 font-semibold rounded-xl transition-all active:scale-[0.98]"
                     >
                         Back to Dashboard

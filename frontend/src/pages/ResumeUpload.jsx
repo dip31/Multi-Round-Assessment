@@ -323,7 +323,7 @@ export default function ResumeUpload() {
                 {/* Back link */}
                 <div className="mb-12">
                     <button
-                        onClick={() => navigate('/dashboard')}
+                        onClick={() => navigate('/student/dashboard')}
                         className="text-on-surface-variant hover:text-on-surface text-sm font-medium flex items-center gap-1 transition-colors"
                     >
                         <span>←</span> Back to Dashboard

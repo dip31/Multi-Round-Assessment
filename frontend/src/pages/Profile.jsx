@@ -109,7 +109,7 @@ export default function Profile() {
                                 <p className="text-on-surface-variant text-lg mb-4">{user?.email || ''}</p>
                                 <div className="flex gap-4">
                                     <button
-                                        onClick={() => navigate('/dashboard')}
+                                        onClick={() => navigate('/student/dashboard')}
                                         className="hero-gradient text-on-primary-container px-6 py-2 rounded-full font-semibold transition-all duration-200 shadow-lg shadow-primary/20 hover:shadow-[0_0_20px_rgba(186,158,255,0.4)] active:scale-95"
                                     >
                                         Continue Assessment

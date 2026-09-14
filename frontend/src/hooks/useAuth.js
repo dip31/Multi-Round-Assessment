@@ -13,8 +13,8 @@ export function useAuth() {
         return data;
     }, []);
 
-    const register = useCallback(async (name, email, password) => {
-        const data = await registerUser(name, email, password);
+    const register = useCallback(async (name, email, password, role = 'student') => {
+        const data = await registerUser(name, email, password, role);
         return data;
     }, []);
 

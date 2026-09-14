@@ -16,6 +16,7 @@ class UserCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, examples=["Alice Smith"])
     email: EmailStr = Field(..., examples=["alice@example.com"])
     password: str = Field(..., min_length=8, max_length=128)
+    role: str = Field(default="student", pattern="^(student|faculty|tpo)$")
 
 
 class UserLogin(BaseModel):

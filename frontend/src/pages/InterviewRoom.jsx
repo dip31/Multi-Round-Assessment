@@ -60,7 +60,7 @@ export default function InterviewRoom() {
                 message: 'Interview session not found. Redirecting to dashboard...',
             });
             setTimeout(() => {
-                navigate('/dashboard');
+                navigate('/student/dashboard');
             }, 3000);
         } else {
             console.log('Interview ID found:', interviewId);

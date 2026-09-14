@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { Toast } from '../components/Toast';
+import { homeForRole, resolveRole } from '../services/roleService';
 
 export default function Login() {
     const [email, setEmail] = useState('');
@@ -12,6 +13,7 @@ export default function Login() {
     const [dismissError, setDismissError] = useState(false);
     const { login } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
 
     const validateEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
@@ -38,7 +40,9 @@ export default function Login() {
         try {
             await login(email, password);
             setToast({ type: 'success', message: 'Login successful! Redirecting...' });
-            setTimeout(() => navigate('/dashboard'), 500);
+            const role = await resolveRole({ force: true });
+            const destination = location.state?.from || homeForRole(role);
+            setTimeout(() => navigate(destination), 500);
         } catch (err) {
             const detail = err.response?.data?.detail || 'Login failed. Please try again.';
             if (typeof detail === 'string') {

@@ -1,8 +1,4 @@
-"""
-Authentication endpoints.
-
-Handles user registration, login (JWT issuance), and token refresh.
-"""
+"""Authentication endpoints."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -17,81 +13,45 @@ from app.services.auth_service import create_user, get_user_by_email, verify_use
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
-@router.post(
-    "/register",
-    response_model=UserResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Register a new user",
-)
+@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def register(payload: UserCreate, db: Session = Depends(get_db)) -> UserResponse:
-    """Create a new user account.
-
-    Raises:
-        HTTPException (409): If the email is already registered.
-    """
-    existing = get_user_by_email(db, payload.email)
-    if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Email already registered",
-        )
-
-    user = create_user(db, name=payload.name, email=payload.email, password=payload.password)
-    return user
+    """Create a user with an explicit application role."""
+    if get_user_by_email(db, payload.email):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+    return create_user(
+        db,
+        name=payload.name,
+        email=payload.email,
+        password=payload.password,
+        role=payload.role,
+    )
 
 
-@router.post(
-    "/login",
-    response_model=TokenResponse,
-    summary="Log in and receive a JWT access token",
-)
+@router.post("/login", response_model=TokenResponse)
 def login(payload: UserLogin, db: Session = Depends(get_db)) -> TokenResponse:
-    """Verify credentials and return a signed JWT.
-
-    Raises:
-        HTTPException (401): If credentials are invalid.
-    """
+    """Verify credentials and return a signed JWT access token."""
     user = verify_user_credentials(db, email=payload.email, password=payload.password)
     if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password",
-        )
-
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
     access_token = create_access_token(data={"sub": str(user.id), "is_admin": user.role == "admin"})
     return TokenResponse(access_token=access_token)
 
 
-@router.post(
-    "/refresh",
-    response_model=TokenResponse,
-    summary="Refresh an access token",
-)
+@router.post("/refresh", response_model=TokenResponse)
 def refresh(token: str, db: Session = Depends(get_db)) -> TokenResponse:
-    """Decode an existing (valid) access token and issue a fresh one.
-
-    This is a lightweight refresh mechanism. For production, consider
-    opaque refresh tokens stored in the ``refresh_tokens`` table.
-
-    Raises:
-        HTTPException (401): If the token is invalid or expired.
-    """
+    """Issue a fresh token for a valid existing token."""
     payload = decode_access_token(token)
     if payload is None or "sub" not in payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+    user = db.query(User).filter(User.id == int(payload["sub"])).first()
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    return TokenResponse(
+        access_token=create_access_token(data={"sub": str(user.id), "is_admin": user.role == "admin"})
+    )
 
-    new_token = create_access_token(data={"sub": payload["sub"], "is_admin": payload.get("is_admin", False)})
-    return TokenResponse(access_token=new_token)
 
-
-@router.get(
-    "/me",
-    response_model=UserResponse,
-    summary="Get the currently authenticated user",
-)
+@router.get("/me", response_model=UserResponse)
 def me(current_user: User = Depends(get_current_user)) -> UserResponse:
-    """Return profile details for the user represented by the JWT bearer token."""
+    """Return the authenticated user's profile."""
     return current_user

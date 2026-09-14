@@ -6,6 +6,7 @@ export default function Register() {
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [role, setRole] = useState('student');
     const [errors, setErrors] = useState({});
     const [apiError, setApiError] = useState('');
     const [loading, setLoading] = useState(false);
@@ -28,7 +29,7 @@ export default function Register() {
 
         setLoading(true);
         try {
-            await register(name, email, password);
+            await register(name, email, password, role);
             navigate('/login');
         } catch (err) {
             const detail = err.response?.data?.detail;
@@ -130,6 +131,25 @@ export default function Register() {
                                 {errors.password && (
                                     <p className="mt-1 text-xs text-error">{errors.password}</p>
                                 )}
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-label text-on-surface-variant uppercase tracking-widest mb-2">
+                                    Account Role
+                                </label>
+                                <select
+                                    value={role}
+                                    onChange={(e) => setRole(e.target.value)}
+                                    className="w-full px-4 py-3 bg-surface-container-high border border-outline-variant/30 rounded-lg text-on-surface focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 transition-all text-sm"
+                                    disabled={loading}
+                                >
+                                    <option value="student">Student</option>
+                                    <option value="faculty">Faculty</option>
+                                    <option value="tpo">Training &amp; Placement Officer</option>
+                                </select>
+                                <p className="mt-1 text-xs text-on-surface-variant">
+                                    Your role controls which dashboard and data scope you can access.
+                                </p>
                             </div>
 
                             {/* Submit Button */}

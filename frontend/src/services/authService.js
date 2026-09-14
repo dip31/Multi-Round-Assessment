@@ -15,8 +15,8 @@ const writeUserNameMap = (map) => {
     localStorage.setItem(USER_NAME_MAP_KEY, JSON.stringify(map));
 };
 
-export const registerUser = async (name, email, password) => {
-    const response = await api.post('/auth/register', { name, email, password });
+export const registerUser = async (name, email, password, role = 'student') => {
+    const response = await api.post('/auth/register', { name, email, password, role });
 
     // Persist mapping so future logins can resolve display name from email.
     const normalizedEmail = email.trim().toLowerCase();

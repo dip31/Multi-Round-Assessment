@@ -200,7 +200,7 @@ export default function AptitudeTest() {
         } catch (err) {
             if (!err.response) {
                 console.error("Failed to restore session", err);
-                navigate('/dashboard');
+                navigate('/student/dashboard');
             }
         }
     };
@@ -306,7 +306,7 @@ export default function AptitudeTest() {
                         Retry Connection
                     </button>
                     <button
-                        onClick={() => navigate('/dashboard')}
+                        onClick={() => navigate('/student/dashboard')}
                         className="mt-4 w-full rounded-lg bg-transparent px-5 py-3 text-sm font-semibold text-[var(--color-text-secondary)] transition hover:text-[var(--color-text-primary)] hover:bg-[var(--color-bg-elevated)]"
                     >
                         Return to Dashboard

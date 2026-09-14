@@ -17,7 +17,7 @@ const AdminRoute = ({ children }) => {
 
   const decoded = parseJwt(token);
   if (!decoded || !decoded.is_admin) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to="/student/dashboard" replace />;
   }
 
   return children;

@@ -172,7 +172,7 @@ export default function HumanLikeInterview() {
     useEffect(() => {
         if (!interviewId) {
             setToast({ type: 'error', message: 'Interview session not found' });
-            setTimeout(() => navigate('/dashboard'), 3000);
+            setTimeout(() => navigate('/student/dashboard'), 3000);
             return;
         }
 
