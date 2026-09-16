@@ -37,7 +37,7 @@ alembic/versions/__pycache__/
 # by the application or committed to the repository).
 database.db
 *.db
-
+*.dump
 
 # Application logs
 logs/

@@ -19,12 +19,9 @@ import AdminCandidateReports from './pages/AdminCandidateReports';
 import AdminReview from './pages/AdminReview';
 import AdminPools from './pages/AdminPools';
 import AdminProctoringDashboard from './pages/AdminProctoringDashboard';
-<<<<<<< Updated upstream
-=======
 import StudentDashboard from './pages/StudentDashboard';
 import FacultyDashboard from './pages/FacultyDashboard';
 import TPODashboard from './pages/TPODashboard';
->>>>>>> Stashed changes
 import AdminRoute from './components/AdminRoute';
 import RoleRoute from './components/RoleRoute';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -163,8 +160,6 @@ export default function App() {
             </PrivateRoute>
           }
         />
-<<<<<<< Updated upstream
-=======
         {/* Role dashboards are the primary authenticated entry points.
             RoleRoute resolves the backend-authenticated role and prevents
             users from opening another role's dashboard. */}
@@ -194,7 +189,6 @@ export default function App() {
             </RoleRoute>
           }
         />
->>>>>>> Stashed changes
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
