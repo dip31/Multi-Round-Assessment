@@ -36,7 +36,13 @@ def register(payload: UserCreate, db: Session = Depends(get_db)) -> UserResponse
             detail="Email already registered",
         )
 
-    user = create_user(db, name=payload.name, email=payload.email, password=payload.password)
+    user = create_user(
+        db,
+        name=payload.name,
+        email=payload.email,
+        password=payload.password,
+        role=payload.role,
+    )
     return user
 
 
@@ -58,8 +64,10 @@ def login(payload: UserLogin, db: Session = Depends(get_db)) -> TokenResponse:
             detail="Invalid email or password",
         )
 
-    access_token = create_access_token(data={"sub": str(user.id), "is_admin": user.role == "admin"})
-    return TokenResponse(access_token=access_token)
+    access_token = create_access_token(
+        data={"sub": str(user.id), "is_admin": user.role == "admin", "role": user.role}
+    )
+    return TokenResponse(access_token=access_token, role=user.role, user=user)
 
 
 @router.post(

@@ -49,3 +49,17 @@ def get_current_user(
         raise credentials_exception
 
     return user
+
+
+def get_current_user_from_token_str(token: str, db: Session) -> User | None:
+    """Decode raw token string and return user, or None if invalid."""
+    payload = decode_access_token(token)
+    if payload is None:
+        return None
+    user_id = payload.get("sub")
+    if user_id is None:
+        return None
+    try:
+        return get_user_by_id(db, user_id=int(user_id))
+    except (ValueError, TypeError):
+        return None

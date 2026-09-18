@@ -28,21 +28,32 @@ class GroqService:
 
     # ── Question Pool Generation (UNCHANGED) ────────────────────────────
 
-    def generate_question_pool(self, skills: List[str], projects: Dict[str, str], count: int = 12) -> List[Dict]:
+    def generate_question_pool(
+        self,
+        skills: List[str],
+        projects: Dict[str, str],
+        count: int = 12,
+        interview_type: str = "technical",
+    ) -> List[Dict]:
         """
         Generate personalized interview question pool using Groq.
 
-        Questions are grounded in the candidate's extracted skills and projects.
+        Questions are grounded in the candidate's extracted skills and projects,
+        and strictly aligned to the interview type ('technical', 'hr', or 'communication').
         """
         from app.services.role_detection_service import detect_role
         from app.services.retriever_service import (
             retrieve, format_for_prompt
         )
 
+        norm_type = (interview_type or "technical").lower().strip()
+        if norm_type not in ("technical", "hr", "communication"):
+            norm_type = "technical"
+
         # Step 1: Detect role
         detected_role = detect_role(skills, projects)
 
-        # Step 2: Retrieve relevant knowledge
+        # Step 2: Retrieve relevant knowledge (relevant for technical, general background for others)
         try:
             retrieved_docs = retrieve(
                 skills=skills,
@@ -57,28 +68,30 @@ class GroqService:
             context = "No additional context available."
             retrieved_docs = []
 
-        # Step 3: Build grounded prompt
-        prompt = f"""
-      You are an expert technical interviewer for campus 
-      placement interviews.
+        # Step 3: Build grounded prompt based on interview type
+        if norm_type == "technical":
+            prompt = f"""
+      You are an expert technical interviewer conducting a campus placement technical interview.
 
       CANDIDATE PROFILE:
       Technical Skills: {skills}
       Projects: {projects}
-      Detected Role: {detected_role}
+      Target Role: {detected_role}
 
       RETRIEVED KNOWLEDGE BASE:
       {context}
 
       INSTRUCTIONS:
-      - Generate exactly {count} interview questions
-      - PRIORITIZE retrieved knowledge above
-      - MUST reference candidate specific skills/projects
-      - If retrieved context is insufficient, minimally
-        extend using general {detected_role} domain knowledge
-      - Mix HR (4 questions) and Technical (8 questions)
-      - Distribute: 3 Easy, 5 Medium, 4 Hard
-      - Make questions personalized not generic
+      - Generate exactly {count} TECHNICAL interview questions.
+      - Every question MUST be a technical question focusing on:
+        1. Programming languages and problem solving
+        2. Data Structures and Algorithms
+        3. CS fundamentals (OOPS, DBMS, Operating Systems, Computer Networks)
+        4. Technical architecture and implementation details of candidate's projects ({projects})
+        5. Deep-dive into technical skills ({skills})
+      - ALL questions must have "phase": "TECHNICAL".
+      - Distribute difficulty: 3 EASY, 5 MEDIUM, 4 HARD.
+      - Make questions personalized to candidate's projects and skills where possible.
 
       Return ONLY valid JSON, no markdown:
       {{
@@ -88,8 +101,81 @@ class GroqService:
             "question": "...",
             "difficulty": "EASY|MEDIUM|HARD",
             "topic": "...",
-            "phase": "HR|TECHNICAL",
-            "grounded_in": "which context chunk inspired this",
+            "phase": "TECHNICAL",
+            "grounded_in": "which skill or project inspired this",
+            "personalized": true
+          }}
+        ]
+      }}
+      """
+        elif norm_type == "hr":
+            prompt = f"""
+      You are an expert HR director conducting a behavioral and HR placement interview.
+
+      CANDIDATE PROFILE:
+      Background / Skills: {skills}
+      Projects: {projects}
+      Target Role: {detected_role}
+
+      INSTRUCTIONS:
+      - Generate exactly {count} HR and BEHAVIORAL interview questions.
+      - Focus on:
+        1. Professional introduction and career motivations
+        2. Key strengths, areas for growth, and continuous learning
+        3. Team collaboration, leadership, and conflict resolution
+        4. Handling failure, pressure, and unexpected setbacks
+        5. Situational workplace judgment (STAR method: Situation, Task, Action, Result)
+        6. Alignment with company values and long-term goals
+      - ALL questions must have "phase": "HR".
+      - Distribute difficulty: 3 EASY, 5 MEDIUM, 4 HARD.
+      - Vary the questions so they feel human, authentic, and situational.
+
+      Return ONLY valid JSON, no markdown:
+      {{
+        "detected_role": "{detected_role}",
+        "questions": [
+          {{
+            "question": "...",
+            "difficulty": "EASY|MEDIUM|HARD",
+            "topic": "...",
+            "phase": "HR",
+            "grounded_in": "behavioral competency",
+            "personalized": true
+          }}
+        ]
+      }}
+      """
+        else:  # communication
+            prompt = f"""
+      You are an expert executive communication coach evaluating candidate communication and articulation.
+
+      CANDIDATE PROFILE:
+      Background / Skills: {skills}
+      Projects: {projects}
+      Target Role: {detected_role}
+
+      INSTRUCTIONS:
+      - Generate exactly {count} COMMUNICATION-focused interview questions.
+      - Focus on:
+        1. Structured professional self-introduction
+        2. Explaining a complex technical concept simply to a non-technical stakeholder
+        3. Pitching or narrating a key project with clarity and business context
+        4. Handling a workplace communication breakdown or persuasion scenario
+        5. Explaining their problem-solving thought process step-by-step
+        6. Delivering constructive feedback or presenting a structured opinion
+      - ALL questions must have "phase": "COMMUNICATION".
+      - Distribute difficulty: 3 EASY, 5 MEDIUM, 4 HARD.
+
+      Return ONLY valid JSON, no markdown:
+      {{
+        "detected_role": "{detected_role}",
+        "questions": [
+          {{
+            "question": "...",
+            "difficulty": "EASY|MEDIUM|HARD",
+            "topic": "...",
+            "phase": "COMMUNICATION",
+            "grounded_in": "communication scenario",
             "personalized": true
           }}
         ]
@@ -114,44 +200,92 @@ class GroqService:
 
         if result and "questions" in result:
             questions = result["questions"]
-            # Add unique IDs and role to each question
             for idx, q in enumerate(questions, 1):
                 q["role"] = detected_role
-                # Generate unique ID based on question content
                 q["id"] = hashlib.md5(q["question"].encode()).hexdigest()[:12]
             return questions
 
-        # Fallback: use retrieved docs directly
-        print("[RAG] Using fallback questions from KB")
+        # Fallback question banks strictly tailored to the requested interview type
+        print(f"[RAG] Using fallback questions for {norm_type} interview")
         fallback = []
-        for idx, doc in enumerate(retrieved_docs[:count], 1):
-            question_text = doc.get("text", "Tell me about yourself")
-            fallback.append({
-                "id": hashlib.md5(question_text.encode()).hexdigest()[:12],
-                "question": question_text,
-                "difficulty": doc.get("difficulty", "medium").upper(),
-                "topic": doc.get("topic", detected_role),
-                "phase": "TECHNICAL",
-                "grounded_in": "knowledge base fallback",
-                "personalized": False,
-                "role": detected_role
-            })
-
-        # Pad with HR questions if fallback is short
-        hr_idx = len(fallback) + 1
-        while len(fallback) < count:
-            question_text = "Tell me about a challenging project you worked on."
-            fallback.append({
-                "id": f"hr_fallback_{hr_idx}",
-                "question": question_text,
-                "difficulty": "MEDIUM",
-                "topic": "experience",
-                "phase": "HR",
-                "grounded_in": "default HR question",
-                "personalized": False,
-                "role": detected_role
-            })
-            hr_idx += 1
+        if norm_type == "technical":
+            tech_fallbacks = [
+                ("Explain the lifecycle of a request in your recent project and where data persistence happens.", "MEDIUM", "Projects"),
+                ("How would you optimize database queries when dealing with millions of records?", "HARD", "DBMS"),
+                ("What is the difference between processes and threads, and how does inter-process communication work?", "MEDIUM", "OS"),
+                ("Explain the ACID properties in database transactions and why each is necessary.", "EASY", "DBMS"),
+                ("What are the core pillars of Object-Oriented Programming, and how does polymorphism differ at compile-time vs runtime?", "EASY", "OOPS"),
+                ("Explain how a Hash Map operates internally, including collision handling techniques.", "MEDIUM", "DSA"),
+                ("What happens at the network layer during the TCP three-way handshake?", "MEDIUM", "Networks"),
+                ("How would you design a scalable cache system using Redis or Memcached?", "HARD", "System Design"),
+                ("Explain the time and space complexity tradeoffs between QuickSort and MergeSort.", "EASY", "DSA"),
+                ("How does virtual memory and demand paging prevent processes from corrupting each other's memory space?", "HARD", "OS"),
+                ("Describe an interesting bug you resolved in your code and your systematic debugging process.", "MEDIUM", "Problem Solving"),
+                ("What are microservices compared to monolithic architecture, and what challenges arise with distributed transactions?", "HARD", "Architecture"),
+            ]
+            for idx, (q_txt, diff, top) in enumerate(tech_fallbacks[:count], 1):
+                fallback.append({
+                    "id": hashlib.md5(q_txt.encode()).hexdigest()[:12],
+                    "question": q_txt,
+                    "difficulty": diff,
+                    "topic": top,
+                    "phase": "TECHNICAL",
+                    "grounded_in": "technical fallback",
+                    "personalized": False,
+                    "role": detected_role,
+                })
+        elif norm_type == "hr":
+            hr_fallbacks = [
+                ("Walk me through your background and what motivated you to pursue a career in technology.", "EASY", "Introduction"),
+                ("Tell me about a time you faced a difficult conflict with a team member and how you resolved it.", "MEDIUM", "Conflict Resolution"),
+                ("What do you consider your greatest professional strength and one area you are actively improving?", "EASY", "Self Awareness"),
+                ("Describe a project that failed or did not go according to plan. What did you learn from it?", "MEDIUM", "Resilience"),
+                ("Where do you envision yourself professionally in three to five years?", "EASY", "Career Goals"),
+                ("Tell me about a situation where you had to work under tight deadlines with ambiguous requirements.", "HARD", "Adaptability"),
+                ("How do you handle receiving critical feedback from a peer or manager?", "MEDIUM", "Feedback"),
+                ("Describe a time you took initiative to lead a project or solve an unassigned problem.", "HARD", "Leadership"),
+                ("What factors are most important to you when evaluating a company's culture and work environment?", "EASY", "Culture Fit"),
+                ("Tell me about a time you had to persuade someone who initially disagreed with your proposal.", "HARD", "Persuasion"),
+                ("How do you prioritize competing tasks when everything feels urgent?", "MEDIUM", "Time Management"),
+                ("Why do you want to join our institution's placement drives and work in this domain?", "EASY", "Motivation"),
+            ]
+            for idx, (q_txt, diff, top) in enumerate(hr_fallbacks[:count], 1):
+                fallback.append({
+                    "id": hashlib.md5(q_txt.encode()).hexdigest()[:12],
+                    "question": q_txt,
+                    "difficulty": diff,
+                    "topic": top,
+                    "phase": "HR",
+                    "grounded_in": "hr fallback",
+                    "personalized": False,
+                    "role": detected_role,
+                })
+        else:  # communication
+            comm_fallbacks = [
+                ("Please introduce yourself and highlight the central theme of your engineering journey in under two minutes.", "EASY", "Self Introduction"),
+                ("Explain the concept of an API or database indexing as if you were explaining it to a non-technical business executive.", "MEDIUM", "Simplification"),
+                ("Tell the story of a project you built: the problem, your architectural choices, and the measurable outcome.", "MEDIUM", "Project Storytelling"),
+                ("Describe a scenario where a client or teammate misunderstood your message. How did you realign expectations?", "HARD", "Clarity & Conflict"),
+                ("Take a stand on whether remote work improves or hampers software engineering productivity, and give two structured supporting arguments.", "MEDIUM", "Structured Opinion"),
+                ("How do you prepare and structure a technical presentation when delivering it to senior stakeholders?", "HARD", "Executive Presence"),
+                ("Explain how you explain technical debt to a product manager who wants new features delivered immediately.", "HARD", "Stakeholder Communication"),
+                ("What strategies do you use to ensure active listening during high-stakes technical meetings?", "EASY", "Active Listening"),
+                ("Summarize the most complex technical paper, article, or documentation you read recently into three key takeaways.", "MEDIUM", "Synthesis"),
+                ("If you noticed an error in a senior engineer's code during a code review, how would you phrase your comment constructively?", "MEDIUM", "Diplomacy"),
+                ("Describe how you structure written documentation so that a new developer can onboard smoothly.", "EASY", "Documentation"),
+                ("Explain your step-by-step thought process for estimating how long a challenging software feature will take to deliver.", "HARD", "Process Articulation"),
+            ]
+            for idx, (q_txt, diff, top) in enumerate(comm_fallbacks[:count], 1):
+                fallback.append({
+                    "id": hashlib.md5(q_txt.encode()).hexdigest()[:12],
+                    "question": q_txt,
+                    "difficulty": diff,
+                    "topic": top,
+                    "phase": "COMMUNICATION",
+                    "grounded_in": "communication fallback",
+                    "personalized": False,
+                    "role": detected_role,
+                })
 
         return fallback[:count]
 
@@ -179,14 +313,22 @@ Make it sound like a human interviewer is asking it. Return only the rephrased q
 
     # ── Classifier (NEW — spec step 2) ───────────────────────────────────
 
-    def classify_answer(self, question: str, answer: str) -> Dict:
+    def classify_answer(self, question: str, answer: str, interview_type: str = "technical") -> Dict:
         """
         Classify answer quality, intent, and score content.
 
         Deterministic — temp=0.2.
         Returns: {quality, intent, missing_part, content_score}
         """
-        prompt = f"""You are an expert technical interviewer evaluating a candidate's response in a campus placement interview.
+        norm_type = (interview_type or "technical").lower().strip()
+        if norm_type == "hr":
+            role_desc = "You are an expert HR interviewer evaluating a candidate's response in a behavioral placement interview. Evaluate behavioral reasoning, structured response, honesty, and professional attitude."
+        elif norm_type == "communication":
+            role_desc = "You are an expert executive communication interviewer evaluating a candidate's response in a communication placement interview. Evaluate clarity, structure, conciseness, articulation, and relevance."
+        else:
+            role_desc = "You are an expert technical interviewer evaluating a candidate's response in a technical placement interview. Evaluate technical correctness, depth, problem solving, and relevance."
+
+        prompt = f"""{role_desc}
 
 Question: {question}
 Candidate Answer: {answer}

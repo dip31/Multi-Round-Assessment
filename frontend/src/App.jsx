@@ -14,6 +14,7 @@ import CodingResultPage from './pages/CodingResultPage';
 import InterviewReport from './pages/InterviewReport';
 import LandingPage from './pages/LandingPage';
 import Analytics from './pages/Analytics';
+import Portfolio from './pages/Portfolio';
 import AdminLogin from './pages/AdminLogin';
 import AdminAnalyticsDashboard from './pages/AdminAnalyticsDashboard';
 import AdminCandidateReports from './pages/AdminCandidateReports';
@@ -21,6 +22,9 @@ import AdminReview from './pages/AdminReview';
 import AdminPools from './pages/AdminPools';
 import AdminProctoringDashboard from './pages/AdminProctoringDashboard';
 import AdminRoute from './components/AdminRoute';
+import RoleRoute from './components/RoleRoute';
+import FacultyDashboard from './pages/FacultyDashboard';
+import TPODashboard from './pages/TPODashboard';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 export default function App() {
@@ -71,14 +75,32 @@ export default function App() {
             </AdminRoute>
           } 
         />
+        {/* Role-Based Dashboards */}
         <Route
           path="/dashboard"
           element={
-            <PrivateRoute>
+            <RoleRoute allowedRoles={['student']}>
               <Dashboard />
-            </PrivateRoute>
+            </RoleRoute>
           }
         />
+        <Route
+          path="/faculty/dashboard"
+          element={
+            <RoleRoute allowedRoles={['faculty', 'admin']}>
+              <FacultyDashboard />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/tpo/dashboard"
+          element={
+            <RoleRoute allowedRoles={['tpo', 'admin']}>
+              <TPODashboard />
+            </RoleRoute>
+          }
+        />
+
         <Route
           path="/profile"
           element={
@@ -96,69 +118,77 @@ export default function App() {
           }
         />
         <Route
+          path="/portfolio"
+          element={
+            <RoleRoute allowedRoles={['student']}>
+              <Portfolio />
+            </RoleRoute>
+          }
+        />
+        <Route
           path="/instructions"
           element={
-            <PrivateRoute>
+            <RoleRoute allowedRoles={['student']}>
               <Instructions />
-            </PrivateRoute>
+            </RoleRoute>
           }
         />
         <Route
           path="/aptitude"
           element={
-            <PrivateRoute>
+            <RoleRoute allowedRoles={['student']}>
               <ErrorBoundary>
                 <AptitudeTest />
               </ErrorBoundary>
-            </PrivateRoute>
+            </RoleRoute>
           }
         />
         <Route
           path="/coding"
           element={
-            <PrivateRoute>
+            <RoleRoute allowedRoles={['student']}>
               <CodingRound />
-            </PrivateRoute>
+            </RoleRoute>
           }
         />
         <Route
           path="/coding/result"
           element={
-            <PrivateRoute>
+            <RoleRoute allowedRoles={['student']}>
               <CodingResultPage />
-            </PrivateRoute>
+            </RoleRoute>
           }
         />
         <Route
           path="/result"
           element={
-            <PrivateRoute>
+            <RoleRoute allowedRoles={['student']}>
               <ResultPage />
-            </PrivateRoute>
+            </RoleRoute>
           }
         />
         <Route
           path="/resume-upload"
           element={
-            <PrivateRoute>
+            <RoleRoute allowedRoles={['student']}>
               <ResumeUpload />
-            </PrivateRoute>
+            </RoleRoute>
           }
         />
         <Route
           path="/interview"
           element={
-            <PrivateRoute>
+            <RoleRoute allowedRoles={['student']}>
               <HumanLikeInterview />
-            </PrivateRoute>
+            </RoleRoute>
           }
         />
         <Route
           path="/interview/report/:interviewId"
           element={
-            <PrivateRoute>
+            <RoleRoute allowedRoles={['student', 'faculty', 'tpo', 'admin']}>
               <InterviewReport />
-            </PrivateRoute>
+            </RoleRoute>
           }
         />
         <Route path="*" element={<Navigate to="/login" replace />} />

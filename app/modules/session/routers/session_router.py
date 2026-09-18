@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.auth import get_current_user
 from app.database.db import get_db
 from app.models.user import User
+from app.models.assessment import AssessmentSession
 from app.schemas.assessment import SessionResponse
 from app.services.session_service import create_session, create_round, get_active_session, complete_session, end_round, get_user_active_round
 
@@ -59,11 +60,22 @@ def session_status(
 ) -> SessionResponse:
     """Return the active assessment session for the authenticated user.
 
-    If no active session exists, return an empty/default session payload
-    so frontend dashboards can render without noisy 404s.
+    If no active session exists, find and return the user's latest session
+    (including completed round states and scores) so dashboards continue
+    displaying assessment information.
+    If no session exists at all, return a default empty session payload.
     """
     session = get_active_session(db, user_id=current_user.id)
     if session is None:
+        latest = (
+            db.query(AssessmentSession)
+            .filter(AssessmentSession.user_id == current_user.id)
+            .order_by(AssessmentSession.id.desc())
+            .first()
+        )
+        if latest is not None:
+            return latest
+
         return SessionResponse(
             id=0,
             user_id=current_user.id,
@@ -73,6 +85,30 @@ def session_status(
             rounds=[],
         )
 
+    return session
+
+
+@router.post(
+    "/fresh",
+    response_model=SessionResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Start a fresh assessment cycle",
+)
+def start_fresh_session(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> SessionResponse:
+    """Complete any existing active session and create a brand new assessment session."""
+    active = get_active_session(db, user_id=current_user.id)
+    if active:
+        active_round = get_user_active_round(db, current_user.id, round_type="aptitude")
+        if active_round is not None:
+            end_round(db, active_round.id)
+        complete_session(db, active.id)
+
+    session = create_session(db, user_id=current_user.id)
+    create_round(db, session_id=session.id, round_type="aptitude")
+    db.refresh(session)
     return session
 
 

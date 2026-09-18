@@ -15,6 +15,13 @@ import app.models.assessment  # noqa: F401
 # Import the FastAPI instance as `application` to avoid shadowing `app` package
 from app.main import app as application
 
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.ext.compiler import compiles
+
+@compiles(JSONB, "sqlite")
+def compile_jsonb_sqlite(type_, compiler, **kw):
+    return "TEXT"
+
 # ── In-memory SQLite for testing ──────────────────────────────────────
 # StaticPool ensures all sessions share the same in-memory database.
 engine = create_engine(
@@ -103,3 +110,4 @@ passed += 1
 print("9. Unauthenticated 401: PASS")
 
 print(f"\nALL {passed}/9 TESTS PASSED")
+application.dependency_overrides.clear()

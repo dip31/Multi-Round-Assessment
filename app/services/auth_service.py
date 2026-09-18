@@ -13,14 +13,18 @@ from app.config.security import hash_password, verify_password
 from app.models.user import User
 
 
-def create_user(db: Session, name: str, email: str, password: str) -> User:
-    """Register a new user with a hashed password.
+from app.models.profile import StudentProfile, FacultyProfile, TPOProfile
+
+
+def create_user(db: Session, name: str, email: str, password: str, role: str = "student") -> User:
+    """Register a new user with a hashed password and initialize their role profile.
 
     Args:
         db: Active database session.
         name: Display name.
         email: Unique email address.
         password: Plain-text password (will be hashed before storage).
+        role: User role ('student', 'faculty', 'tpo', 'admin').
 
     Returns:
         The newly created ``User`` instance (already committed).
@@ -29,8 +33,22 @@ def create_user(db: Session, name: str, email: str, password: str) -> User:
         name=name,
         email=email,
         password_hash=hash_password(password),
+        role=role,
     )
     db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    if role == "student":
+        student_prof = StudentProfile(user_id=user.id)
+        db.add(student_prof)
+    elif role == "faculty":
+        faculty_prof = FacultyProfile(user_id=user.id)
+        db.add(faculty_prof)
+    elif role == "tpo":
+        tpo_prof = TPOProfile(user_id=user.id)
+        db.add(tpo_prof)
+
     db.commit()
     db.refresh(user)
     return user

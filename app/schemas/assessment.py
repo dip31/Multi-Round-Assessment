@@ -5,7 +5,7 @@ Pydantic schemas for assessment session and round payloads.
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 # ── Request schemas ───────────────────────────────────────────────────
@@ -39,6 +39,13 @@ class RoundResponse(BaseModel):
     max_questions: int
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+
+    @computed_field
+    @property
+    def duration_seconds(self) -> Optional[int]:
+        if self.completed_at and self.started_at:
+            return max(0, int((self.completed_at - self.started_at).total_seconds()))
+        return None
 
     model_config = {"from_attributes": True}
 

@@ -13,6 +13,8 @@ class NextQuestionResponse(BaseModel):
     question_text: str
     options: Dict[str, str]
     difficulty: str
+    topic: Optional[str] = None
+    subject: Optional[str] = None
 
 
 class SubmitAnswerRequest(BaseModel):
@@ -20,6 +22,8 @@ class SubmitAnswerRequest(BaseModel):
     question_id: int
     selected_option: Optional[str] = Field(None, pattern="^[A-D]$", examples=["A"])
     response_time: float
+    practice_type: Optional[str] = None
+    subject: Optional[str] = None
 
 
 class SubmitAnswerResponse(BaseModel):

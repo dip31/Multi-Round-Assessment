@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { uploadResume, startInterview } from '../services/interviewService';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { startInterview } from '../services/interviewService';
+import api from '../services/api';
 import { Toast } from '../components/Toast';
-import { LoadingSkeleton } from '../components/LoadingSkeleton';
 
 const STATES = {
     IDLE: 'idle',
@@ -12,30 +12,66 @@ const STATES = {
 };
 
 export default function ResumeUpload() {
+    const navigate = useNavigate();
+    const location = useLocation();
+    const initialInterviewType = location.state?.interview_type || 'technical';
+    const [selectedInterviewType, setSelectedInterviewType] = useState(initialInterviewType);
+
     const [state, setState] = useState(STATES.IDLE);
+    const [profileResumes, setProfileResumes] = useState([]);
+    const [selectedResumeId, setSelectedResumeId] = useState(null);
+    const [loadingResumes, setLoadingResumes] = useState(true);
+    const [showUploadNew, setShowUploadNew] = useState(false);
+
+    // New resume upload states
+    const [newCvName, setNewCvName] = useState('');
+    const [newCvType, setNewCvType] = useState('Software Developer');
     const [selectedFile, setSelectedFile] = useState(null);
+
     const [poolId, setPoolId] = useState(null);
     const [interviewId, setInterviewId] = useState(null);
     const [toast, setToast] = useState(null);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [detectedRole, setDetectedRole] = useState(null);
-    
-    const navigate = useNavigate();
+
     const intervalIdRef = useRef(null);
     const fileInputRef = useRef(null);
-    
+
     useEffect(() => {
+        fetchProfileResumes();
         return () => {
             if (intervalIdRef.current) {
                 clearInterval(intervalIdRef.current);
             }
         };
     }, []);
-    
+
+    const fetchProfileResumes = async () => {
+        setLoadingResumes(true);
+        try {
+            const res = await api.get('/profile/resumes');
+            const list = res.data || [];
+            setProfileResumes(list);
+            if (list.length > 0) {
+                setSelectedResumeId(list[0].id);
+            } else {
+                setShowUploadNew(true);
+            }
+        } catch (err) {
+            console.error('Failed to load profile resumes:', err);
+            setShowUploadNew(true);
+        } finally {
+            setLoadingResumes(false);
+        }
+    };
+
     const handleFileSelect = (e) => {
         const file = e.target.files?.[0];
         if (file && file.type === 'application/pdf') {
             setSelectedFile(file);
+            if (!newCvName) {
+                setNewCvName(file.name.replace(/\.pdf$/i, ''));
+            }
         } else {
             setToast({
                 type: 'error',
@@ -43,18 +79,16 @@ export default function ResumeUpload() {
             });
         }
     };
-    
-    const handleDragOver = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-    };
-    
+
     const handleDrop = (e) => {
         e.preventDefault();
         e.stopPropagation();
         const file = e.dataTransfer.files?.[0];
         if (file && file.type === 'application/pdf') {
             setSelectedFile(file);
+            if (!newCvName) {
+                setNewCvName(file.name.replace(/\.pdf$/i, ''));
+            }
         } else {
             setToast({
                 type: 'error',
@@ -62,65 +96,102 @@ export default function ResumeUpload() {
             });
         }
     };
-    
-    const handleUpload = async () => {
-        if (!selectedFile) {
+
+    const handleProceedWithSelectedResume = async () => {
+        if (!selectedResumeId) {
             setToast({
                 type: 'error',
-                message: 'Please select a file first',
+                message: 'Please select a resume from your profile to proceed',
             });
             return;
         }
-        
+
         setState(STATES.UPLOADING);
-        setUploadProgress(0);
-        
+        setUploadProgress(20);
+
         try {
-            const res = await uploadResume(selectedFile);
-            setPoolId(res.pool_id);
-            setDetectedRole(res.detected_role || null);
+            setUploadProgress(50);
+            const res = await api.post(`/interview/resume/use-profile-resume/${selectedResumeId}?interview_type=${selectedInterviewType}`);
+            setPoolId(res.data.pool_id);
+            setDetectedRole(res.data.detected_role || null);
             setUploadProgress(100);
-            
-            // Simulate processing time before showing approval state
+
             setTimeout(() => {
                 setState(STATES.WAITING_APPROVAL);
-                pollForApproval(res.pool_id);
-            }, 1500);
+                pollForApproval(res.data.pool_id);
+            }, 1200);
         } catch (error) {
-            let errorMsg = 'Upload failed';
-            
-            if (error.response?.data?.detail) {
-                if (typeof error.response.data.detail === 'string') {
-                    errorMsg = error.response.data.detail;
-                } else if (Array.isArray(error.response.data.detail)) {
-                    errorMsg = error.response.data.detail[0]?.msg || 'Upload failed';
-                }
-            }
-            
+            console.error('Failed to use profile resume:', error);
             setToast({
                 type: 'error',
-                message: errorMsg,
+                message: error.response?.data?.detail || 'Failed to generate questions from selected resume',
             });
             setState(STATES.IDLE);
             setUploadProgress(0);
         }
     };
-    
+
+    const handleUploadNewAndProceed = async () => {
+        if (!selectedFile) {
+            setToast({
+                type: 'error',
+                message: 'Please select a PDF file first',
+            });
+            return;
+        }
+
+        setState(STATES.UPLOADING);
+        setUploadProgress(20);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            formData.append('cv_name', newCvName.trim() || 'My Resume');
+            formData.append('cv_type', newCvType);
+
+            setUploadProgress(40);
+            const profileUploadRes = await api.post('/profile/resumes', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+            const newResume = profileUploadRes.data;
+            setProfileResumes((prev) => [newResume, ...prev]);
+            setSelectedResumeId(newResume.id);
+
+            setUploadProgress(70);
+            const res = await api.post(`/interview/resume/use-profile-resume/${newResume.id}?interview_type=${selectedInterviewType}`);
+            setPoolId(res.data.pool_id);
+            setDetectedRole(res.data.detected_role || newCvType);
+            setUploadProgress(100);
+
+            setTimeout(() => {
+                setState(STATES.WAITING_APPROVAL);
+                pollForApproval(res.data.pool_id);
+            }, 1200);
+        } catch (error) {
+            console.error('Failed to upload and use resume:', error);
+            setToast({
+                type: 'error',
+                message: error.response?.data?.detail || 'Failed to upload and process resume',
+            });
+            setState(STATES.IDLE);
+            setUploadProgress(0);
+        }
+    };
+
     const pollForApproval = (pId) => {
         intervalIdRef.current = setInterval(async () => {
             try {
                 const response = await fetch(`/api/v1/interview/pool/${pId}`, {
                     headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('access_token')}`
-                    }
+                        Authorization: `Bearer ${localStorage.getItem('access_token')}`,
+                    },
                 });
-                
+
                 if (!response.ok) {
                     throw new Error('Failed to fetch pool status');
                 }
-                
+
                 const pool = await response.json();
-                // Check if pool is admin_approved (auto-approved by backend for dev)
                 if (pool.admin_approved) {
                     clearInterval(intervalIdRef.current);
                     setState(STATES.APPROVED);
@@ -129,325 +200,500 @@ export default function ResumeUpload() {
             } catch (error) {
                 console.error('Polling failed:', error);
             }
-        }, 2000); // Poll every 2 seconds instead of 3
-        
-        // Auto-approve after 5 seconds if still pending (fallback for instant approval)
+        }, 2000);
+
         setTimeout(() => {
             if (intervalIdRef.current) {
                 clearInterval(intervalIdRef.current);
                 setState(STATES.APPROVED);
                 startInterviewSession(pId);
             }
-        }, 5000);
+        }, 4000);
     };
-    
+
     const startInterviewSession = async (pId) => {
         try {
-            console.log('Starting interview session with pool_id:', pId);
             const res = await startInterview(pId);
-            console.log('Interview session response:', res);
-            
             if (res && res.interview_id) {
                 setInterviewId(res.interview_id);
                 localStorage.setItem('interview_id', res.interview_id);
-                console.log('Interview ID saved:', res.interview_id);
             } else {
-                console.error('No interview_id in response:', res);
                 setToast({
                     type: 'error',
-                    message: 'Failed to get interview ID',
+                    message: 'Failed to initialize interview session ID',
                 });
             }
         } catch (error) {
-            console.error('Failed to start interview session:', error);
             setToast({
                 type: 'error',
                 message: error.response?.data?.detail || 'Failed to start interview',
             });
         }
     };
-    
+
     const handleStartInterview = () => {
-        console.log('handleStartInterview called');
-        console.log('interviewId state:', interviewId);
-        console.log('localStorage interview_id:', localStorage.getItem('interview_id'));
-        
         const storedInterviewId = localStorage.getItem('interview_id');
-        
         if (interviewId || storedInterviewId) {
-            console.log('Navigating to /interview');
             navigate('/interview');
         } else {
-            console.error('No interview ID found!');
             setToast({
                 type: 'error',
-                message: 'Interview ID not found. Please try uploading your resume again.',
+                message: 'Interview ID not ready yet. Please wait a moment.',
             });
         }
     };
 
     const steps = [
-        { label: 'Upload Resume', completed: [STATES.UPLOADING, STATES.WAITING_APPROVAL, STATES.APPROVED].includes(state) },
-        { label: 'AI Processing', completed: [STATES.WAITING_APPROVAL, STATES.APPROVED].includes(state) },
-        { label: 'Admin Review', completed: state === STATES.APPROVED },
-        { label: 'Start Interview', completed: false }
+        { label: 'Choose Resume', completed: [STATES.UPLOADING, STATES.WAITING_APPROVAL, STATES.APPROVED].includes(state) },
+        { label: 'AI Question Generation', completed: [STATES.WAITING_APPROVAL, STATES.APPROVED].includes(state) },
+        { label: 'Session Ready', completed: state === STATES.APPROVED },
+        { label: 'AI Mock Interview', completed: false },
     ];
 
-    const whatHappensNext = [
-        { num: 1, text: 'Our AI will analyze your resume and experience' },
-        { num: 2, text: 'An admin will review the analysis for approval' },
-        { num: 3, text: 'You\'ll proceed directly to the interview' }
-    ];
-    
+    const typeColors = {
+        'Software Developer': 'bg-blue-50 text-blue-700 border-blue-200',
+        'Data Science': 'bg-purple-50 text-purple-700 border-purple-200',
+        'Software Testing / QA': 'bg-amber-50 text-amber-700 border-amber-200',
+        'Core Industry': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        'Marketing': 'bg-rose-50 text-rose-700 border-rose-200',
+        'Others': 'bg-slate-100 text-slate-700 border-slate-200',
+    };
+
     return (
-        <div className="min-h-screen bg-background text-on-surface font-body selection:bg-primary/30 antialiased">
-            {/* Toast */}
+        <div className="min-h-screen bg-slate-50 text-slate-900 font-['Inter'] antialiased">
             {toast && <Toast {...toast} onClose={() => setToast(null)} />}
 
-            <main className="mx-auto max-w-3xl px-6 py-12 pt-24">
-                {/* Back link */}
-                <div className="mb-12">
+            <main className="mx-auto max-w-3xl px-6 py-12 pt-20">
+                {/* Back Link */}
+                <div className="mb-8">
                     <button
                         onClick={() => navigate('/dashboard')}
-                        className="text-on-surface-variant hover:text-on-surface text-sm font-medium flex items-center gap-1 transition-colors"
+                        className="text-slate-500 hover:text-slate-900 text-xs font-semibold flex items-center gap-1.5 transition-colors"
                     >
                         <span>←</span> Back to Dashboard
                     </button>
                 </div>
 
                 {/* Header */}
-                <div className="mb-12">
-                    <h1 className="text-4xl font-headline font-black tracking-tighter text-on-surface mb-2">Resume Upload</h1>
-                    <p className="text-on-surface-variant">Upload your resume to begin the interview process</p>
+                <div className="mb-10">
+                    <div className="inline-block text-[11px] font-bold uppercase tracking-widest text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-200 mb-3">
+                        Round 3 — AI Technical & Behavioral Interview
+                    </div>
+                    <h1 className="text-3xl font-black tracking-tight text-slate-900 mb-2">
+                        Select Resume for Interview
+                    </h1>
+                    <p className="text-slate-500 text-sm">
+                        Choose which resume from your profile you want to be interviewed for, or upload a new one.
+                    </p>
                 </div>
 
                 {/* Progress Stepper */}
-                <div className="mb-12 bg-surface-container border border-outline-variant/20 rounded-2xl p-8 shadow-lg shadow-primary/5">
+                <div className="mb-10 bg-white border border-slate-200 rounded-3xl p-6 shadow-sm">
                     <div className="flex items-center justify-between">
                         {steps.map((step, idx) => (
-                            <div key={idx} className="flex flex-col items-center flex-1">
-                                {/* Step Circle */}
+                            <div key={idx} className="flex flex-col items-center flex-1 relative">
                                 <div
-                                    className={`w-12 h-12 rounded-full flex items-center justify-center mb-3 font-semibold text-sm transition-all ${
+                                    className={`w-10 h-10 rounded-full flex items-center justify-center mb-2 font-bold text-xs transition-all ${
                                         step.completed
-                                            ? 'bg-emerald-500/20 text-emerald-400 border-2 border-emerald-500/30'
+                                            ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30'
                                             : idx === 0 && state !== STATES.IDLE
-                                            ? 'bg-primary/20 text-primary border-2 border-primary/30'
-                                            : 'bg-surface-container-highest text-on-surface-variant border-2 border-outline-variant/30'
+                                            ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30'
+                                            : 'bg-slate-100 text-slate-500 border border-slate-200'
                                     }`}
                                 >
                                     {step.completed ? '✓' : idx + 1}
                                 </div>
-                                {/* Step Label */}
-                                <p className={`text-xs font-label uppercase tracking-widest text-center ${
-                                    step.completed ? 'text-emerald-400' : 'text-on-surface-variant'
-                                }`}>
+                                <p
+                                    className={`text-[11px] font-semibold text-center ${
+                                        step.completed ? 'text-emerald-700' : 'text-slate-600'
+                                    }`}
+                                >
                                     {step.label}
                                 </p>
-                                {/* Connection Line */}
-                                {idx < steps.length - 1 && (
-                                    <div
-                                        className={`absolute w-12 h-1 -ml-6 mt-6 ${
-                                            steps[idx + 1].completed ? 'bg-emerald-500/30' : 'bg-outline-variant/30'
-                                        }`}
-                                        style={{
-                                            left: `calc(${(idx + 1) * (100 / steps.length)}% - 24px)`,
-                                            top: '51px'
-                                        }}
-                                    ></div>
-                                )}
                             </div>
                         ))}
                     </div>
                 </div>
 
-                {/* Main Content Card */}
+                {/* Main Content Area */}
                 {state === STATES.IDLE && (
-                    <div className="mb-12">
-                        <div
-                            onDragOver={handleDragOver}
-                            onDrop={handleDrop}
-                            className="bg-surface-container rounded-2xl border-2 border-dashed border-outline-variant/50 hover:border-primary/50 p-12 text-center transition-colors shadow-lg shadow-primary/5"
-                        >
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept=".pdf"
-                                onChange={handleFileSelect}
-                                className="hidden"
-                                id="file-input"
-                            />
-                            
-                            {/* Cloud Icon */}
-                            <div className="text-5xl mb-4">☁️</div>
-                            
-                            {/* Upload Text */}
-                            <h2 className="text-xl font-headline font-bold text-on-surface mb-2">
-                                {selectedFile ? 'File Selected' : 'Drag & drop your resume'}
-                            </h2>
-                            <p className="text-on-surface-variant text-sm mb-6">
-                                {selectedFile 
-                                    ? selectedFile.name 
-                                    : 'or click below to browse. PDF format, max 10MB'
-                                }
-                            </p>
-                            
-                            {/* Upload Button */}
-                            <button
-                                type="button"
-                                onClick={() => fileInputRef.current?.click()}
-                                className="inline-flex items-center justify-center bg-primary hover:bg-primary/90 active:scale-95 text-on-primary-container font-semibold py-3 px-8 rounded-xl transition-all duration-150 shadow-lg shadow-primary/20"
-                            >
-                                {selectedFile ? 'Change File' : 'Select Resume'}
-                            </button>
-                            
-                            {/* Upload Action */}
-                            {selectedFile && (
-                                <div className="mt-6">
-                                    <button
-                                        onClick={handleUpload}
-                                        className="w-full hero-gradient hover:shadow-lg text-on-primary-container font-semibold py-3 rounded-xl transition-all duration-150 shadow-lg shadow-primary/20 active:scale-95"
-                                    >
-                                        Upload & Process
-                                    </button>
+                    <div className="space-y-6">
+                        {/* Step 1: Interview Type Selection */}
+                        <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-8 shadow-sm">
+                            <div className="mb-4">
+                                <div className="flex items-center gap-2">
+                                    <span className="w-6 h-6 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">1</span>
+                                    <h3 className="text-base font-bold text-slate-900">Select Interview Type</h3>
                                 </div>
-                            )}
-                        </div>
-
-                        {/* What Happens Next */}
-                        <div className="mt-12 bg-surface-container border border-outline-variant/20 rounded-2xl p-8 shadow-lg shadow-primary/5">
-                            <h3 className="text-lg font-headline font-bold text-on-surface mb-6">What happens next?</h3>
-                            <div className="space-y-4">
-                                {whatHappensNext.map((item) => (
-                                    <div key={item.num} className="flex items-start gap-4">
-                                        <div className="flex-shrink-0 w-8 h-8 bg-primary/20 text-primary rounded-full flex items-center justify-center font-bold text-sm font-label">
-                                            {item.num}
-                                        </div>
-                                        <p className="text-on-surface text-sm font-medium pt-1">{item.text}</p>
-                                    </div>
-                                ))}
+                                <p className="text-xs text-slate-500 mt-1 ml-8">
+                                    Choose the specific interview assessment format tailored to your target focus area:
+                                </p>
                             </div>
-                        </div>
-                    </div>
-                )}
 
-                {state === STATES.UPLOADING && (
-                    <div className="bg-surface-container rounded-2xl border border-outline-variant/20 p-12 shadow-lg shadow-primary/5">
-                        <div className="text-center">
-                            {/* Progress Steps During Upload */}
-                            <div className="space-y-6 mb-8">
-                                {[
-                                    { label: 'Uploading file', progress: uploadProgress >= 25 },
-                                    { label: 'Parsing resume', progress: uploadProgress >= 50 },
-                                    { label: 'Extracting info', progress: uploadProgress >= 75 },
-                                    { label: 'Finalizing', progress: uploadProgress === 100 }
-                                ].map((step, idx) => (
-                                    <div key={idx} className="flex items-center gap-3">
-                                        {step.progress ? (
-                                            <div className="w-5 h-5 bg-emerald-500 rounded-full flex items-center justify-center flex-shrink-0">
-                                                <span className="text-white text-xs font-bold">✓</span>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
+                                {/* Technical Interview */}
+                                <div
+                                    onClick={() => setSelectedInterviewType('technical')}
+                                    className={`p-5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                                        selectedInterviewType === 'technical'
+                                            ? 'border-indigo-600 bg-indigo-50/50 shadow-sm ring-2 ring-indigo-500/20'
+                                            : 'border-slate-200 hover:border-slate-300 bg-white'
+                                    }`}
+                                >
+                                    <div>
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100">
+                                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                                                </svg>
                                             </div>
-                                        ) : (
-                                            <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin flex-shrink-0"></div>
-                                        )}
-                                        <p className={`text-sm font-medium ${step.progress ? 'text-on-surface-variant' : 'text-on-surface'}`}>
-                                            {step.label}
+                                            <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                                selectedInterviewType === 'technical' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'
+                                            }`}>
+                                                {selectedInterviewType === 'technical' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                            </span>
+                                        </div>
+                                        <h4 className="font-bold text-slate-900 text-sm mb-1">Technical Interview</h4>
+                                        <p className="text-[11px] text-slate-500 leading-relaxed">
+                                            Evaluates CS fundamentals, technical projects, and resume-based technical competencies.
                                         </p>
                                     </div>
-                                ))}
-                            </div>
-                            
-                            {/* Overall Progress Bar */}
-                            <div className="w-full bg-surface-container-highest rounded-full h-2 overflow-hidden">
+                                    <div className="mt-3 pt-2 border-t border-slate-100 text-[10px] font-semibold text-indigo-700">
+                                        CS Concepts • Code • Projects
+                                    </div>
+                                </div>
+
+                                {/* HR Interview */}
                                 <div
-                                    className="bg-gradient-to-r from-primary to-secondary h-full rounded-full transition-all duration-500"
-                                    style={{ width: `${uploadProgress}%` }}
-                                ></div>
+                                    onClick={() => setSelectedInterviewType('hr')}
+                                    className={`p-5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                                        selectedInterviewType === 'hr'
+                                            ? 'border-indigo-600 bg-indigo-50/50 shadow-sm ring-2 ring-indigo-500/20'
+                                            : 'border-slate-200 hover:border-slate-300 bg-white'
+                                    }`}
+                                >
+                                    <div>
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center border border-rose-100">
+                                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                                </svg>
+                                            </div>
+                                            <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                                selectedInterviewType === 'hr' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'
+                                            }`}>
+                                                {selectedInterviewType === 'hr' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                            </span>
+                                        </div>
+                                        <h4 className="font-bold text-slate-900 text-sm mb-1">HR Interview</h4>
+                                        <p className="text-[11px] text-slate-500 leading-relaxed">
+                                            Evaluates behavioral traits, leadership, adaptability, teamwork, and situational judgment.
+                                        </p>
+                                    </div>
+                                    <div className="mt-3 pt-2 border-t border-slate-100 text-[10px] font-semibold text-rose-700">
+                                        STAR Method • Culture • Behavior
+                                    </div>
+                                </div>
+
+                                {/* Communication Interview */}
+                                <div
+                                    onClick={() => setSelectedInterviewType('communication')}
+                                    className={`p-5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                                        selectedInterviewType === 'communication'
+                                            ? 'border-indigo-600 bg-indigo-50/50 shadow-sm ring-2 ring-indigo-500/20'
+                                            : 'border-slate-200 hover:border-slate-300 bg-white'
+                                    }`}
+                                >
+                                    <div>
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center border border-amber-100">
+                                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                                </svg>
+                                            </div>
+                                            <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                                selectedInterviewType === 'communication' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'
+                                            }`}>
+                                                {selectedInterviewType === 'communication' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                            </span>
+                                        </div>
+                                        <h4 className="font-bold text-slate-900 text-sm mb-1">Communication Interview</h4>
+                                        <p className="text-[11px] text-slate-500 leading-relaxed">
+                                            Evaluates professional communication, articulation, explaining technical concepts simply, and clarity.
+                                        </p>
+                                    </div>
+                                    <div className="mt-3 pt-2 border-t border-slate-100 text-[10px] font-semibold text-amber-700">
+                                        Articulation • Clarity • Structure
+                                    </div>
+                                </div>
                             </div>
-                            <p className="mt-4 text-on-surface-variant text-sm">{uploadProgress}% complete</p>
                         </div>
+
+                        {/* Step 2: Profile Resumes Selection */}
+                        {profileResumes.length > 0 && !showUploadNew && (
+                            <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
+                                <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-6 h-6 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">2</span>
+                                            <h3 className="text-base font-bold text-slate-900">
+                                                Select Saved Resume ({profileResumes.length})
+                                            </h3>
+                                        </div>
+                                        <p className="text-xs text-slate-500 mt-1 ml-8">
+                                            Select the resume you would like the AI interviewer to assess:
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowUploadNew(true)}
+                                        className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                                    >
+                                        + Upload New CV
+                                    </button>
+                                </div>
+
+                                <div className="space-y-3">
+                                    {profileResumes.map((res) => {
+                                        const isSelected = selectedResumeId === res.id;
+                                        const badgeClass = typeColors[res.cv_type] || typeColors['Others'];
+                                        const formattedDate = res.uploaded_at
+                                            ? new Date(res.uploaded_at).toLocaleDateString(undefined, {
+                                                  year: 'numeric',
+                                                  month: 'short',
+                                                  day: 'numeric',
+                                              })
+                                            : 'Recent';
+                                        const formattedSize = res.file_size
+                                            ? `${Math.round(res.file_size / 1024)} KB`
+                                            : 'PDF';
+
+                                        return (
+                                            <div
+                                                key={res.id}
+                                                onClick={() => setSelectedResumeId(res.id)}
+                                                className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between gap-4 ${
+                                                    isSelected
+                                                        ? 'border-indigo-600 bg-indigo-50/40 shadow-sm'
+                                                        : 'border-slate-200 hover:border-slate-300 bg-white'
+                                                }`}
+                                            >
+                                                <div className="flex items-center gap-3.5 min-w-0">
+                                                    <div
+                                                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${
+                                                            isSelected
+                                                                ? 'border-indigo-600 bg-indigo-600 text-white'
+                                                                : 'border-slate-300 bg-white'
+                                                        }`}
+                                                    >
+                                                        {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <h4 className="font-bold text-slate-900 text-xs truncate">
+                                                                {res.cv_name}
+                                                            </h4>
+                                                            <span
+                                                                className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${badgeClass}`}
+                                                            >
+                                                                {res.cv_type}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                                                            {res.file_name} • {formattedSize} • Uploaded {formattedDate}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-xs font-bold text-indigo-600 shrink-0">
+                                                    {isSelected ? '✓ Selected' : 'Choose'}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                <div className="mt-8 pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate('/profile')}
+                                        className="text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors"
+                                    >
+                                        Manage all resumes in Profile →
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleProceedWithSelectedResume}
+                                        disabled={!selectedResumeId}
+                                        className="w-full sm:w-auto px-8 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 uppercase tracking-wider"
+                                    >
+                                        Start Interview with Selected CV →
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Upload New Resume Box */}
+                        {showUploadNew && (
+                            <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
+                                <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
+                                    <div>
+                                        <h3 className="text-base font-bold text-slate-900">Upload New Resume</h3>
+                                        <p className="text-xs text-slate-500 mt-0.5">
+                                            This resume will be saved to your profile and used for this interview session.
+                                        </p>
+                                    </div>
+                                    {profileResumes.length > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowUploadNew(false)}
+                                            className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                                        >
+                                            ← Back to Saved Resumes
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div className="space-y-4 text-xs mb-6">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block font-semibold text-slate-700 mb-1.5">
+                                                CV Name <span className="text-red-500">*</span>
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={newCvName}
+                                                onChange={(e) => setNewCvName(e.target.value)}
+                                                placeholder="e.g. Software Developer Resume"
+                                                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block font-semibold text-slate-700 mb-1.5">
+                                                CV Type <span className="text-red-500">*</span>
+                                            </label>
+                                            <select
+                                                value={newCvType}
+                                                onChange={(e) => setNewCvType(e.target.value)}
+                                                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                            >
+                                                <option value="Software Developer">Software Developer</option>
+                                                <option value="Data Science">Data Science</option>
+                                                <option value="Software Testing / QA">Software Testing / QA</option>
+                                                <option value="Core Industry">Core Industry</option>
+                                                <option value="Marketing">Marketing</option>
+                                                <option value="Others">Others</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div
+                                        onDragOver={(e) => e.preventDefault()}
+                                        onDrop={handleDrop}
+                                        className="border-2 border-dashed border-slate-300 hover:border-indigo-500 rounded-2xl p-8 text-center bg-slate-50/50 hover:bg-slate-50 transition-colors cursor-pointer"
+                                        onClick={() => fileInputRef.current?.click()}
+                                    >
+                                        <input
+                                            ref={fileInputRef}
+                                            type="file"
+                                            accept=".pdf"
+                                            onChange={handleFileSelect}
+                                            className="hidden"
+                                        />
+                                        <div className="text-4xl mb-2">📄</div>
+                                        <div className="font-bold text-slate-800 text-sm">
+                                            {selectedFile ? selectedFile.name : 'Click to select or drag & drop resume'}
+                                        </div>
+                                        <div className="text-slate-400 text-xs mt-1">
+                                            {selectedFile
+                                                ? `${Math.round(selectedFile.size / 1024)} KB`
+                                                : 'PDF document only, up to 10MB'}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                                    {profileResumes.length > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowUploadNew(false)}
+                                            className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all"
+                                        >
+                                            Cancel
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={handleUploadNewAndProceed}
+                                        disabled={!selectedFile}
+                                        className="px-8 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition-all uppercase tracking-wider"
+                                    >
+                                        Save & Start Interview →
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
-                {state === STATES.WAITING_APPROVAL && (
-                    <div className="bg-surface-container rounded-2xl border border-outline-variant/20 p-12 shadow-lg shadow-primary/5">
-                        <div className="text-center">
-                            {/* Animated Clock Icon */}
-                            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-secondary/20 mb-6">
-                                <div className="text-3xl animate-pulse">⏱️</div>
-                            </div>
-                            
-                            <h2 className="text-2xl font-headline font-bold text-on-surface mb-2">
-                                Awaiting Admin Review
-                            </h2>
-                            <p className="text-on-surface-variant text-base mb-8">
-                                Your resume is being reviewed by our admin team. This typically takes a few minutes.
-                            </p>
-                            
-                            {/* Status Indicator */}
-                            <div className="inline-flex items-center gap-2 bg-secondary/10 px-4 py-2 rounded-full mb-8 border border-secondary/20">
-                                <div className="w-2 h-2 bg-secondary rounded-full animate-pulse"></div>
-                                <span className="text-sm font-medium text-secondary">Pending approval...</span>
-                            </div>
-
-                            {/* Preview Cards (Blurred) */}
-                            <div className="mt-8 space-y-3 opacity-40 pointer-events-none">
-                                <div className="bg-surface-container-highest h-20 rounded-xl"></div>
-                                <div className="bg-surface-container-highest h-20 rounded-xl"></div>
-                            </div>
+                {/* State: Processing & Generating */}
+                {state === STATES.UPLOADING && (
+                    <div className="bg-white border border-slate-200 rounded-3xl p-10 shadow-sm text-center">
+                        <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-6 text-2xl animate-pulse">
+                            🤖
                         </div>
+                        <h3 className="text-xl font-bold text-slate-900 mb-2">
+                            Analyzing Resume & Generating Questions
+                        </h3>
+                        <p className="text-slate-500 text-xs max-w-md mx-auto mb-8">
+                            Our AI is analyzing your technical competencies, project highlights, and role alignment to prepare tailored interview prompts.
+                        </p>
+
+                        <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden max-w-md mx-auto">
+                            <div
+                                className="bg-gradient-to-r from-indigo-600 to-sky-500 h-full rounded-full transition-all duration-500"
+                                style={{ width: `${uploadProgress}%` }}
+                            />
+                        </div>
+                        <p className="mt-3 text-xs font-semibold text-slate-400">{uploadProgress}% complete</p>
                     </div>
-                                )}
+                )}
 
-                                {state === STATES.WAITING_APPROVAL && detectedRole && (
-                                        <div className="mt-4 bg-blue-50 rounded-xl p-4 border border-blue-100 flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4 a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002 -2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-            </div>
-            <div>
-                <p className="text-sm font-medium text-blue-900">Role Detected: {detectedRole}</p>
-                <p className="text-xs text-blue-600 mt-0.5">Questions tailored for {detectedRole} interviews</p>
-            </div>
-        </div>
-                                )}
-
-                                {state === STATES.APPROVED && (
-                    <div className="bg-surface-container rounded-2xl border border-outline-variant/20 p-12 shadow-lg shadow-primary/5">
-                        <div className="text-center">
-                            {/* Checkmark with Bounce */}
-                            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-emerald-500/20 mb-6 animate-bounce">
-                                <span className="text-4xl">✅</span>
-                            </div>
-                            
-                            <h2 className="text-2xl font-headline font-bold text-on-surface mb-2">
-                                Resume Approved!
-                            </h2>
-                            <p className="text-on-surface-variant text-base mb-8">
-                                Your resume has been approved. You're ready to start the interview.
-                            </p>
-                            
-                            {/* Status Badge */}
-                            <div className="inline-flex items-center gap-2 bg-emerald-500/10 px-4 py-2 rounded-full mb-8 border border-emerald-500/20">
-                                <div className="w-2 h-2 bg-emerald-500 rounded-full"></div>
-                                <span className="text-sm font-medium text-emerald-400">Ready to proceed</span>
-                            </div>
-
-                            {/* CTA Button */}
-                            <button
-                                onClick={handleStartInterview}
-                                className="w-full hero-gradient text-on-primary-container font-semibold py-4 rounded-xl transition-all duration-150 flex items-center justify-center gap-2 text-base shadow-lg shadow-primary/20 active:scale-95"
-                            >
-                                Start Interview
-                                <span>→</span>
-                            </button>
-
-                            {/* Footer Text */}
-                            <p className="mt-6 text-on-surface-variant text-xs">
-                                You have 48 hours to complete the interview
-                            </p>
+                {/* State: Waiting Approval / Ready */}
+                {state === STATES.WAITING_APPROVAL && (
+                    <div className="bg-white border border-slate-200 rounded-3xl p-10 shadow-sm text-center">
+                        <div className="w-16 h-16 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center mx-auto mb-4 text-2xl animate-spin">
+                            ⚡
                         </div>
+                        <h3 className="text-xl font-bold text-slate-900 mb-2">Finalizing Interview Environment</h3>
+                        {detectedRole && (
+                            <div className="inline-block text-xs font-bold px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 mb-4">
+                                Role Track: {detectedRole}
+                            </div>
+                        )}
+                        <p className="text-slate-500 text-xs max-w-sm mx-auto">
+                            Allocating AI interview room and audio streams...
+                        </p>
+                    </div>
+                )}
+
+                {/* State: Approved & Ready */}
+                {state === STATES.APPROVED && (
+                    <div className="bg-white border border-slate-200 rounded-3xl p-10 shadow-sm text-center">
+                        <div className="w-16 h-16 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-4 text-3xl animate-bounce">
+                            ✅
+                        </div>
+                        <h3 className="text-xl font-bold text-slate-900 mb-2">Interview Room Ready!</h3>
+                        <p className="text-slate-500 text-xs max-w-md mx-auto mb-6">
+                            Your personalized question pool is loaded based on your selected CV. Click below to enter the live interview environment.
+                        </p>
+
+                        <button
+                            type="button"
+                            onClick={handleStartInterview}
+                            className="px-10 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-md shadow-emerald-600/30 transition-all uppercase tracking-wider inline-flex items-center gap-2"
+                        >
+                            Enter Interview Room →
+                        </button>
                     </div>
                 )}
             </main>

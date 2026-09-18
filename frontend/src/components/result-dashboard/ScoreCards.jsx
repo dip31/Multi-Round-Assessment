@@ -4,15 +4,15 @@ export default function ScoreCards({ cards }) {
             {cards.map((card) => (
                 <article
                     key={card.label}
-                    className="rounded-2xl border border-slate-200/10 bg-slate-900/70 p-5 shadow-[0_18px_60px_rgba(15,23,42,0.22)] backdrop-blur"
+                    className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
                 >
-                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">{card.label}</p>
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">{card.label}</p>
                     <div className="mt-4 flex items-end justify-between gap-3">
                         <div>
-                            <div className="text-3xl font-black tracking-tight text-white">{card.value}</div>
-                            {card.subtext ? <p className="mt-2 text-sm text-slate-400">{card.subtext}</p> : null}
+                            <div className="text-3xl font-black tracking-tight text-slate-900">{card.value}</div>
+                            {card.subtext ? <p className="mt-2 text-xs font-medium text-slate-500">{card.subtext}</p> : null}
                         </div>
-                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${card.badgeClassName}`}>{card.badge}</span>
+                        <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${card.badgeClassName}`}>{card.badge}</span>
                     </div>
                 </article>
             ))}

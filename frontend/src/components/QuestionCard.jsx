@@ -20,9 +20,16 @@ export default function QuestionCard({
         <div className="rounded-[12px] border border-[var(--color-border)] bg-white p-8 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)]">
             {/* Header */}
             <div className="mb-6 flex items-center justify-between">
-                <span className="text-sm font-medium tracking-wide text-[var(--color-text-secondary)]">
-                    Question {question.question_id}
-                </span>
+                <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium tracking-wide text-[var(--color-text-secondary)]">
+                        Question {question.question_id}
+                    </span>
+                    {question.topic && (
+                        <span className="rounded bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 text-xs font-semibold text-indigo-700">
+                            {question.topic}
+                        </span>
+                    )}
+                </div>
                 <span
                     aria-label={`Question difficulty: ${question.difficulty}`}
                     className={`rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wider ${diffStyle}`}

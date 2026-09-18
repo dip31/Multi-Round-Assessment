@@ -7,12 +7,12 @@ export default function ImprovementInsights({ topicStats, fallbackInsights }) {
 
     if (!hasTopics) {
         return (
-            <section className="rounded-3xl border border-slate-200/10 bg-slate-900/70 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.22)] backdrop-blur">
-                <h2 className="text-lg font-bold text-white">Improvement Insights</h2>
-                <p className="mt-2 text-sm text-slate-400">Fallback signals derived from the result pattern</p>
+            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h2 className="text-lg font-bold text-slate-900">Improvement Insights</h2>
+                <p className="mt-2 text-sm text-slate-500">Signals derived from your performance pattern</p>
                 <div className="mt-5 grid gap-3 md:grid-cols-2">
                     {fallbackInsights.map((insight) => (
-                        <div key={insight} className="rounded-2xl border border-slate-200/10 bg-slate-950/40 p-4 text-sm text-slate-200">
+                        <div key={insight} className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-medium text-slate-700">
                             {insight}
                         </div>
                     ))}
@@ -31,37 +31,43 @@ export default function ImprovementInsights({ topicStats, fallbackInsights }) {
             title: 'Strongest topic',
             topic: strongestTopic.topic,
             value: formatPercent(strongestTopic.accuracy),
+            tone: 'text-emerald-700 bg-emerald-50 border-emerald-200',
         },
         {
             title: 'Weakest topic',
             topic: weakestTopic.topic,
             value: formatPercent(weakestTopic.accuracy),
+            tone: 'text-rose-700 bg-rose-50 border-rose-200',
         },
         {
             title: 'Fastest topic',
             topic: fastestTopic.topic,
             value: `${fastestTopic.avg_response_time.toFixed(1)}s`,
+            tone: 'text-sky-700 bg-sky-50 border-sky-200',
         },
         {
             title: 'Slowest topic',
             topic: slowestTopic.topic,
             value: `${slowestTopic.avg_response_time.toFixed(1)}s`,
+            tone: 'text-amber-700 bg-amber-50 border-amber-200',
         },
     ];
 
     return (
-        <section className="rounded-3xl border border-slate-200/10 bg-slate-900/70 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.22)] backdrop-blur">
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="mb-5">
-                <h2 className="text-lg font-bold text-white">Improvement Insights</h2>
-                <p className="text-sm text-slate-400">Topic-level signals that point to where practice will pay off</p>
+                <h2 className="text-lg font-bold text-slate-900">Improvement Insights</h2>
+                <p className="text-sm text-slate-500">Topic-level signals that point to where practice will pay off</p>
             </div>
 
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 {cards.map((card) => (
-                    <article key={card.title} className="rounded-2xl border border-slate-200/10 bg-slate-950/40 p-4">
-                        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">{card.title}</p>
-                        <p className="mt-3 text-sm text-slate-500">{card.topic}</p>
-                        <p className="mt-2 text-2xl font-black text-white">{card.value}</p>
+                    <article key={card.title} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <span className={`inline-block text-[11px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-md border mb-2 ${card.tone}`}>
+                            {card.title}
+                        </span>
+                        <p className="text-sm font-semibold text-slate-900 truncate">{card.topic}</p>
+                        <p className="mt-2 text-2xl font-black text-slate-900">{card.value}</p>
                     </article>
                 ))}
             </div>

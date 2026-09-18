@@ -1,30 +1,44 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import api from '../services/api';
+import Navbar from '../components/Navbar';
+import { getStudentAnalytics, getAnalytics } from '../services/reportService';
+import {
+    ResponsiveContainer,
+    LineChart,
+    Line,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    Legend,
+    BarChart,
+    Bar,
+    Cell,
+} from 'recharts';
 
 export default function Analytics() {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [analytics, setAnalytics] = useState(null);
-    const [userName, setUserName] = useState('');
+    const [data, setData] = useState(null);
 
     useEffect(() => {
         const fetchAnalytics = async () => {
             try {
-                const response = await api.get('/report/analytics');
-                setAnalytics(response.data);
-                
-                // Try to get user name from localStorage
-                const storedName = localStorage.getItem('user_name') || localStorage.getItem('full_name');
-                setUserName(storedName || 'Candidate');
+                const res = await getStudentAnalytics();
+                setData(res);
             } catch (err) {
-                console.error('Failed to fetch analytics:', err);
-                if (err.response?.status === 401) {
-                    navigate('/login');
-                    return;
+                console.warn('Student analytics error, attempting fallback:', err);
+                try {
+                    const fallback = await getAnalytics();
+                    setData(fallback);
+                } catch (fallbackErr) {
+                    if (fallbackErr?.response?.status === 401) {
+                        navigate('/login');
+                        return;
+                    }
+                    setError(fallbackErr?.response?.data?.detail || 'Failed to load analytics');
                 }
-                setError(err.response?.data?.detail || 'Failed to load analytics');
             } finally {
                 setLoading(false);
             }
@@ -33,31 +47,29 @@ export default function Analytics() {
         fetchAnalytics();
     }, [navigate]);
 
-    // Loading state
     if (loading) {
         return (
-            <div className="bg-[#0e0e10] text-[#f9f5f8] min-h-screen flex items-center justify-center">
+            <div className="bg-slate-50 text-slate-900 font-['Inter'] min-h-screen flex items-center justify-center antialiased">
                 <div className="text-center">
-                    <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-on-surface-variant">Loading your analytics...</p>
+                    <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-slate-500 text-sm font-semibold">Loading student analytics...</p>
                 </div>
             </div>
         );
     }
 
-    // Error state
     if (error) {
         return (
-            <div className="bg-[#0e0e10] text-[#f9f5f8] min-h-screen flex items-center justify-center">
-                <div className="text-center max-w-md mx-auto p-8">
-                    <div className="w-16 h-16 bg-error-container/20 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <span className="material-symbols-outlined text-error-dim text-2xl">error</span>
+            <div className="bg-slate-50 text-slate-900 font-['Inter'] min-h-screen flex items-center justify-center p-6 antialiased">
+                <div className="bg-white border border-slate-200 rounded-3xl p-8 max-w-md w-full text-center shadow-sm">
+                    <div className="w-14 h-14 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl font-bold">
+                        ⚠️
                     </div>
-                    <h2 className="text-xl font-bold text-on-surface mb-2">Unable to Load Analytics</h2>
-                    <p className="text-on-surface-variant mb-6">{error}</p>
-                    <button 
-                        onClick={() => window.location.reload()} 
-                        className="bg-primary text-on-primary px-6 py-3 rounded-full font-semibold"
+                    <h2 className="text-xl font-bold text-slate-900 mb-2">Unable to Load Analytics</h2>
+                    <p className="text-slate-500 text-xs mb-6 leading-relaxed">{error}</p>
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl text-xs uppercase tracking-wider transition-all shadow-sm cursor-pointer"
                     >
                         Try Again
                     </button>
@@ -66,372 +78,425 @@ export default function Analytics() {
         );
     }
 
-    // No data state
-    if (!analytics || analytics.completed_rounds.length === 0) {
-        return (
-            <div className="bg-[#0e0e10] text-[#f9f5f8] min-h-screen">
-                <nav className="fixed top-0 w-full z-50 bg-[#0e0e10]/60 backdrop-blur-xl border-b border-[#48474a]/20 flex justify-between items-center px-8 h-16">
-                    <div className="text-xl font-bold tracking-tighter text-[#f9f5f8] flex items-center gap-2">
-                        <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>analytics</span>
-                        AIPlacement
-                    </div>
-                    <Link to="/dashboard" className="text-[#adaaad] hover:text-[#f9f5f8] transition-colors">← Back to Dashboard</Link>
-                </nav>
-                
-                <main className="pt-28 pb-20 px-8 max-w-3xl mx-auto text-center">
-                    <div className="glass-panel p-12 rounded-3xl">
-                        <div className="w-20 h-20 bg-surface-container rounded-full flex items-center justify-center mx-auto mb-6">
-                            <span className="material-symbols-outlined text-on-surface-variant text-4xl">query_stats</span>
-                        </div>
-                        <h1 className="text-2xl font-bold text-on-surface mb-4">No Analytics Available Yet</h1>
-                        <p className="text-on-surface-variant mb-8 max-w-md mx-auto">
-                            Complete at least one assessment round to see your performance analytics and insights.
-                        </p>
-                        <Link 
-                            to="/dashboard" 
-                            className="inline-flex items-center gap-2 bg-primary text-on-primary px-8 py-3 rounded-full font-bold"
-                        >
-                            Start an Assessment
-                            <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                        </Link>
-                    </div>
-                </main>
-            </div>
-        );
-    }
+    const overview = data?.overview || {};
+    const summary = data?.summary || {};
+    const trend = Array.isArray(data?.trend) ? data.trend : [];
+    const subjects = Array.isArray(data?.subjects) ? data.subjects : [];
+    const topics = Array.isArray(data?.topics) ? data.topics : [];
+    const rounds = Array.isArray(data?.rounds) ? data.rounds : [];
+    const difficulty = Array.isArray(data?.difficulty) ? data.difficulty : [];
+    const coding = data?.coding || {};
+    const interviews = data?.interviews || {};
+    const strengths = Array.isArray(data?.strengths) ? data.strengths : [];
+    const focusAreas = Array.isArray(data?.focus_areas) ? data.focus_areas : [];
+    const recommendation = data?.recommendation;
+    const consistency = data?.consistency || {};
 
-    // Calculate derived values
-    const responseTimeDiff = analytics.benchmark_response_time > 0 
-        ? Math.round(((analytics.benchmark_response_time - analytics.avg_response_time) / analytics.benchmark_response_time) * 100)
-        : 0;
-    const isFasterThanBenchmark = responseTimeDiff > 0;
+    const hasAnyAttempts = (summary.questions_attempted || 0) > 0 || trend.length > 0;
 
     return (
-        <div className="bg-[#0e0e10] text-[#f9f5f8] font-body selection:bg-primary/30 min-h-screen relative z-0 overflow-x-hidden">
-            {/* Background Glows */}
-            <div className="fixed w-[600px] h-[600px] rounded-full bg-[radial-gradient(circle,rgba(186,158,255,0.08)_0%,rgba(14,14,16,0)_70%)] -z-10 blur-[80px] top-[-10%] right-[-10%]"></div>
-            <div className="fixed w-[600px] h-[600px] rounded-full bg-[radial-gradient(circle,rgba(186,158,255,0.08)_0%,rgba(14,14,16,0)_70%)] -z-10 blur-[80px] bottom-[-10%] left-[-10%] opacity-50"></div>
+        <div className="bg-slate-50 text-slate-900 font-['Inter'] antialiased min-h-screen">
+            <Navbar position="sticky" />
 
-            {/* TopNavBar */}
-            <nav className="fixed top-0 w-full z-50 bg-[#0e0e10]/60 backdrop-blur-xl border-b border-[#48474a]/20 flex justify-between items-center px-8 h-16 shadow-2xl shadow-black/50">
-                <div className="text-xl font-bold tracking-tighter text-[#f9f5f8] flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary" style={{ fontVariationSettings: "'FILL' 1" }}>analytics</span>
-                    AIPlacement
-                </div>
-                <div className="hidden md:flex gap-8 items-center font-['Inter'] tracking-tight">
-                    <Link to="/dashboard" className="text-[#adaaad] hover:text-[#f9f5f8] transition-colors">Dashboard</Link>
-                    <Link to="/analytics" className="text-[#ba9eff] border-b-2 border-[#ba9eff] pb-1">Analytics</Link>
-                </div>
-                <div className="flex items-center gap-4">
-                    <button className="p-2 text-[#adaaad] hover:bg-[#262528]/50 rounded-lg transition-all active:scale-95 duration-200">
-                        <span className="material-symbols-outlined">notifications</span>
-                    </button>
-                    <div className="h-8 w-8 rounded-full overflow-hidden border border-outline-variant/30 bg-primary/20 flex items-center justify-center">
-                        <span className="text-primary font-bold text-sm">{userName.charAt(0).toUpperCase()}</span>
-                    </div>
-                </div>
-            </nav>
-
-            <main className="pt-28 pb-20 px-8 max-w-7xl mx-auto">
-                {/* Header Section */}
-                <header className="mb-12 flex flex-col md:flex-row justify-between items-end gap-6">
+            <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+                {/* Header Strip */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
                     <div>
-                        <span className="text-primary text-sm font-medium tracking-[0.2em] uppercase mb-2 block">Performance Analytics</span>
-                        <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-on-surface">Your Progress</h1>
-                        <p className="text-on-surface-variant mt-4 max-w-lg leading-relaxed">
-                            Detailed analysis of your assessment performance. AI-driven metrics highlight your strengths and identify areas for improvement.
-                        </p>
-                    </div>
-                    <div className="flex gap-3">
-                        <Link 
-                            to="/dashboard"
-                            className="bg-surface-container-high text-on-surface px-6 py-3 rounded-full border border-outline-variant/20 hover:bg-surface-bright transition-all flex items-center gap-2 text-sm font-semibold"
-                        >
-                            <span className="material-symbols-outlined text-sm">arrow_back</span> Dashboard
-                        </Link>
-                    </div>
-                </header>
-
-                {/* Summary Metrics */}
-                <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-                    <div className="glass-panel p-6 rounded-2xl flex flex-col justify-between group">
-                        <span className="text-on-surface-variant text-sm font-medium">Overall Score</span>
-                        <div className="mt-4 flex items-baseline gap-2">
-                            <span className="text-4xl font-bold text-primary tracking-tighter">{analytics.overall_score}%</span>
-                        </div>
-                        <div className="w-full bg-surface-container-lowest h-1.5 rounded-full mt-6 overflow-hidden">
-                            <div 
-                                className="bg-primary h-full rounded-full shadow-[0_0_10px_rgba(186,158,255,0.5)]"
-                                style={{ width: `${Math.min(analytics.overall_score, 100)}%` }}
-                            ></div>
-                        </div>
-                    </div>
-                    
-                    <div className="glass-panel p-6 rounded-2xl flex flex-col justify-between">
-                        <span className="text-on-surface-variant text-sm font-medium">Accuracy</span>
-                        <div className="mt-4 flex items-baseline gap-2">
-                            <span className="text-4xl font-bold text-on-surface tracking-tighter">{analytics.accuracy}%</span>
-                            {analytics.accuracy >= 80 && (
-                                <span className="material-symbols-outlined text-secondary text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>verified</span>
-                            )}
-                        </div>
-                        <p className="text-xs text-on-surface-variant mt-6">
-                            {analytics.accuracy >= 90 ? 'Excellent consistency' : 
-                             analytics.accuracy >= 70 ? 'Good accuracy' : 
-                             'Room for improvement'}
-                        </p>
-                    </div>
-
-                    <div className="glass-panel p-6 rounded-2xl flex flex-col justify-between">
-                        <span className="text-on-surface-variant text-sm font-medium">Percentile Rank</span>
-                        <div className="mt-4">
-                            <span className="text-4xl font-bold text-tertiary tracking-tighter">
-                                {analytics.percentile}<span className="text-lg">th</span>
+                        <div className="flex items-center gap-2">
+                            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+                                Student Performance Analytics
+                            </h1>
+                            <span className="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded-full border border-indigo-200 uppercase tracking-wider">
+                                Real DB Data
                             </span>
                         </div>
-                        <p className="text-xs text-on-surface-variant mt-6">
-                            {analytics.percentile >= 90 ? 'Top performer!' : 
-                             analytics.percentile >= 75 ? 'Above average' : 
-                             analytics.percentile >= 50 ? 'Average performance' :
-                             'Keep improving'}
+                        <p className="text-xs text-slate-500 font-medium mt-1">
+                            Comprehensive readiness evaluation across Aptitude, Technical, Coding, and Interview dimensions
                         </p>
                     </div>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => navigate('/dashboard')}
+                            className="px-4 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-xs font-bold text-slate-700 shadow-2xs transition-all cursor-pointer"
+                        >
+                            ← Back to Dashboard
+                        </button>
+                    </div>
+                </div>
 
-                    <div className="glass-panel p-6 rounded-2xl flex flex-col justify-between">
-                        <span className="text-on-surface-variant text-sm font-medium">Total Questions</span>
-                        <div className="mt-4">
-                            <span className="text-4xl font-bold text-on-surface tracking-tighter">{analytics.total_questions}</span>
+                {/* 1. OVERALL READINESS SCORECARD */}
+                <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-center">
+                        <div className="md:col-span-1 p-6 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-600 text-white text-center shadow-md">
+                            <span className="text-[11px] font-bold uppercase tracking-wider opacity-90 block mb-1">
+                                Overall Placement Readiness
+                            </span>
+                            <div className="text-5xl font-black my-2 tracking-tight">
+                                {overview.overall_readiness !== undefined ? `${overview.overall_readiness}%` : '0%'}
+                            </div>
+                            <span className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-white/20 backdrop-blur-xs mt-1">
+                                {overview.readiness_tier || 'Foundational'}
+                            </span>
                         </div>
-                        <p className="text-xs text-on-surface-variant mt-6">
-                            {analytics.completed_rounds.length} round{analytics.completed_rounds.length !== 1 ? 's' : ''} completed
-                        </p>
+
+                        <div className="md:col-span-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/70">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                                    Questions Attempted
+                                </span>
+                                <span className="text-2xl font-black text-slate-900">
+                                    {summary.questions_attempted || 0}
+                                </span>
+                                <span className="text-[10px] text-slate-500 block mt-0.5">Across all rounds</span>
+                            </div>
+                            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/70">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                                    Overall Accuracy
+                                </span>
+                                <span className="text-2xl font-black text-emerald-600">
+                                    {summary.overall_accuracy !== undefined ? `${summary.overall_accuracy}%` : '0%'}
+                                </span>
+                                <span className="text-[10px] text-slate-500 block mt-0.5">MCQ + Technical</span>
+                            </div>
+                            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/70">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                                    Coding Challenges
+                                </span>
+                                <span className="text-2xl font-black text-indigo-600">
+                                    {coding.problems_solved || 0} Solved
+                                </span>
+                                <span className="text-[10px] text-slate-500 block mt-0.5">
+                                    Best: {coding.best_score || 0}%
+                                </span>
+                            </div>
+                            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/70">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                                    Interview Average
+                                </span>
+                                <span className="text-2xl font-black text-violet-600">
+                                    {interviews.avg_score !== undefined ? `${interviews.avg_score}%` : 'N/A'}
+                                </span>
+                                <span className="text-[10px] text-slate-500 block mt-0.5">AI mock rounds</span>
+                            </div>
+                        </div>
                     </div>
                 </section>
 
-                {/* Main Analytics Grid */}
-                <div className="grid grid-cols-12 gap-6 mb-12">
-                    {/* Completed Rounds Progress */}
-                    <div className="col-span-12 lg:col-span-8 glass-panel p-8 rounded-3xl">
-                        <div className="flex justify-between items-start mb-10">
-                            <div>
-                                <h3 className="text-xl font-bold text-on-surface tracking-tight">Round Completion</h3>
-                                <p className="text-sm text-on-surface-variant">Your assessment journey progress</p>
-                            </div>
+                {/* 2. CHRONOLOGICAL PERFORMANCE TREND */}
+                <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
+                        <div>
+                            <h2 className="text-base font-bold text-slate-900 tracking-tight">
+                                Chronological Progression Trend
+                            </h2>
+                            <p className="text-xs text-slate-500">Session-by-session performance trajectory</p>
                         </div>
-
-                        <div className="grid grid-cols-3 gap-4">
-                            {['aptitude', 'coding', 'interview'].map((roundType) => {
-                                const isCompleted = analytics.completed_rounds.includes(roundType);
-                                const roundNames = {
-                                    aptitude: 'Aptitude',
-                                    coding: 'Coding',
-                                    interview: 'Interview'
-                                };
-                                return (
-                                    <div 
-                                        key={roundType}
-                                        className={`p-6 rounded-2xl border ${
-                                            isCompleted 
-                                                ? 'bg-primary/10 border-primary/30' 
-                                                : 'bg-surface-container border-outline-variant/20'
-                                        }`}
-                                    >
-                                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 ${
-                                            isCompleted ? 'bg-primary' : 'bg-surface-container-high'
-                                        }`}>
-                                            {isCompleted ? (
-                                                <span className="material-symbols-outlined text-on-primary">check</span>
-                                            ) : (
-                                                <span className="material-symbols-outlined text-on-surface-variant">hourglass_empty</span>
-                                            )}
-                                        </div>
-                                        <h4 className="font-bold text-on-surface">{roundNames[roundType]}</h4>
-                                        <p className={`text-xs mt-1 ${isCompleted ? 'text-primary' : 'text-on-surface-variant'}`}>
-                                            {isCompleted ? 'Completed' : 'Pending'}
-                                        </p>
-                                    </div>
-                                );
-                            })}
-                        </div>
+                        <span className="text-xs text-slate-500 font-medium">
+                            {trend.length} Historical Sessions
+                        </span>
                     </div>
 
-                    {/* Skill Breakdown */}
-                    <div className="col-span-12 lg:col-span-4 glass-panel p-8 rounded-3xl">
-                        <h3 className="text-xl font-bold text-on-surface tracking-tight mb-8">Skill Breakdown</h3>
-                        {analytics.skill_breakdown.length > 0 ? (
-                            <div className="space-y-6">
-                                {analytics.skill_breakdown.map((skill, idx) => (
-                                    <div key={idx} className="space-y-2">
-                                        <div className="flex justify-between text-xs font-medium uppercase tracking-wider text-on-surface-variant">
-                                            <span>{skill.name}</span>
-                                            <span className="text-on-surface">{skill.score}%</span>
-                                        </div>
-                                        <div className="h-2 w-full bg-surface-container rounded-full overflow-hidden">
-                                            <div 
-                                                className="h-full bg-primary transition-all duration-500"
-                                                style={{ width: `${Math.min(skill.score, 100)}%` }}
-                                            ></div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <p className="text-on-surface-variant text-sm">Complete assessments to see skill breakdown</p>
-                        )}
-
-                        {analytics.skill_breakdown.length > 0 && (
-                            <div className="mt-10 p-4 rounded-xl bg-primary/5 border border-primary/10">
-                                <p className="text-xs text-primary leading-relaxed">
-                                    <span className="font-bold">Pro Tip:</span> Focus on your lowest scoring areas to maximize improvement.
-                                </p>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
-                    {/* Response Time Analysis */}
-                    <div className="glass-panel p-8 rounded-3xl">
-                        <h3 className="text-xl font-bold text-on-surface tracking-tight mb-2">Response Time Analysis</h3>
-                        <p className="text-sm text-on-surface-variant mb-8">Average seconds per answer</p>
-                        
-                        <div className="flex items-end gap-12 h-40 pb-4 border-b border-outline-variant/10">
-                            <div className="flex flex-col items-center gap-4 flex-1">
-                                <div className="w-full bg-surface-container rounded-t-xl h-[90%] relative group">
-                                    <div 
-                                        className="absolute bottom-0 w-full bg-secondary rounded-t-xl shadow-[0_0_20px_rgba(45,183,242,0.3)]"
-                                        style={{ height: `${Math.min((analytics.avg_response_time / 120) * 100, 100)}%` }}
-                                    ></div>
-                                    <span className="absolute -top-8 text-xs font-bold text-on-surface">{Math.round(analytics.avg_response_time)}s</span>
-                                </div>
-                                <span className="text-[10px] uppercase font-bold text-on-surface-variant tracking-widest text-center">Your Avg</span>
-                            </div>
-                            <div className="flex flex-col items-center gap-4 flex-1">
-                                <div className="w-full bg-surface-container rounded-t-xl h-[90%] relative group">
-                                    <div 
-                                        className="absolute bottom-0 w-full bg-outline-variant/50 rounded-t-xl"
-                                        style={{ height: `${Math.min((analytics.benchmark_response_time / 120) * 100, 100)}%` }}
-                                    ></div>
-                                    <span className="absolute -top-8 text-xs font-bold text-on-surface-variant">{Math.round(analytics.benchmark_response_time)}s</span>
-                                </div>
-                                <span className="text-[10px] uppercase font-bold text-on-surface-variant tracking-widest text-center">Benchmark</span>
-                            </div>
+                    {trend.length > 0 ? (
+                        <div className="h-64 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={trend} margin={{ top: 10, right: 20, left: -20, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                                    <XAxis dataKey="date" stroke="#64748b" fontSize={11} />
+                                    <YAxis stroke="#64748b" fontSize={11} domain={[0, 100]} unit="%" />
+                                    <Tooltip
+                                        contentStyle={{
+                                            backgroundColor: '#ffffff',
+                                            borderRadius: '12px',
+                                            border: '1px solid #e2e8f0',
+                                            fontSize: '12px',
+                                            fontWeight: 'bold',
+                                        }}
+                                    />
+                                    <Legend wrapperStyle={{ fontSize: '11px' }} />
+                                    <Line
+                                        type="monotone"
+                                        dataKey="score"
+                                        name="Score %"
+                                        stroke="#4f46e5"
+                                        strokeWidth={3}
+                                        dot={{ r: 4, fill: '#4f46e5' }}
+                                        activeDot={{ r: 6 }}
+                                    />
+                                </LineChart>
+                            </ResponsiveContainer>
                         </div>
+                    ) : (
+                        <div className="py-12 text-center text-xs text-slate-400 italic">
+                            No historical sessions completed yet. Practice rounds will populate your progression chart.
+                        </div>
+                    )}
+                </section>
 
-                        <p className="mt-6 text-sm text-on-surface-variant">
-                            {isFasterThanBenchmark ? (
-                                <>You are answering <span className="text-secondary font-bold">{Math.abs(responseTimeDiff)}% faster</span> than the benchmark.</>
-                            ) : responseTimeDiff < 0 ? (
-                                <>You are <span className="text-tertiary font-bold">{Math.abs(responseTimeDiff)}% slower</span> than the benchmark. Practice for speed!</>
-                            ) : (
-                                <>You are performing at the <span className="text-on-surface font-bold">benchmark level</span>.</>
-                            )}
+                {/* 3. TECHNICAL SUBJECT PERFORMANCE (OS, CN, OOPS, DBMS, DSA) */}
+                <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs">
+                    <div className="mb-6">
+                        <h2 className="text-base font-bold text-slate-900 tracking-tight">
+                            Core Technical Subjects Breakdown
+                        </h2>
+                        <p className="text-xs text-slate-500">
+                            Evaluated against standard Computer Science placement subjects: OS, CN, OOPS, DBMS, and DSA
                         </p>
                     </div>
 
-                    {/* Optimization Areas */}
-                    <div className="glass-panel p-8 rounded-3xl">
-                        <h3 className="text-xl font-bold text-on-surface tracking-tight mb-6">Optimization Areas</h3>
-                        {analytics.optimization_areas.length > 0 ? (
-                            <div className="space-y-4">
-                                {analytics.optimization_areas.map((area, idx) => (
-                                    <div 
-                                        key={idx}
-                                        className={`flex items-start gap-4 p-4 rounded-2xl ${
-                                            area.severity === 'warning' 
-                                                ? 'bg-error-container/10 border border-error-container/20'
-                                                : 'bg-tertiary-container/10 border border-tertiary-container/20'
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-center">
+                        <div className="lg:col-span-2 h-64">
+                            {subjects.length > 0 ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={subjects} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                                        <XAxis dataKey="subject" stroke="#64748b" fontSize={10} />
+                                        <YAxis stroke="#64748b" fontSize={11} domain={[0, 100]} unit="%" />
+                                        <Tooltip
+                                            contentStyle={{
+                                                backgroundColor: '#ffffff',
+                                                borderRadius: '12px',
+                                                border: '1px solid #e2e8f0',
+                                                fontSize: '11px',
+                                            }}
+                                        />
+                                        <Bar dataKey="score" name="Accuracy %" radius={[6, 6, 0, 0]}>
+                                            {subjects.map((entry, index) => (
+                                                <Cell
+                                                    key={`cell-${index}`}
+                                                    fill={entry.score >= 75 ? '#10b981' : entry.score >= 50 ? '#6366f1' : '#f59e0b'}
+                                                />
+                                            ))}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="h-full flex items-center justify-center text-xs text-slate-400 italic">
+                                    No technical subject questions attempted yet.
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="space-y-2">
+                            {subjects.map((s) => (
+                                <div
+                                    key={s.subject}
+                                    className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs"
+                                >
+                                    <div>
+                                        <h4 className="font-bold text-slate-900">{s.subject}</h4>
+                                        <span className="text-[10px] text-slate-500">
+                                            {s.correct || 0} / {s.attempted || 0} Correct
+                                        </span>
+                                    </div>
+                                    <span
+                                        className={`font-black text-sm ${
+                                            (s.score || 0) >= 75
+                                                ? 'text-emerald-600'
+                                                : (s.score || 0) >= 50
+                                                ? 'text-indigo-600'
+                                                : 'text-amber-600'
                                         }`}
                                     >
-                                        <div className={`p-2 rounded-lg ${
-                                            area.severity === 'warning'
-                                                ? 'bg-error-container/20 text-error-dim'
-                                                : 'bg-tertiary-container/20 text-tertiary-dim'
-                                        }`}>
-                                            <span className="material-symbols-outlined text-sm">
-                                                {area.severity === 'warning' ? 'warning' : 'psychology'}
-                                            </span>
+                                        {s.score !== null ? `${s.score}%` : 'N/A'}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </section>
+
+                {/* 4. PRACTICE ROUNDS & COMBINED ROUND SPLIT */}
+                <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs">
+                    <div className="mb-6">
+                        <h2 className="text-base font-bold text-slate-900 tracking-tight">
+                            Practice Rounds & Assessment Breakdown
+                        </h2>
+                        <p className="text-xs text-slate-500">
+                            Including MCQ Round, Technical Round, Combined Round (with 50/50 split), Coding, and Interview
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
+                        {rounds.map((r, idx) => (
+                            <div key={idx} className="p-4 rounded-2xl bg-slate-50/80 border border-slate-200 flex flex-col justify-between">
+                                <div>
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                                        {r.label}
+                                    </span>
+                                    <span className="text-2xl font-black text-slate-900 block my-1">
+                                        {r.best_score !== null && r.best_score !== undefined ? `${r.best_score}%` : '—'}
+                                    </span>
+                                    {r.sub_breakdown && (
+                                        <div className="mt-2 pt-2 border-t border-slate-200 text-[10px] space-y-0.5 text-slate-600">
+                                            <div className="flex justify-between">
+                                                <span>Aptitude (50%):</span>
+                                                <strong className="text-slate-900">{r.sub_breakdown.aptitude_score || 0}%</strong>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span>Technical (50%):</span>
+                                                <strong className="text-slate-900">{r.sub_breakdown.technical_score || 0}%</strong>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <h4 className="text-sm font-bold text-on-surface">{area.title}</h4>
-                                            <p className="text-xs text-on-surface-variant mt-1 leading-relaxed">
-                                                {area.description}
-                                            </p>
-                                        </div>
+                                    )}
+                                </div>
+                                <div className="mt-3 text-[10px] text-slate-500 flex justify-between">
+                                    <span>Attempts: {r.attempts || 0}</span>
+                                    <span>Avg: {r.avg_score || 0}%</span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+
+                {/* 5. STRENGTHS, FOCUS AREAS & NEXT PRACTICE */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Strengths */}
+                    <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs">
+                        <div className="flex items-center gap-2 mb-4">
+                            <span className="text-lg">💪</span>
+                            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                                Key Strengths
+                            </h3>
+                        </div>
+                        {strengths.length > 0 ? (
+                            <div className="space-y-2">
+                                {strengths.map((str, idx) => (
+                                    <div
+                                        key={idx}
+                                        className="p-3 rounded-2xl bg-emerald-50/70 border border-emerald-100 flex items-center justify-between text-xs"
+                                    >
+                                        <span className="font-bold text-emerald-950">{str.name}</span>
+                                        <span className="font-black text-emerald-700">{str.score}%</span>
                                     </div>
                                 ))}
                             </div>
                         ) : (
-                            <div className="flex items-center justify-center h-32 text-on-surface-variant">
-                                <div className="text-center">
-                                    <span className="material-symbols-outlined text-4xl text-secondary mb-2">celebration</span>
-                                    <p className="text-sm">Great job! No major areas need attention.</p>
-                                </div>
-                            </div>
+                            <p className="text-xs text-slate-400 italic p-3">Complete more practice rounds to identify dominant skills.</p>
                         )}
                     </div>
+
+                    {/* Focus Areas */}
+                    <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs">
+                        <div className="flex items-center gap-2 mb-4">
+                            <span className="text-lg">🎯</span>
+                            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                                Focus Areas / Weaknesses
+                            </h3>
+                        </div>
+                        {focusAreas.length > 0 ? (
+                            <div className="space-y-2">
+                                {focusAreas.map((foc, idx) => (
+                                    <div
+                                        key={idx}
+                                        className="p-3 rounded-2xl bg-amber-50/70 border border-amber-200/70 flex items-center justify-between text-xs"
+                                    >
+                                        <span className="font-bold text-amber-950">{foc.name}</span>
+                                        <span className="font-black text-amber-700">{foc.score}%</span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-xs text-slate-400 italic p-3">No low-performing domains detected. Great consistency!</p>
+                        )}
+                    </div>
+
+                    {/* Deterministic Next Practice Recommendation */}
+                    <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs flex flex-col justify-between">
+                        <div>
+                            <div className="flex items-center gap-2 mb-4">
+                                <span className="text-lg">🚀</span>
+                                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                                    Recommended Next Practice
+                                </h3>
+                            </div>
+                            <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-100 text-xs">
+                                <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-wider block mb-1">
+                                    Algorithm Suggested Round
+                                </span>
+                                <h4 className="text-sm font-black text-indigo-950">
+                                    {recommendation?.title || 'Technical Round — Operating Systems'}
+                                </h4>
+                                <p className="text-indigo-800/80 text-[11px] mt-1 leading-relaxed">
+                                    {recommendation?.reason ||
+                                        'Reinforce foundational technical concepts to boost your overall placement readiness.'}
+                                </p>
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={() => navigate('/dashboard')}
+                            className="w-full mt-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition-all cursor-pointer"
+                        >
+                            Launch Recommended Practice →
+                        </button>
+                    </div>
                 </div>
 
-                {/* Recent Sessions Table */}
-                {analytics.session_history.length > 0 && (
-                    <div className="glass-panel rounded-3xl overflow-hidden mb-12 border border-outline-variant/20">
-                        <div className="p-8 border-b border-outline-variant/10 flex justify-between items-center">
-                            <h3 className="text-xl font-bold text-on-surface tracking-tight">Recent Sessions</h3>
-                        </div>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left">
-                                <thead>
-                                    <tr className="bg-surface-container-low border-b border-outline-variant/10">
-                                        <th className="px-8 py-4 text-[10px] uppercase tracking-[0.2em] font-bold text-on-surface-variant">Session ID</th>
-                                        <th className="px-8 py-4 text-[10px] uppercase tracking-[0.2em] font-bold text-on-surface-variant">Type</th>
-                                        <th className="px-8 py-4 text-[10px] uppercase tracking-[0.2em] font-bold text-on-surface-variant">Date</th>
-                                        <th className="px-8 py-4 text-[10px] uppercase tracking-[0.2em] font-bold text-on-surface-variant">Score</th>
-                                        <th className="px-8 py-4 text-[10px] uppercase tracking-[0.2em] font-bold text-on-surface-variant">Duration</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-outline-variant/5 bg-surface-container-lowest/30">
-                                    {analytics.session_history.map((session, idx) => (
-                                        <tr key={idx} className="hover:bg-surface-container-high/50 transition-colors">
-                                            <td className="px-8 py-6">
-                                                <span className="text-sm font-bold text-on-surface">{session.id}</span>
-                                            </td>
-                                            <td className="px-8 py-6">
-                                                <span className="text-sm text-on-surface-variant">{session.type}</span>
-                                            </td>
-                                            <td className="px-8 py-6 text-sm text-on-surface-variant">{session.date}</td>
-                                            <td className="px-8 py-6">
-                                                <span className={`text-sm font-bold ${session.score >= 70 ? 'text-primary' : 'text-on-surface'}`}>
-                                                    {session.score}%
-                                                </span>
-                                            </td>
-                                            <td className="px-8 py-6 text-sm text-on-surface-variant">{session.duration}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                {/* 6. CONSISTENCY & DIFFICULTY ANALYTICS */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    {/* Consistency Summary */}
+                    <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs">
+                        <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4">
+                            Score Consistency & Distribution
+                        </h3>
+                        <div className="grid grid-cols-2 gap-3 text-xs">
+                            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
+                                <span className="text-slate-500 block mb-1">Best Score</span>
+                                <strong className="text-lg font-black text-emerald-600">
+                                    {consistency.best_score ? `${consistency.best_score}%` : 'N/A'}
+                                </strong>
+                            </div>
+                            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
+                                <span className="text-slate-500 block mb-1">Average Score</span>
+                                <strong className="text-lg font-black text-slate-900">
+                                    {consistency.avg_score ? `${consistency.avg_score}%` : 'N/A'}
+                                </strong>
+                            </div>
+                            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
+                                <span className="text-slate-500 block mb-1">Lowest Score</span>
+                                <strong className="text-lg font-black text-amber-600">
+                                    {consistency.lowest_score ? `${consistency.lowest_score}%` : 'N/A'}
+                                </strong>
+                            </div>
+                            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
+                                <span className="text-slate-500 block mb-1">Latest Score</span>
+                                <strong className="text-lg font-black text-indigo-600">
+                                    {consistency.latest_score ? `${consistency.latest_score}%` : 'N/A'}
+                                </strong>
+                            </div>
                         </div>
                     </div>
-                )}
+
+                    {/* Difficulty Distribution */}
+                    <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs">
+                        <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4">
+                            Difficulty Tier Performance
+                        </h3>
+                        <div className="space-y-3">
+                            {difficulty.map((d) => (
+                                <div key={d.level} className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
+                                    <div className="flex items-center justify-between mb-1.5">
+                                        <span className="font-bold text-slate-800 capitalize">{d.level} Questions</span>
+                                        <span className="font-black text-indigo-600">
+                                            {d.accuracy !== null ? `${d.accuracy}%` : 'N/A'}
+                                        </span>
+                                    </div>
+                                    <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                                        <div
+                                            className="bg-indigo-600 h-full rounded-full transition-all duration-500"
+                                            style={{ width: `${d.accuracy || 0}%` }}
+                                        ></div>
+                                    </div>
+                                    <div className="flex justify-between text-[10px] text-slate-500 mt-1">
+                                        <span>Attempted: {d.attempted}</span>
+                                        <span>Correct: {d.correct}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
             </main>
-
-            {/* Footer */}
-            <footer className="bg-[#0e0e10] border-t border-[#48474a]/10 w-full py-12 relative z-10">
-                <div className="flex flex-col md:flex-row justify-between items-center px-8 max-w-7xl mx-auto">
-                    <div className="flex flex-col items-center md:items-start gap-4">
-                        <div className="text-[#f9f5f8] font-bold flex items-center gap-2">
-                            <span className="material-symbols-outlined text-primary text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
-                            AIPlacement
-                        </div>
-                        <p className="font-['Inter'] text-sm text-[#adaaad]">© 2024 AIPlacement. All rights reserved.</p>
-                    </div>
-                    <div className="flex gap-8 mt-8 md:mt-0 font-['Inter'] text-sm">
-                        <Link to="#" className="text-[#adaaad] hover:text-[#f9f5f8] transition-colors">Privacy Policy</Link>
-                        <Link to="#" className="text-[#adaaad] hover:text-[#f9f5f8] transition-colors">Terms of Service</Link>
-                        <Link to="#" className="text-[#adaaad] hover:text-[#f9f5f8] transition-colors">Documentation</Link>
-                        <Link to="#" className="text-[#adaaad] hover:text-[#f9f5f8] transition-colors">Support</Link>
-                    </div>
-                </div>
-            </footer>
         </div>
     );
 }

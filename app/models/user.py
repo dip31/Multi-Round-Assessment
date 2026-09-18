@@ -5,7 +5,7 @@ SQLAlchemy ORM model for the ``users`` table.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Boolean, DateTime, Integer, String, text
 from sqlalchemy.sql import func
@@ -15,10 +15,11 @@ from app.database.base import Base
 
 if TYPE_CHECKING:
     from app.models.assessment import AssessmentSession
+    from app.models.profile import StudentProfile, FacultyProfile, TPOProfile, UserResume
 
 
 class User(Base):
-    """Represents a registered platform user (student or admin).
+    """Represents a registered platform user (student, faculty, tpo, or admin).
 
     Columns mirror the ``users`` table defined in ``database/schema.sql``.
     """
@@ -38,6 +39,33 @@ class User(Base):
     assessment_sessions: Mapped[list["AssessmentSession"]] = relationship(
         "AssessmentSession",
         back_populates="user",
+        lazy="select",
+    )
+    student_profile: Mapped[Optional["StudentProfile"]] = relationship(
+        "StudentProfile",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
+    faculty_profile: Mapped[Optional["FacultyProfile"]] = relationship(
+        "FacultyProfile",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
+    tpo_profile: Mapped[Optional["TPOProfile"]] = relationship(
+        "TPOProfile",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
+    resumes: Mapped[list["UserResume"]] = relationship(
+        "UserResume",
+        back_populates="user",
+        cascade="all, delete-orphan",
         lazy="select",
     )
 

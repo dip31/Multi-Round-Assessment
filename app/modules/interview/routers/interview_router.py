@@ -38,6 +38,7 @@ from app.config.settings import settings
 from app.core.auth import get_current_user
 from app.database.db import get_db
 from app.models.user import User
+from app.models.profile import UserResume
 from app.models.interview import (
     InterviewSession,
     ApprovedQuestionPool,
@@ -122,6 +123,7 @@ def _get_redis_client() -> Optional[redis.Redis]:
 async def upload_resume(
     file: UploadFile = File(...),
     session_id: Optional[int] = Query(None, description="Assessment session ID (optional)"),
+    interview_type: Optional[str] = Query("technical", description="technical | hr | communication"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -151,6 +153,7 @@ async def upload_resume(
             extracted["skills"],
             extracted["projects"],
             count=12,
+            interview_type=interview_type or "technical",
         )
 
         # Extract detected_role from generated pool
@@ -181,6 +184,82 @@ async def upload_resume(
     finally:
         if content:
             del content
+
+
+# ── ENDPOINT 1.1: POST /interview/resume/use-profile-resume/{resume_id} ──
+@router.post("/resume/use-profile-resume/{resume_id}", response_model=ResumeUploadResponse)
+async def use_profile_resume(
+    resume_id: int,
+    session_id: Optional[int] = Query(None, description="Assessment session ID (optional)"),
+    interview_type: Optional[str] = Query("technical", description="technical | hr | communication"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generate question pool using an existing uploaded resume from student profile."""
+    resume = (
+        db.query(UserResume)
+        .filter(UserResume.id == resume_id, UserResume.user_id == current_user.id)
+        .first()
+    )
+    if not resume:
+        raise HTTPException(
+            status_code=404,
+            detail="Resume not found in student profile",
+        )
+
+    if not session_id:
+        active_session = (
+            db.query(AssessmentSession)
+            .filter(
+                AssessmentSession.user_id == current_user.id,
+                AssessmentSession.status == "in_progress",
+            )
+            .order_by(AssessmentSession.id.desc())
+            .first()
+        )
+
+        if not active_session:
+            raise HTTPException(
+                status_code=400,
+                detail="No active assessment session found. Please start an assessment first.",
+            )
+        session_id = active_session.id
+
+    skills = resume.parsed_skills if isinstance(resume.parsed_skills, list) else []
+    projects = resume.parsed_projects if isinstance(resume.parsed_projects, list) else []
+
+    pool = groq_service.generate_question_pool(
+        skills,
+        projects,
+        count=12,
+        interview_type=interview_type or "technical",
+    )
+
+    detected_role = resume.cv_type or "Software Developer"
+    if pool and len(pool) > 0 and pool[0].get("role"):
+        detected_role = pool[0].get("role")
+
+    pool_record = ApprovedQuestionPool(
+        session_id=session_id,
+        extracted_skills=skills,
+        extracted_projects=projects,
+        question_pool=pool,
+        admin_approved=True,
+        approved_by=None,
+        approved_at=datetime.now(),
+        detected_role=detected_role,
+    )
+    db.add(pool_record)
+    db.commit()
+    db.refresh(pool_record)
+
+    return ResumeUploadResponse(
+        status="pool_generated",
+        pool_id=pool_record.id,
+        question_count=len(pool),
+        detected_role=detected_role,
+        pending_approval=True,
+    )
 
 
 # ── ENDPOINT 1.5: GET /interview/admin/pools ──────────────────────────
@@ -342,13 +421,19 @@ async def start_interview(
 
     session_id = approved_pool.session_id
 
+    first_q = approved_pool.question_pool[0] if (approved_pool.question_pool and len(approved_pool.question_pool) > 0) else {}
+    interview_phase = first_q.get("phase", "HR").upper()
+
     rl_engine = InterviewRLEngine()
+    initial_state = rl_engine.to_dict()
+    initial_state["interview_type"] = interview_phase.lower()
+
     interview = InterviewSession(
         session_id=session_id,
-        phase="HR",
+        phase=interview_phase,
         current_turn=0,
         total_turns=10,
-        rl_state=rl_engine.to_dict(),
+        rl_state=initial_state,
     )
     db.add(interview)
     db.commit()
@@ -356,7 +441,7 @@ async def start_interview(
 
     return StartInterviewResponse(
         interview_id=interview.id,
-        phase="HR",
+        phase=interview_phase,
         total_turns=10,
     )
 
@@ -575,7 +660,11 @@ async def submit_response(
 
     # ── STEP 2: Classifier (skip if force_next) ─────────────────────────
     if not force_next:
-        classifier_result = groq_service.classify_answer(question, transcript)
+        classifier_result = groq_service.classify_answer(
+            question,
+            transcript,
+            interview_type=rl_state.get("interview_type", "technical"),
+        )
         quality = classifier_result["quality"]
         intent = classifier_result["intent"]
         missing_part = classifier_result.get("missing_part")

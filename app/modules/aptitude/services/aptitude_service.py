@@ -382,22 +382,43 @@ def get_current_difficulty(db: Session, round_id: int, user_id: int) -> str:
     return "medium"
 
 
-def get_next_question(db: Session, difficulty: str = "medium") -> Optional[dict]:
-    """Fetch the next aptitude question at the given difficulty.
+def get_next_question(
+    db: Session,
+    difficulty: str = "medium",
+    practice_type: Optional[str] = None,
+    subject: Optional[str] = None,
+    topic: Optional[str] = None,
+    exclude_ids: Optional[list[int]] = None,
+    is_combined_technical_turn: Optional[bool] = None,
+) -> Optional[dict]:
+    """Fetch the next aptitude question at the given difficulty and filters.
 
     Args:
         db: Active database session.
-        difficulty: Target difficulty (``"easy"`` | ``"medium"`` | ``"hard"``).
-            Defaults to ``"medium"`` for the first question in a session.
+        difficulty: Target difficulty ("easy" | "medium" | "hard").
+        practice_type: "mcq" | "technical" | "combined".
+        subject: "OS" | "CN" | "OOPS" | "DBMS" | "DSA" | "all".
+        topic: Specific topic name if requested.
+        exclude_ids: Questions already attempted in this round.
+        is_combined_technical_turn: Forces technical vs aptitude question for combined mode.
 
     Returns:
-        Question dict or ``None`` if no questions are available.
+        Question dict or None if no questions are available.
     """
-    question = select_question_by_difficulty(db, difficulty)
+    question = select_question_by_difficulty(
+        db,
+        difficulty=difficulty,
+        practice_type=practice_type,
+        subject=subject,
+        topic=topic,
+        exclude_ids=exclude_ids,
+        is_combined_technical_turn=is_combined_technical_turn,
+    )
 
     if not question:
         return None
 
+    topic_name = question.topic.name if question.topic else None
     return {
         "question_id": question.id,
         "question_text": question.question_text,
@@ -408,6 +429,8 @@ def get_next_question(db: Session, difficulty: str = "medium") -> Optional[dict]
             "D": question.option_d,
         },
         "difficulty": question.difficulty,
+        "topic": topic_name,
+        "subject": subject or topic_name,
     }
 
 
@@ -505,6 +528,8 @@ def submit_answer_and_adapt(
     question_id: int,
     selected_option: str,
     response_time: float,
+    practice_type: Optional[str] = None,
+    subject: Optional[str] = None,
 ) -> Optional[dict]:
     """Submit answer, run RL engine, and return result with next difficulty.
 
@@ -655,7 +680,25 @@ def submit_answer_and_adapt(
     db.commit()
 
     # ── 9. Fetch next question at adapted difficulty ──────────────────
-    next_q = get_next_question(db, difficulty=next_difficulty)
+    attempted_ids = [
+        row[0]
+        for row in db.query(AptitudeAttempt.question_id)
+        .filter(AptitudeAttempt.round_id == round_id)
+        .all()
+    ]
+    if question_id not in attempted_ids:
+        attempted_ids.append(question_id)
+
+    is_combined_turn = (len(attempted_ids) % 2 == 1) if practice_type == "combined" else None
+
+    next_q = get_next_question(
+        db,
+        difficulty=next_difficulty,
+        practice_type=practice_type,
+        subject=subject,
+        exclude_ids=attempted_ids,
+        is_combined_technical_turn=is_combined_turn,
+    )
 
     return {
         "correct": is_correct,

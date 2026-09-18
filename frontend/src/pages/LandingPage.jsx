@@ -14,37 +14,20 @@ export default function LandingPage() {
   const highlightedNavIndex = navItems.findIndex((item) => item.id === highlightedSection);
 
   const navLinkClass = (sectionId) => (
-    `relative z-10 transition-colors ${
+    `relative z-10 transition-colors text-xs font-bold uppercase tracking-wider py-2 px-3 ${
       highlightedSection === sectionId
-        ? 'text-zinc-100 font-semibold'
-        : 'text-zinc-400 hover:text-zinc-100'
+        ? 'text-indigo-600'
+        : 'text-slate-600 hover:text-indigo-600'
     }`
   );
 
   useEffect(() => {
-    // Add dynamic styles for animations
     const style = document.createElement('style');
     style.innerHTML = `
-      @keyframes aurora {
-        0% { background-position: 0% 50%; }
-        50% { background-position: 100% 50%; }
-        100% { background-position: 0% 50%; }
-      }
-
-      @keyframes float {
-        0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-20px); }
-      }
-
-      @keyframes pulse-glow {
-        0%, 100% { box-shadow: 0 0 20px rgba(186, 158, 255, 0.1); }
-        50% { box-shadow: 0 0 50px rgba(186, 158, 255, 0.3); }
-      }
-
       .reveal {
         opacity: 0;
-        transform: translateY(30px);
-        transition: all 0.8s cubic-bezier(0.2, 1, 0.3, 1);
+        transform: translateY(20px);
+        transition: all 0.7s cubic-bezier(0.2, 1, 0.3, 1);
       }
 
       .reveal.active {
@@ -52,35 +35,21 @@ export default function LandingPage() {
         transform: translateY(0);
       }
 
-      .aurora-bg {
-        background: linear-gradient(-45deg, #0e0e10, #1a0b2e, #0e0e10, #051a24);
-        background-size: 400% 400%;
-        animation: aurora 20s ease infinite;
-      }
-
-      .animate-float {
-        animation: float 6s ease-in-out infinite;
-      }
-
-      .animate-pulse-glow {
-        animation: pulse-glow 4s ease-in-out infinite;
-      }
-
       .stagger-item { 
         opacity: 0; 
-        transform: translateY(20px); 
+        transform: translateY(15px); 
       }
       
       .active .stagger-item {
         opacity: 1;
         transform: translateY(0);
-        transition: all 0.6s cubic-bezier(0.2, 1, 0.3, 1);
+        transition: all 0.5s cubic-bezier(0.2, 1, 0.3, 1);
       }
 
       .card-hover:hover {
-        transform: translateY(-8px) scale(1.02);
-        border-color: rgba(186, 158, 255, 0.4);
-        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4), 0 0 20px rgba(186, 158, 255, 0.1);
+        transform: translateY(-4px);
+        border-color: #cbd5e1;
+        box-shadow: 0 12px 24px -10px rgba(15, 23, 42, 0.08);
       }
 
       .step-line-container {
@@ -89,13 +58,13 @@ export default function LandingPage() {
         left: 0;
         width: 100%;
         height: 2px;
-        background: rgba(72, 71, 74, 0.2);
+        background: #e2e8f0;
         z-index: 0;
       }
 
       .step-line-progress {
         height: 100%;
-        background: linear-gradient(to right, #ba9eff, #2db7f2);
+        background: #4f46e5;
         width: 0;
         transition: width 1.5s cubic-bezier(0.4, 0, 0.2, 1);
       }
@@ -121,7 +90,6 @@ export default function LandingPage() {
     `;
     document.head.appendChild(style);
 
-    // Intersection Observer for reveal animations
     const observerOptions = {
       threshold: 0.15,
       rootMargin: "0px 0px -50px 0px"
@@ -132,7 +100,6 @@ export default function LandingPage() {
         if (entry.isIntersecting) {
           entry.target.classList.add('active');
           
-          // Special handling for the How It Works line
           if (entry.target.id === 'how-it-works') {
             const lineElement = entry.target.querySelector('.step-line-progress');
             if (lineElement) {
@@ -166,7 +133,6 @@ export default function LandingPage() {
       }
     });
 
-    // Initial Hero Trigger
     const handleWindowLoad = () => {
       document.querySelectorAll('section').forEach((section, index) => {
         if (index === 0) {
@@ -186,18 +152,24 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div className="bg-background text-on-surface font-body selection:bg-primary/30 antialiased min-h-screen flex flex-col aurora-bg">
+    <div className="bg-slate-50 text-slate-900 font-['Inter'] antialiased min-h-screen flex flex-col">
       {/* Top Navigation Bar */}
-      <nav className="fixed top-0 w-full z-50 bg-zinc-950/60 backdrop-blur-xl border-b border-zinc-800/20 shadow-2xl shadow-violet-900/10 font-['Inter'] antialiased tracking-tight">
-        <div className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto">
-          <div className="text-2xl font-black tracking-tighter text-zinc-100">AIPlacement</div>
-          <div className="hidden md:block w-[25rem]">
+      <nav className="fixed top-0 w-full z-50 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-xs tracking-tight">
+        <div className="flex justify-between items-center px-8 py-3.5 max-w-7xl mx-auto">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-black text-sm shadow-sm">
+              AI
+            </div>
+            <span className="text-xl font-black tracking-tight text-slate-900">AIPlacement</span>
+          </div>
+
+          <div className="hidden md:block w-[24rem]">
             <div
-              className="relative grid grid-cols-3 items-center"
+              className="relative grid grid-cols-3 items-center text-center"
               onMouseLeave={() => setHoveredSection('')}
             >
               <div
-                className="absolute bottom-[-8px] left-0 h-[2px] bg-primary rounded-full transition-all duration-300 ease-out"
+                className="absolute bottom-[-6px] left-0 h-[2.5px] bg-indigo-600 rounded-full transition-all duration-300 ease-out"
                 style={{
                   width: '33.3333%',
                   transform: `translateX(${Math.max(highlightedNavIndex, 0) * 100}%)`,
@@ -207,7 +179,7 @@ export default function LandingPage() {
               {navItems.map((item) => (
                 <a
                   key={item.id}
-                  className={`${navLinkClass(item.id)} text-center py-1`}
+                  className={navLinkClass(item.id)}
                   href={`#${item.id}`}
                   onMouseEnter={() => setHoveredSection(item.id)}
                 >
@@ -216,39 +188,40 @@ export default function LandingPage() {
               ))}
             </div>
           </div>
+
           <Link
             to="/login"
-            className="bg-primary text-on-primary-container px-6 py-2 rounded-full font-semibold hover:bg-primary-container active:scale-95 transition-all duration-200"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-xl text-xs font-bold shadow-sm hover:shadow-md transition-all uppercase tracking-wider"
           >
             Start Assessment
           </Link>
         </div>
       </nav>
 
-      <main className="pt-24 flex-grow">
+      <main className="pt-20 flex-grow">
         {/* Hero Section */}
-        <section className="relative overflow-hidden px-6 pt-16 pb-24 md:pt-32 md:pb-48">
-          {/* Background Glows */}
-          <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-primary/20 rounded-full blur-[120px] pointer-events-none"></div>
-          <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-secondary/10 rounded-full blur-[120px] pointer-events-none"></div>
-          <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-16 items-center flex-grow">
+        <section className="relative overflow-hidden px-6 pt-16 pb-20 md:pt-24 md:pb-32 bg-gradient-to-b from-white via-slate-50 to-slate-100/50">
+          <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
             <div className="lg:col-span-6 z-10">
-              <h1 className="reveal text-5xl md:text-7xl font-headline font-black tracking-tighter text-on-surface leading-[1.1] mb-6">
+              <div className="reveal inline-block px-3.5 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold uppercase tracking-wider mb-5">
+                Next-Gen Multi-Round Assessment Engine
+              </div>
+              <h1 className="reveal text-4xl md:text-6xl font-black tracking-tight text-slate-900 leading-[1.15] mb-6">
                 AI-Driven Placement Assessment Platform
               </h1>
-              <p className="reveal text-lg md:text-xl text-on-surface-variant max-w-xl mb-10 leading-relaxed">
-                Simulate real placement rounds with adaptive testing powered by reinforcement learning. Elevate your potential with data-backed insights.
+              <p className="reveal text-base md:text-lg text-slate-600 max-w-xl mb-8 leading-relaxed">
+                Simulate real campus placement rounds with adaptive testing powered by reinforcement learning. Elevate candidate standards with verifiable, data-backed insights.
               </p>
               <div className="reveal flex flex-wrap gap-4">
                 <Link
                   to="/login"
-                  className="hero-gradient px-8 py-4 rounded-full text-on-primary font-bold shadow-lg shadow-primary/20 active:scale-95 transition-all duration-300 hover:shadow-[0_0_25px_rgba(186,158,255,0.4)]"
+                  className="px-8 py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-indigo-600/20 active:scale-95 transition-all inline-flex items-center gap-2"
                 >
-                  Start Assessment
+                  Start Assessment →
                 </Link>
                 <a
                   href="#features"
-                  className="bg-transparent border border-outline-variant/30 hover:bg-surface-container-high px-8 py-4 rounded-full text-on-surface font-semibold transition-all duration-300 inline-block text-center hover:border-primary/50"
+                  className="bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 px-8 py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider shadow-xs transition-all inline-block"
                 >
                   Learn More
                 </a>
@@ -256,273 +229,322 @@ export default function LandingPage() {
             </div>
             
             <div className="lg:col-span-6 relative group reveal">
-              <div className="absolute -inset-1 bg-gradient-to-r from-primary/30 to-secondary/30 rounded-xl blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
-              <div className="relative rounded-xl overflow-hidden glass-panel border border-outline-variant/20 shadow-2xl animate-float animate-pulse-glow">
-                <img
-                  className="w-full aspect-video object-cover"
-                  alt="Modern dark dashboard interface displaying complex data visualization charts, neural network graphs, and clean software assessment UI"
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuA42fU8GCOlbjWyBhmhmsj9ps3V9j9BisRD2psOw-4LUJK8tFkW6SHjTENtRr9Se5i6uzuVf5MDxE9R9wtt2nobnm3DOjuKVrj4KoaV7hlW8eyXOOIh1eZtEDF0IXTxdiwNf92no8Y46yvmSXT466djCrj4w6AAKLfwr-C26QCZynSDjE_6ThQMsq3T-yFkeDlQ7VnFHgw6LZAGUK3LGNTG7YpD_MdrmUym8D8aUcSRpYt3EclC1wh3wE94PwuzRAweY_XmmnsDKYCY"
-                />
+              <div className="relative rounded-3xl overflow-hidden bg-white border border-slate-200 shadow-xl p-3">
+                <div className="rounded-2xl overflow-hidden bg-slate-900">
+                  <img
+                    className="w-full aspect-video object-cover"
+                    alt="Assessment interface and analytics"
+                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuA42fU8GCOlbjWyBhmhmsj9ps3V9j9BisRD2psOw-4LUJK8tFkW6SHjTENtRr9Se5i6uzuVf5MDxE9R9wtt2nobnm3DOjuKVrj4KoaV7hlW8eyXOOIh1eZtEDF0IXTxdiwNf92no8Y46yvmSXT466djCrj4w6AAKLfwr-C26QCZynSDjE_6ThQMsq3T-yFkeDlQ7VnFHgw6LZAGUK3LGNTG7YpD_MdrmUym8D8aUcSRpYt3EclC1wh3wE94PwuzRAweY_XmmnsDKYCY"
+                  />
+                </div>
               </div>
             </div>
           </div>
         </section>
 
         {/* Features Section (Bento Grid) */}
-        <section id="features" className="py-24 px-6 bg-surface-container-low reveal scroll-mt-28">
+        <section id="features" className="py-20 px-6 bg-white border-y border-slate-200 reveal scroll-mt-20">
           <div className="max-w-7xl mx-auto">
-            <div className="mb-16 stagger-item">
-              <span className="text-secondary font-label tracking-[0.2em] uppercase text-sm mb-4 block">Capabilities</span>
-              <h2 className="text-4xl font-headline font-bold text-on-surface">Powerful Assessment Engine</h2>
+            <div className="mb-14 stagger-item">
+              <span className="text-indigo-600 font-bold tracking-widest uppercase text-xs mb-2 block">Capabilities</span>
+              <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight">Powerful Assessment Engine</h2>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 md:grid-rows-2 gap-6">
               {/* Feature 1: Large */}
-              <div className="md:col-span-2 bg-surface-container p-10 rounded-xl transition-all duration-500 card-hover border border-transparent stagger-item">
-                <span className="material-symbols-outlined text-primary text-4xl mb-6">psychology</span>
-                <h3 className="text-2xl font-bold mb-4">Adaptive Testing</h3>
-                <p className="text-on-surface-variant text-lg leading-relaxed max-w-lg">
-                  Every answer changes what comes next. If you solve quickly and correctly, the next questions become more challenging. If you struggle, the platform gives foundational questions to recover confidence and accuracy.
+              <div className="md:col-span-2 bg-slate-50 border border-slate-200 p-8 rounded-3xl transition-all card-hover stagger-item shadow-xs">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-2xl mb-5">
+                  🧠
+                </div>
+                <h3 className="text-xl font-bold text-slate-900 mb-3">Adaptive Testing Engine</h3>
+                <p className="text-slate-600 text-sm leading-relaxed max-w-xl">
+                  Every answer dynamically influences upcoming questions. Correct and rapid answers unlock higher difficulty tiers, while foundational recovery questions are served if a candidate needs reinforcement.
                 </p>
               </div>
               
               {/* Feature 2: Tall */}
-              <div className="md:row-span-2 bg-surface-container p-10 rounded-xl transition-all duration-500 card-hover border border-transparent stagger-item">
-                <span className="material-symbols-outlined text-secondary text-4xl mb-6">analytics</span>
-                <h3 className="text-2xl font-bold mb-4">Performance Analytics</h3>
-                <p className="text-on-surface-variant leading-relaxed">
-                  Get round-wise insights for aptitude, coding, and interview stages. Track accuracy, response speed, confidence trend, and time allocation so you know exactly where to improve before real placements.
-                </p>
-                <div className="mt-8 space-y-4">
-                  <div className="h-2 w-full bg-surface-container-highest rounded-full overflow-hidden">
-                    <div className="h-full bg-primary progress-fill" style={{ '--final-width': '75%' }}></div>
+              <div className="md:row-span-2 bg-slate-50 border border-slate-200 p-8 rounded-3xl transition-all card-hover stagger-item shadow-xs flex flex-col justify-between">
+                <div>
+                  <div className="w-12 h-12 rounded-2xl bg-sky-100 text-sky-600 flex items-center justify-center font-bold text-2xl mb-5">
+                    📊
                   </div>
-                  <div className="h-2 w-full bg-surface-container-highest rounded-full overflow-hidden">
-                    <div className="h-full bg-secondary progress-fill" style={{ '--final-width': '50%' }}></div>
+                  <h3 className="text-xl font-bold text-slate-900 mb-3">Performance Analytics</h3>
+                  <p className="text-slate-600 text-sm leading-relaxed mb-6">
+                    Multi-stage round breakdowns for aptitude, coding, and AI interviews. Track accuracy, response latency, and benchmark percentiles before real campus drives.
+                  </p>
+                </div>
+                <div className="space-y-3 pt-4 border-t border-slate-200">
+                  <div>
+                    <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
+                      <span>Quantitative Aptitude</span>
+                      <span className="text-indigo-600 font-bold">84%</span>
+                    </div>
+                    <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden">
+                      <div className="h-full bg-indigo-600 progress-fill rounded-full" style={{ '--final-width': '84%' }}></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-xs font-semibold text-slate-700 mb-1">
+                      <span>Code Quality & Correctness</span>
+                      <span className="text-sky-600 font-bold">76%</span>
+                    </div>
+                    <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden">
+                      <div className="h-full bg-sky-500 progress-fill rounded-full" style={{ '--final-width': '76%' }}></div>
+                    </div>
                   </div>
                 </div>
               </div>
               
               {/* Feature 3 */}
-              <div className="bg-surface-container p-10 rounded-xl transition-all duration-500 card-hover border border-transparent stagger-item">
-                <span className="material-symbols-outlined text-tertiary text-4xl mb-6">layers</span>
-                <h3 className="text-xl font-bold mb-3">Multi-Round Assessment</h3>
-                <p className="text-on-surface-variant text-sm">Follow a complete hiring simulation from aptitude to coding to AI interview. Each stage has realistic constraints and scoring logic aligned with placement processes.</p>
+              <div className="bg-slate-50 border border-slate-200 p-8 rounded-3xl transition-all card-hover stagger-item shadow-xs">
+                <div className="w-12 h-12 rounded-2xl bg-violet-100 text-violet-600 flex items-center justify-center font-bold text-2xl mb-5">
+                  📑
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">Multi-Round Simulation</h3>
+                <p className="text-slate-600 text-xs leading-relaxed">
+                  Mirror full corporate hiring cycles: timed aptitude screening, interactive live coding, and customized AI technical interviews.
+                </p>
               </div>
               
               {/* Feature 4 */}
-              <div className="bg-surface-container p-10 rounded-xl transition-all duration-500 card-hover border border-transparent stagger-item">
-                <span className="material-symbols-outlined text-error text-4xl mb-6">security</span>
-                <h3 className="text-xl font-bold mb-3">Proctoring System</h3>
-                <p className="text-on-surface-variant text-sm">Camera, tab-switch, and activity checks protect test integrity. You receive clear warnings in-session so you can stay compliant and complete the test smoothly.</p>
+              <div className="bg-slate-50 border border-slate-200 p-8 rounded-3xl transition-all card-hover stagger-item shadow-xs">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-2xl mb-5">
+                  🛡️
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">Automated Proctoring</h3>
+                <p className="text-slate-600 text-xs leading-relaxed">
+                  Real-time face verification, tab-switch monitoring, and device tracking guarantee session integrity for institutional credibility.
+                </p>
               </div>
             </div>
           </div>
         </section>
 
         {/* How It Works Section */}
-        <section id="how-it-works" className="py-24 px-6 bg-surface reveal scroll-mt-28">
+        <section id="how-it-works" className="py-20 px-6 bg-slate-50 reveal scroll-mt-20">
           <div className="max-w-7xl mx-auto">
-            <div className="text-center mb-20 stagger-item">
-              <h2 className="text-4xl font-headline font-bold text-on-surface mb-4">Your Path to Success</h2>
-              <p className="text-on-surface-variant max-w-2xl mx-auto">The complete project flow: Test Round first, then Coding Round, then Interview Round, followed by your final evaluation report.</p>
+            <div className="text-center mb-16 stagger-item">
+              <span className="text-indigo-600 font-bold tracking-widest uppercase text-xs mb-2 block">Workflow</span>
+              <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight mb-3">Your Path to Placement Success</h2>
+              <p className="text-slate-600 text-sm max-w-2xl mx-auto">
+                Follow the 3-round standard sequence: Aptitude Screening, Coding Challenge, and AI Technical Interview.
+              </p>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-12 relative">
-              {/* Connecting Line */}
-              <div className="hidden md:block step-line-container">
-                <div className="step-line-progress" id="scroll-line"></div>
-              </div>
-              
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-8 relative">
               {/* Step 1 */}
-              <div className="relative z-10 flex flex-col items-center text-center stagger-item">
-                <div className="w-24 h-24 rounded-full bg-surface-container border border-primary/30 flex items-center justify-center mb-6 shadow-xl shadow-primary/5">
-                  <span className="text-2xl font-bold text-primary">01</span>
+              <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs text-center stagger-item">
+                <div className="w-14 h-14 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center mx-auto mb-4 font-black text-lg">
+                  01
                 </div>
-                <h4 className="font-bold mb-3">Test Round (Aptitude)</h4>
-                <p className="text-sm text-on-surface-variant leading-relaxed">Start with the aptitude test round. Solve objective questions within time limits; this stage evaluates fundamentals, speed, and accuracy.</p>
+                <h4 className="font-bold text-slate-900 text-sm mb-2">Round 1: Aptitude Test</h4>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Solve quantitative, logical, and verbal objective questions within adaptive time limits.
+                </p>
               </div>
               
               {/* Step 2 */}
-              <div className="relative z-10 flex flex-col items-center text-center stagger-item">
-                <div className="w-24 h-24 rounded-full bg-surface-container border border-secondary/30 flex items-center justify-center mb-6 shadow-xl shadow-secondary/5">
-                  <span className="text-2xl font-bold text-secondary">02</span>
+              <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs text-center stagger-item">
+                <div className="w-14 h-14 rounded-2xl bg-sky-50 border border-sky-200 text-sky-600 flex items-center justify-center mx-auto mb-4 font-black text-lg">
+                  02
                 </div>
-                <h4 className="font-bold mb-3">Coding Round</h4>
-                <p className="text-sm text-on-surface-variant leading-relaxed">Move to the coding round and solve programming problems in the editor. Your logic, correctness, and code quality are assessed here.</p>
+                <h4 className="font-bold text-slate-900 text-sm mb-2">Round 2: Coding Arena</h4>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Write, run, and submit code against test cases with real-time execution feedback.
+                </p>
               </div>
               
               {/* Step 3 */}
-              <div className="relative z-10 flex flex-col items-center text-center stagger-item">
-                <div className="w-24 h-24 rounded-full bg-surface-container border border-tertiary/30 flex items-center justify-center mb-6 shadow-xl shadow-tertiary/5">
-                  <span className="text-2xl font-bold text-tertiary">03</span>
+              <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs text-center stagger-item">
+                <div className="w-14 h-14 rounded-2xl bg-purple-50 border border-purple-200 text-purple-600 flex items-center justify-center mx-auto mb-4 font-black text-lg">
+                  03
                 </div>
-                <h4 className="font-bold mb-3">Interview Round</h4>
-                <p className="text-sm text-on-surface-variant leading-relaxed">Enter the AI interview round with role-based technical and behavioral prompts. Follow-up questions adapt to your responses.</p>
+                <h4 className="font-bold text-slate-900 text-sm mb-2">Round 3: AI Interview</h4>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Attend role-specific interview rounds using your uploaded profile resume with conversational AI.
+                </p>
               </div>
               
               {/* Step 4 */}
-              <div className="relative z-10 flex flex-col items-center text-center stagger-item">
-                <div className="w-24 h-24 rounded-full bg-surface-container border border-primary-dim/30 flex items-center justify-center mb-6 shadow-xl shadow-primary-dim/5">
-                  <span className="text-2xl font-bold text-primary-dim">04</span>
+              <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs text-center stagger-item">
+                <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-600 flex items-center justify-center mx-auto mb-4 font-black text-lg">
+                  04
                 </div>
-                <h4 className="font-bold mb-3">Final Report</h4>
-                <p className="text-sm text-on-surface-variant leading-relaxed">Receive your consolidated performance report with round-wise scores, strengths, weaknesses, and recommended next steps.</p>
+                <h4 className="font-bold text-slate-900 text-sm mb-2">Comprehensive Report</h4>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Receive detailed scorecards, competency benchmarks, and actionable placement recommendations.
+                </p>
               </div>
             </div>
 
-            <div className="mt-14 flex flex-wrap justify-center gap-4 stagger-item">
+            <div className="mt-12 flex justify-center gap-4 stagger-item">
               <a
                 href="#test-flow"
-                className="bg-primary text-on-primary-container px-8 py-3 rounded-full font-semibold hover:bg-primary-container active:scale-95 transition-all duration-200"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-3 rounded-xl font-bold text-xs uppercase tracking-wider shadow-sm transition-all"
               >
                 View Full Test Flow
               </a>
               <Link
                 to="/login"
-                className="border border-outline-variant/40 text-on-surface px-8 py-3 rounded-full font-semibold hover:border-primary/50 hover:bg-surface-container-high active:scale-95 transition-all duration-200"
+                className="bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 px-8 py-3 rounded-xl font-bold text-xs uppercase tracking-wider shadow-xs transition-all"
               >
-                Start Assessment
+                Go to Login
               </Link>
             </div>
           </div>
         </section>
 
         {/* Test Flow Section */}
-        <section id="test-flow" className="py-24 px-6 bg-surface-container-low reveal scroll-mt-28">
-          <div className="max-w-5xl mx-auto">
+        <section id="test-flow" className="py-20 px-6 bg-white border-t border-slate-200 reveal scroll-mt-20">
+          <div className="max-w-4xl mx-auto">
             <div className="mb-12 text-center stagger-item">
-              <h2 className="text-4xl font-headline font-bold text-on-surface mb-4">How to Give the Test</h2>
-              <p className="text-on-surface-variant max-w-3xl mx-auto">
-                Use this exact sequence on test day so you can complete every round without confusion.
-              </p>
+              <span className="text-indigo-600 font-bold tracking-widest uppercase text-xs mb-2 block">Step-by-Step Guide</span>
+              <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight mb-2">How to Take the Assessment</h2>
+              <p className="text-slate-500 text-xs">Recommended flow for candidates on testing day</p>
             </div>
 
-            <div className="space-y-5">
-              <div className="stagger-item bg-surface-container rounded-xl border border-outline-variant/30 p-6">
-                <h3 className="text-lg font-semibold mb-2 text-on-surface">1. Login and open your assessment slot</h3>
-                <p className="text-on-surface-variant text-sm leading-relaxed">Sign in with your registered account, open the active test from dashboard, and read round instructions carefully before clicking begin.</p>
-              </div>
-              <div className="stagger-item bg-surface-container rounded-xl border border-outline-variant/30 p-6">
-                <h3 className="text-lg font-semibold mb-2 text-on-surface">2. Complete system checks</h3>
-                <p className="text-on-surface-variant text-sm leading-relaxed">Allow camera and microphone access, keep your face visible, and avoid tab switching so proctoring can verify your session properly.</p>
-              </div>
-              <div className="stagger-item bg-surface-container rounded-xl border border-outline-variant/30 p-6">
-                <h3 className="text-lg font-semibold mb-2 text-on-surface">3. Attempt aptitude round</h3>
-                <p className="text-on-surface-variant text-sm leading-relaxed">Answer objective questions within the timer. Focus on both correctness and speed because both impact your score profile.</p>
-              </div>
-              <div className="stagger-item bg-surface-container rounded-xl border border-outline-variant/30 p-6">
-                <h3 className="text-lg font-semibold mb-2 text-on-surface">4. Attempt coding round</h3>
-                <p className="text-on-surface-variant text-sm leading-relaxed">Solve coding tasks in the editor, run checks, and submit final solutions. Difficulty adjusts based on prior performance and code quality.</p>
-              </div>
-              <div className="stagger-item bg-surface-container rounded-xl border border-outline-variant/30 p-6">
-                <h3 className="text-lg font-semibold mb-2 text-on-surface">5. Attend AI interview round</h3>
-                <p className="text-on-surface-variant text-sm leading-relaxed">Respond to role-specific interview prompts clearly and concisely. The interview engine asks follow-up questions from your previous answers.</p>
-              </div>
-              <div className="stagger-item bg-surface-container rounded-xl border border-outline-variant/30 p-6">
-                <h3 className="text-lg font-semibold mb-2 text-on-surface">6. Review results and next actions</h3>
-                <p className="text-on-surface-variant text-sm leading-relaxed">Download your report, review weak topics, and use recommendations to plan your next practice attempt.</p>
-              </div>
+            <div className="space-y-4">
+              {[
+                { title: '1. Sign in to your candidate account', desc: 'Log in with your institution credentials and review your student profile details.' },
+                { title: '2. Perform device and camera checks', desc: 'Enable camera permissions and ensure proper lighting for proctoring compliance.' },
+                { title: '3. Complete Round 1: Aptitude Screening', desc: 'Answer questions within the time limit. Accuracy and speed both influence your score.' },
+                { title: '4. Solve Round 2: Coding Challenges', desc: 'Write and test your algorithms in the live multi-language code editor.' },
+                { title: '5. Select Resume & Complete AI Interview', desc: 'Pick your tailored CV from your profile and answer targeted technical and behavioral prompts.' },
+                { title: '6. Review Consolidated Scorecard', desc: 'Inspect round scores, benchmark percentiles, and improvement pointers.' }
+              ].map((step, idx) => (
+                <div key={idx} className="stagger-item bg-slate-50 rounded-2xl border border-slate-200 p-5 flex items-start gap-4">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
+                    {idx + 1}
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-900 text-sm mb-1">{step.title}</h4>
+                    <p className="text-slate-600 text-xs leading-relaxed">{step.desc}</p>
+                  </div>
+                </div>
+              ))}
             </div>
 
             <div className="mt-10 text-center stagger-item">
               <Link
                 to="/login"
-                className="hero-gradient px-10 py-4 rounded-full text-on-primary font-bold shadow-lg shadow-primary/20 active:scale-95 transition-all duration-300 hover:shadow-[0_0_25px_rgba(186,158,255,0.4)] inline-block"
+                className="px-10 py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-indigo-600/20 inline-block"
               >
-                Go to Login and Start
+                Sign In & Get Started →
               </Link>
             </div>
           </div>
         </section>
 
         {/* Product Preview Section */}
-        <section className="py-24 px-6 bg-surface-container-lowest reveal">
-          <div className="max-w-7xl mx-auto">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-              
-              {/* Aptitude UI Panel */}
-              <div className="glass-panel rounded-2xl p-8 border border-outline-variant/20 flex flex-col h-[500px] stagger-item">
-                <div className="flex items-center justify-between mb-10">
-                  <div className="flex gap-2">
-                    <div className="w-3 h-3 rounded-full bg-error/50"></div>
-                    <div className="w-3 h-3 rounded-full bg-primary/50"></div>
-                    <div className="w-3 h-3 rounded-full bg-secondary/50"></div>
+        <section className="py-20 px-6 bg-slate-50 border-t border-slate-200 reveal">
+          <div className="max-w-6xl mx-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Aptitude Question Card */}
+              <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm flex flex-col justify-between stagger-item">
+                <div>
+                  <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
+                    <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-200">
+                      Sample Question 14 of 20
+                    </span>
+                    <span className="text-xs font-semibold text-slate-400">Timer: 01:45</span>
                   </div>
-                  <span className="text-xs font-label text-on-surface-variant uppercase tracking-widest">Question 14 / 20</span>
-                </div>
-                
-                <div className="flex-grow">
-                  <h3 className="text-xl font-bold mb-8 text-on-surface">A train traveling at 60 km/h crosses a pole in 9 seconds. What is the length of the train in meters?</h3>
-                  <div className="space-y-4">
-                    <label className="flex items-center p-4 bg-surface-container-high rounded-lg cursor-pointer hover:bg-surface-variant transition-colors border border-transparent hover:border-primary/20">
-                      <input className="w-4 h-4 text-primary bg-background border-outline-variant focus:ring-primary" name="aptitude" type="radio" />
-                      <span className="ml-4 text-on-surface">120 meters</span>
-                    </label>
-                    <label className="flex items-center p-4 bg-surface-container-high rounded-lg cursor-pointer hover:bg-surface-variant transition-colors border border-transparent hover:border-primary/20">
-                      <input className="w-4 h-4 text-primary bg-background border-outline-variant focus:ring-primary" name="aptitude" type="radio" />
-                      <span className="ml-4 text-on-surface">150 meters</span>
-                    </label>
-                    <label className="flex items-center p-4 bg-surface-container-high rounded-lg cursor-pointer hover:bg-surface-variant transition-colors border border-transparent hover:border-primary/20">
-                      <input className="w-4 h-4 text-primary bg-background border-outline-variant focus:ring-primary" name="aptitude" type="radio" />
-                      <span className="ml-4 text-on-surface">180 meters</span>
-                    </label>
+                  
+                  <h3 className="text-base font-bold text-slate-900 mb-6 leading-relaxed">
+                    A train traveling at 60 km/h crosses a pole in 9 seconds. What is the length of the train in meters?
+                  </h3>
+                  
+                  <div className="space-y-3">
+                    {['120 meters', '150 meters', '180 meters'].map((option, idx) => (
+                      <label
+                        key={idx}
+                        className={`flex items-center p-3.5 rounded-xl border transition-all cursor-pointer ${
+                          idx === 1
+                            ? 'bg-indigo-50/70 border-indigo-300 font-bold text-indigo-900'
+                            : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="sample-apt"
+                          defaultChecked={idx === 1}
+                          className="w-4 h-4 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <span className="ml-3 text-xs">{option}</span>
+                      </label>
+                    ))}
                   </div>
                 </div>
-                
-                <div className="mt-8 flex justify-end">
+
+                <div className="mt-8 pt-4 border-t border-slate-100 flex justify-end">
                   <Link
                     to="/login"
-                    className="bg-primary text-on-primary px-8 py-2 rounded-full font-bold flex items-center gap-2 hover:bg-primary-container transition-colors"
+                    className="px-6 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs transition-colors"
                   >
-                    Next <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                    Next Question →
                   </Link>
                 </div>
               </div>
-              
-              {/* Results Dashboard Panel */}
-              <div className="glass-panel rounded-2xl p-8 border border-outline-variant/20 h-[500px] flex flex-col stagger-item">
-                <div className="flex items-center gap-3 mb-8">
-                  <span className="material-symbols-outlined text-secondary">bar_chart</span>
-                  <span className="font-bold text-on-surface">Real-time Analytics</span>
+
+              {/* Real-time Analytics Preview */}
+              <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm flex flex-col justify-between stagger-item">
+                <div>
+                  <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
+                    <span className="text-xs font-bold text-sky-600 bg-sky-50 px-3 py-1 rounded-full border border-sky-200">
+                      Real-time Round Scorecard
+                    </span>
+                    <span className="text-xs font-bold text-emerald-600">✓ Proctor Active</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-center">
+                      <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Score</div>
+                      <div className="text-3xl font-black text-indigo-600">84%</div>
+                    </div>
+                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-center">
+                      <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Accuracy</div>
+                      <div className="text-3xl font-black text-emerald-600">92%</div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between items-center text-xs mb-3">
+                      <span className="font-semibold text-slate-500">Adaptive Difficulty Curve</span>
+                      <span className="font-bold text-indigo-600">Tier 8 (Hard)</span>
+                    </div>
+                    <div className="h-28 flex items-end gap-2.5 px-2 bg-slate-50 rounded-2xl p-3 border border-slate-200">
+                      {[25, 45, 65, 90, 85, 100].map((h, i) => (
+                        <div
+                          key={i}
+                          className={`flex-grow rounded-t-lg transition-all ${
+                            i === 5 ? 'bg-indigo-600 shadow-sm' : 'bg-indigo-300'
+                          }`}
+                          style={{ height: `${h}%` }}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4 mb-8">
-                  <div className="bg-surface-container p-6 rounded-xl text-center hover:scale-105 transition-transform duration-300">
-                    <div className="text-on-surface-variant text-xs uppercase tracking-tighter mb-1">Score</div>
-                    <div className="text-3xl font-black text-primary">84%</div>
-                  </div>
-                  <div className="bg-surface-container p-6 rounded-xl text-center hover:scale-105 transition-transform duration-300">
-                    <div className="text-on-surface-variant text-xs uppercase tracking-tighter mb-1">Accuracy</div>
-                    <div className="text-3xl font-black text-secondary">92%</div>
-                  </div>
-                </div>
-                <div className="flex-grow flex flex-col justify-end">
-                  <div className="mb-4 flex justify-between items-end">
-                    <span className="text-xs text-on-surface-variant">Difficulty Progression</span>
-                    <span className="text-xs text-primary font-bold">Level 8 (Hard)</span>
-                  </div>
-                  <div className="h-40 flex items-end gap-2 px-2">
-                    <div className="flex-grow bg-primary/20 chart-bar rounded-t-sm" style={{ height: '25%', transitionDelay: '0.1s' }}></div>
-                    <div className="flex-grow bg-primary/40 chart-bar rounded-t-sm" style={{ height: '50%', transitionDelay: '0.2s' }}></div>
-                    <div className="flex-grow bg-primary/60 chart-bar rounded-t-sm" style={{ height: '75%', transitionDelay: '0.3s' }}></div>
-                    <div className="flex-grow bg-primary/80 chart-bar rounded-t-sm" style={{ height: '100%', transitionDelay: '0.4s' }}></div>
-                    <div className="flex-grow bg-primary chart-bar rounded-t-sm" style={{ height: '85%', transitionDelay: '0.5s' }}></div>
-                    <div className="flex-grow bg-secondary chart-bar rounded-t-sm shadow-[0_-10px_20px_rgba(45,183,242,0.3)]" style={{ height: '100%', transitionDelay: '0.6s' }}></div>
-                  </div>
+
+                <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                  <span>Standard Benchmark: 70%</span>
+                  <span className="font-bold text-indigo-600">+14% Over Benchmark</span>
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* CTA Section */}
-        <section className="py-24 px-6 relative overflow-hidden reveal">
-          <div className="absolute inset-0 bg-primary/5 opacity-40 pointer-events-none"></div>
-          <div className="max-w-4xl mx-auto text-center relative z-10">
-            <h2 className="text-4xl md:text-5xl font-headline font-black mb-8 text-on-surface tracking-tight stagger-item">Ready to Test Your Skills?</h2>
-            <p className="text-lg text-on-surface-variant mb-12 max-w-2xl mx-auto stagger-item">Join thousands of candidates who have already leveled up their placement preparation with our AI-driven platform.</p>
+        {/* Ready to Test CTA */}
+        <section className="py-20 px-6 bg-gradient-to-r from-indigo-50 via-white to-sky-50 border-t border-slate-200 reveal text-center">
+          <div className="max-w-3xl mx-auto">
+            <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight mb-4">
+              Ready to Test Your Placement Readiness?
+            </h2>
+            <p className="text-slate-600 text-sm mb-8 max-w-xl mx-auto leading-relaxed">
+              Experience the integrated multi-round assessment ecosystem with realistic testing and AI-driven feedback.
+            </p>
             <Link
               to="/login"
-              className="hero-gradient px-12 py-5 rounded-full text-on-primary text-xl font-bold shadow-2xl shadow-primary/20 hover:scale-110 transition-transform duration-300 hover:shadow-[0_0_40px_rgba(186,158,255,0.4)] inline-block stagger-item"
+              className="px-10 py-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-indigo-600/25 transition-all inline-block"
             >
               Start Your Assessment
             </Link>
@@ -531,25 +553,22 @@ export default function LandingPage() {
       </main>
 
       {/* Footer */}
-      <footer className="bg-zinc-950 w-full py-12 px-6 border-t border-zinc-900 font-['Inter'] text-sm text-zinc-500">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto">
-          <div className="space-y-4">
-            <div className="text-xl font-bold text-zinc-200">AIPlacement</div>
-            <p className="max-w-xs leading-relaxed">Elevating candidate standards through intelligent, adaptive assessment technology.</p>
-          </div>
-          <div className="flex flex-col gap-3">
-            <h5 className="text-zinc-200 font-bold mb-2">Platform</h5>
-            <a className="text-zinc-500 hover:text-violet-400 transition-colors" href="#">Features</a>
-            <a className="text-zinc-500 hover:text-violet-400 transition-colors" href="#">How It Works</a>
-            <a className="text-zinc-500 hover:text-violet-400 transition-colors" href="#">About</a>
-          </div>
-          <div className="flex flex-col gap-3">
-            <h5 className="text-zinc-200 font-bold mb-2">Company</h5>
-            <a className="text-zinc-500 hover:text-violet-400 transition-colors" href="#">Contact</a>
-            <a className="text-zinc-500 hover:text-violet-400 transition-colors" href="#">Privacy Policy</a>
-            <div className="mt-4 text-zinc-600">
-              © 2024 AIPlacement Assessment. All rights reserved.
+      <footer className="bg-white w-full py-10 px-8 border-t border-slate-200 text-xs text-slate-500">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-xs">
+              AI
             </div>
+            <span className="font-bold text-slate-900">AIPlacement Assessment Platform</span>
+          </div>
+          <div className="flex items-center gap-6">
+            <a href="#features" className="hover:text-indigo-600 transition-colors">Features</a>
+            <a href="#how-it-works" className="hover:text-indigo-600 transition-colors">How It Works</a>
+            <a href="#test-flow" className="hover:text-indigo-600 transition-colors">Test Flow</a>
+            <Link to="/login" className="hover:text-indigo-600 transition-colors">Sign In</Link>
+          </div>
+          <div>
+            © 2026 AIPlacement Assessment. All rights reserved.
           </div>
         </div>
       </footer>

@@ -16,7 +16,7 @@ CREATE TABLE users (
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     is_verified BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CHECK (role IN ('student','admin'))
+    CHECK (role IN ('student', 'faculty', 'tpo', 'admin'))
 );
 
 CREATE INDEX idx_users_email ON users(email);

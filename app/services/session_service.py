@@ -12,11 +12,12 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
+from app.config.settings import settings
 from app.models.assessment import AssessmentRound, AssessmentSession
 
 
 # ── Constants ─────────────────────────────────────────────────────────
-SESSION_TIMEOUT_MINUTES: int = 30
+SESSION_TIMEOUT_MINUTES: int = getattr(settings, "SESSION_TIMEOUT_MINUTES", 180)
 
 
 # ── Session operations ────────────────────────────────────────────────
@@ -29,8 +30,9 @@ def _expire_stale_session(db: Session, user_id: int) -> None:
     This ensures stale sessions (e.g. user left without completing) are
     cleaned up automatically so a new session can be started.
     """
+    timeout_mins = getattr(settings, "SESSION_TIMEOUT_MINUTES", SESSION_TIMEOUT_MINUTES)
     # Use a DB-agnostic datetime cutoff instead of SQL-specific INTERVAL
-    cutoff_dt = datetime.now(timezone.utc) - timedelta(minutes=SESSION_TIMEOUT_MINUTES)
+    cutoff_dt = datetime.now(timezone.utc) - timedelta(minutes=timeout_mins)
 
     stale = (
         db.query(AssessmentSession)
@@ -201,6 +203,18 @@ def get_user_active_round(
     active_session = get_active_session(db, user_id)
     if active_session is None:
         return None
+
+    if round_type in ("aptitude", "mcq", "technical", "combined"):
+        match_types = ["aptitude", "mcq", "technical", "combined"]
+        return (
+            db.query(AssessmentRound)
+            .filter(
+                AssessmentRound.session_id == active_session.id,
+                AssessmentRound.round_type.in_(match_types),
+                AssessmentRound.status == "active",
+            )
+            .first()
+        )
 
     return (
         db.query(AssessmentRound)

@@ -6,8 +6,6 @@ import ScoreCards from '../components/result-dashboard/ScoreCards';
 import ProgressionChart from '../components/result-dashboard/ProgressionChart';
 import PerformanceChart from '../components/result-dashboard/PerformanceChart';
 import ResponseTimeChart from '../components/result-dashboard/ResponseTimeChart';
-import RLInsights from '../components/result-dashboard/RLInsights';
-import ProctoringSummary from '../components/result-dashboard/ProctoringSummary';
 import ImprovementInsights from '../components/result-dashboard/ImprovementInsights';
 
 const difficultyOrder = {
@@ -17,9 +15,9 @@ const difficultyOrder = {
 };
 
 const readinessMap = [
-    { min: 75, label: 'Interview Ready', tone: 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' },
-    { min: 55, label: 'Needs Practice', tone: 'border-amber-400/20 bg-amber-400/10 text-amber-300' },
-    { min: 0, label: 'Foundational Work Needed', tone: 'border-rose-400/20 bg-rose-400/10 text-rose-300' },
+    { min: 75, label: 'Interview Ready', tone: 'border-emerald-500/30 bg-emerald-50 text-emerald-700' },
+    { min: 55, label: 'Needs Practice', tone: 'border-amber-500/30 bg-amber-50 text-amber-700' },
+    { min: 0, label: 'Foundational Work Needed', tone: 'border-rose-500/30 bg-rose-50 text-rose-700' },
 ];
 
 function formatSeconds(value) {
@@ -31,55 +29,47 @@ function getReadiness(accuracy) {
 }
 
 function getResponseTimeFill(value) {
-    if (value < 5) return '#22c55e';
-    if (value <= 15) return '#60a5fa';
+    if (value < 5) return '#10b981';
+    if (value <= 15) return '#3b82f6';
     return '#ef4444';
 }
 
 function buildSkeleton() {
     return (
-        <div className="min-h-screen bg-slate-950 text-white">
+        <div className="min-h-screen bg-slate-50 text-slate-900">
             <Navbar />
             <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
                 <div className="mb-8 space-y-3">
-                    <div className="h-8 w-72 animate-pulse rounded-lg bg-slate-200/20" />
-                    <div className="h-4 w-96 animate-pulse rounded-lg bg-slate-200/20" />
+                    <div className="h-8 w-72 animate-pulse rounded-lg bg-slate-200" />
+                    <div className="h-4 w-96 animate-pulse rounded-lg bg-slate-200" />
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
                     {Array.from({ length: 5 }).map((_, index) => (
-                        <div key={index} className="rounded-2xl border border-slate-200/10 bg-slate-900/70 p-5">
-                            <div className="h-3 w-24 animate-pulse rounded-lg bg-slate-200/20" />
-                            <div className="mt-5 h-9 w-28 animate-pulse rounded-lg bg-slate-200/20" />
-                            <div className="mt-4 h-4 w-40 animate-pulse rounded-lg bg-slate-200/20" />
+                        <div key={index} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+                            <div className="h-3 w-24 animate-pulse rounded-lg bg-slate-200" />
+                            <div className="mt-5 h-9 w-28 animate-pulse rounded-lg bg-slate-200" />
+                            <div className="mt-4 h-4 w-40 animate-pulse rounded-lg bg-slate-200" />
                         </div>
                     ))}
                 </div>
 
                 <div className="mt-6 grid gap-6 lg:grid-cols-2">
-                    <div className="lg:col-span-2 rounded-3xl border border-slate-200/10 bg-slate-900/70 p-6">
-                        <div className="h-6 w-56 animate-pulse rounded-lg bg-slate-200/20" />
-                        <div className="mt-5 h-[300px] animate-pulse rounded-2xl bg-slate-200/20" />
+                    <div className="lg:col-span-2 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <div className="h-6 w-56 animate-pulse rounded-lg bg-slate-200" />
+                        <div className="mt-5 h-[300px] animate-pulse rounded-2xl bg-slate-100" />
                     </div>
-                    <div className="rounded-3xl border border-slate-200/10 bg-slate-900/70 p-6">
-                        <div className="h-6 w-48 animate-pulse rounded-lg bg-slate-200/20" />
-                        <div className="mt-5 h-[280px] animate-pulse rounded-2xl bg-slate-200/20" />
+                    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <div className="h-6 w-48 animate-pulse rounded-lg bg-slate-200" />
+                        <div className="mt-5 h-[280px] animate-pulse rounded-2xl bg-slate-100" />
                     </div>
-                    <div className="rounded-3xl border border-slate-200/10 bg-slate-900/70 p-6">
-                        <div className="h-6 w-40 animate-pulse rounded-lg bg-slate-200/20" />
-                        <div className="mt-5 h-[280px] animate-pulse rounded-2xl bg-slate-200/20" />
+                    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <div className="h-6 w-40 animate-pulse rounded-lg bg-slate-200" />
+                        <div className="mt-5 h-[280px] animate-pulse rounded-2xl bg-slate-100" />
                     </div>
-                    <div className="rounded-3xl border border-slate-200/10 bg-slate-900/70 p-6">
-                        <div className="h-6 w-48 animate-pulse rounded-lg bg-slate-200/20" />
-                        <div className="mt-5 h-[280px] animate-pulse rounded-2xl bg-slate-200/20" />
-                    </div>
-                    <div className="rounded-3xl border border-slate-200/10 bg-slate-900/70 p-6">
-                        <div className="h-6 w-40 animate-pulse rounded-lg bg-slate-200/20" />
-                        <div className="mt-5 h-[280px] animate-pulse rounded-2xl bg-slate-200/20" />
-                    </div>
-                    <div className="lg:col-span-2 rounded-3xl border border-slate-200/10 bg-slate-900/70 p-6">
-                        <div className="h-6 w-52 animate-pulse rounded-lg bg-slate-200/20" />
-                        <div className="mt-5 h-[180px] animate-pulse rounded-2xl bg-slate-200/20" />
+                    <div className="lg:col-span-2 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <div className="h-6 w-52 animate-pulse rounded-lg bg-slate-200" />
+                        <div className="mt-5 h-[180px] animate-pulse rounded-2xl bg-slate-100" />
                     </div>
                 </div>
             </main>
@@ -89,20 +79,20 @@ function buildSkeleton() {
 
 function buildErrorState(navigate) {
     return (
-        <div className="min-h-screen bg-slate-950 text-white">
+        <div className="min-h-screen bg-slate-50 text-slate-900">
             <Navbar />
             <main className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-3xl items-center justify-center px-4 py-10 sm:px-6">
-                <div className="w-full rounded-3xl border border-slate-200/10 bg-slate-900/80 p-10 text-center shadow-[0_18px_60px_rgba(15,23,42,0.22)] backdrop-blur">
-                    <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full border border-slate-200/10 bg-slate-950/60 text-2xl text-slate-300">
+                <div className="w-full rounded-3xl border border-slate-200 bg-white p-10 text-center shadow-sm">
+                    <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-2xl text-slate-500">
                         !
                     </div>
-                    <h1 className="text-3xl font-black tracking-tight text-white">No results found</h1>
-                    <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-slate-400">
+                    <h1 className="text-3xl font-black tracking-tight text-slate-900">No results found</h1>
+                    <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-slate-600">
                         Complete the aptitude assessment to see your results.
                     </p>
                     <button
                         onClick={() => navigate('/aptitude')}
-                        className="mt-8 rounded-full bg-white px-6 py-3 text-sm font-semibold text-slate-950 transition hover:bg-slate-200"
+                        className="mt-8 rounded-full bg-indigo-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 shadow-sm"
                     >
                         Go to aptitude
                     </button>
@@ -207,7 +197,7 @@ export default function ResultPage() {
             value: `${Math.round(data.score || 0)}`,
             subtext: `Out of ${data.total_questions || 0} questions`,
             badge: `${Math.round(data.percentile || 0)}th`,
-            badgeClassName: 'border-sky-400/20 bg-sky-400/10 text-sky-300',
+            badgeClassName: 'border-sky-500/30 bg-sky-50 text-sky-700',
         },
         {
             label: 'Accuracy',
@@ -221,21 +211,21 @@ export default function ResultPage() {
             value: formatSeconds(data.avg_response_time),
             subtext: 'Mean time per question',
             badge: data.avg_response_time < 5 ? 'Fast' : data.avg_response_time <= 15 ? 'Balanced' : 'Slow',
-            badgeClassName: data.avg_response_time < 5 ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : data.avg_response_time <= 15 ? 'border-sky-400/20 bg-sky-400/10 text-sky-300' : 'border-rose-400/20 bg-rose-400/10 text-rose-300',
+            badgeClassName: data.avg_response_time < 5 ? 'border-emerald-500/30 bg-emerald-50 text-emerald-700' : data.avg_response_time <= 15 ? 'border-sky-500/30 bg-sky-50 text-sky-700' : 'border-rose-500/30 bg-rose-50 text-rose-700',
         },
         {
             label: 'Questions Attempted',
             value: `${data.total_questions || 0}`,
             subtext: data.has_multiple_rounds ? 'Combined round summary available' : 'Single aptitude round summary',
             badge: data.has_multiple_rounds ? 'Multi-round' : 'Single round',
-            badgeClassName: 'border-violet-400/20 bg-violet-400/10 text-violet-300',
+            badgeClassName: 'border-violet-500/30 bg-violet-50 text-violet-700',
         },
         {
             label: 'Percentile',
             value: `${Number(data.percentile || 0).toFixed(1)}%`,
             subtext: 'Compared against other completed aptitude sessions',
             badge: data.percentile >= 75 ? 'Top tier' : data.percentile >= 50 ? 'Solid' : 'Needs lift',
-            badgeClassName: data.percentile >= 75 ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300' : data.percentile >= 50 ? 'border-sky-400/20 bg-sky-400/10 text-sky-300' : 'border-amber-400/20 bg-amber-400/10 text-amber-300',
+            badgeClassName: data.percentile >= 75 ? 'border-emerald-500/30 bg-emerald-50 text-emerald-700' : data.percentile >= 50 ? 'border-sky-500/30 bg-sky-50 text-sky-700' : 'border-amber-500/30 bg-amber-50 text-amber-700',
         },
     ];
 
@@ -245,11 +235,11 @@ export default function ResultPage() {
     ];
 
     return (
-        <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(14,165,233,0.14),transparent_30%),linear-gradient(180deg,#020617_0%,#0f172a_100%)] text-white">
+        <div className="min-h-screen bg-slate-50 text-slate-900 font-['Inter']">
             <Navbar
                 rightContent={
                     <button onClick={() => navigate('/profile')} className="flex items-center gap-2 transition-opacity hover:opacity-80">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-sm font-bold text-white">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-50 border border-indigo-200 text-sm font-bold text-indigo-700">
                             {userName?.charAt(0) || 'C'}
                         </div>
                     </button>
@@ -257,11 +247,11 @@ export default function ResultPage() {
             />
 
             <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-                <header className="mb-8 flex flex-col gap-4 rounded-3xl border border-slate-200/10 bg-slate-900/65 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.22)] backdrop-blur lg:flex-row lg:items-end lg:justify-between">
+                <header className="mb-8 flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm lg:flex-row lg:items-end lg:justify-between">
                     <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-sky-300">Performance Analytics</p>
-                        <h1 className="mt-2 text-3xl font-black tracking-tight text-white sm:text-4xl">Aptitude Result Dashboard</h1>
-                        <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">
+                        <p className="text-xs font-bold uppercase tracking-[0.24em] text-indigo-600">Performance Analytics</p>
+                        <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-900 sm:text-4xl">Practice Result Dashboard</h1>
+                        <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
                             Adaptive difficulty is analyzed here as a performance story, not a static quiz score. The progression chart shows how the system responded to your answers in real time.
                         </p>
                     </div>
@@ -277,41 +267,31 @@ export default function ResultPage() {
                         <ProgressionChart data={transformed.progressionData} />
                     </div>
                     <PerformanceChart data={transformed.performanceData} />
-                    <RLInsights summary={data.rl_summary} />
                     <ResponseTimeChart data={transformed.responseTimeData} />
-                    <ProctoringSummary proctoring={data.proctoring} />
                     <div className="lg:col-span-2">
                         <ImprovementInsights topicStats={transformed.topicStats} fallbackInsights={fallbackInsights} />
                     </div>
                 </section>
 
-                <section className="mt-8 rounded-3xl border border-slate-200/10 bg-slate-900/70 p-6 shadow-[0_18px_60px_rgba(15,23,42,0.22)] backdrop-blur">
+                <section className="mt-8 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
-                            <h2 className="text-lg font-bold text-white">Next action</h2>
-                            <p className="text-sm text-slate-400">Move to another round, review the summary, or retry the assessment flow.</p>
+                            <h2 className="text-lg font-bold text-slate-900">Next action</h2>
+                            <p className="text-sm text-slate-500">Move to another round, review the summary, or retry the assessment flow.</p>
                         </div>
                         <div className="flex flex-wrap gap-3">
                             <button
                                 onClick={() => navigate('/dashboard')}
-                                className="rounded-full border border-slate-200/10 bg-white px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-slate-200"
+                                className="rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 shadow-sm"
                             >
                                 Retake Test
                             </button>
                             <button
                                 onClick={() => navigate('/dashboard')}
-                                className="rounded-full border border-slate-200/10 bg-slate-950/40 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-950/70"
+                                className="rounded-xl border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 shadow-sm"
                             >
                                 Go to Dashboard
                             </button>
-                            {data.has_multiple_rounds ? (
-                                <button
-                                    onClick={() => navigate('/analytics')}
-                                    className="rounded-full border border-sky-400/20 bg-sky-400/10 px-5 py-3 text-sm font-semibold text-sky-300 transition hover:bg-sky-400/20"
-                                >
-                                    View Combined Report
-                                </button>
-                            ) : null}
                         </div>
                     </div>
                 </section>

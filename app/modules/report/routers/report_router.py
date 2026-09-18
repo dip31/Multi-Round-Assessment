@@ -20,13 +20,13 @@ from app.modules.report.schemas.report_schema import (
     SkillGapItem
 )
 
-router = APIRouter(prefix="/report/admin", tags=["Admin Reporting"])
+router = APIRouter(prefix="/report/admin", tags=["Admin & Staff Reporting"])
 
 def check_admin(current_user: User):
-    if current_user.role != "admin":
+    if current_user.role not in ("admin", "faculty", "tpo"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Requires admin privileges"
+            detail="Requires faculty, TPO, or admin privileges"
         )
 
 @router.get("/cohort-stats", response_model=CohortStatsResponse)

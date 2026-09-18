@@ -4,92 +4,98 @@
 
 @theme {
   /* Main Backgrounds */
-  --color-bg-primary: #F4F3FF;
+  --color-bg-primary: #F8FAFC;
   --color-bg-surface: #FFFFFF;
 
   /* Layout Specifics */
-  --color-nav-bg: #0A0F1E;
-  --color-hero-bg: #1A1040;
+  --color-nav-bg: #FFFFFF;
+  --color-hero-bg: #F8FAFC;
 
   /* Borders & Shadows */
-  --color-border: #E5E7EB;
+  --color-border: #E2E8F0;
 
   /* Typography */
-  --color-text-primary: #1A1040;
-  --color-text-secondary: #6B7280;
+  --color-text-primary: #0F172A;
+  --color-text-secondary: #475569;
   --color-text-inverse: #FFFFFF;
 
   /* Accents & Status */
-  --color-accent: #6C63FF;
+  --color-accent: #4F46E5;
   --color-success: #10B981;
   --color-warning: #F59E0B;
   --color-danger: #EF4444;
 
   /* Progress Panel Specials */
-  --color-progress-not-visited: #D1D5DB;
+  --color-progress-not-visited: #E2E8F0;
 
   /* Typography Fonts */
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
-  --font-display: 'Syne', system-ui, -apple-system, sans-serif;
+  --font-display: 'Inter', system-ui, -apple-system, sans-serif;
 
-  /* Landing Page Specific Colors */
-  --color-on-primary: #39008c;
-  --color-surface-tint: #ba9eff;
-  --color-on-surface-variant: #adaaad;
-  --color-on-secondary-fixed-variant: #005777;
-  --color-surface-container-highest: #262528;
-  --color-outline-variant: #48474a;
-  --color-secondary: #2db7f2;
-  --color-surface: #0e0e10;
-  --color-on-primary-fixed: #000000;
-  --color-inverse-on-surface: #565457;
-  --color-outline: #767577;
-  --color-surface-container-low: #131315;
-  --color-surface-dim: #0e0e10;
-  --color-tertiary-fixed-dim: #c488ff;
-  --color-secondary-fixed-dim: #73ceff;
-  --color-on-tertiary: #400072;
-  --color-inverse-primary: #6e3bd7;
-  --color-primary-fixed-dim: #a27cff;
-  --color-tertiary-dim: #be83fa;
-  --color-primary-fixed: #ae8dff;
-  --color-primary-dim: #8455ef;
-  --color-primary-container: #ae8dff;
-  --color-error: #ff6e84;
-  --color-surface-container: #19191c;
-  --color-surface-variant: #262528;
-  --color-on-background: #f9f5f8;
-  --color-on-tertiary-container: #2e0055;
-  --color-primary: #ba9eff;
-  --color-secondary-container: #00668a;
-  --color-surface-container-high: #1f1f22;
-  --color-tertiary-fixed: #cd9bff;
-  --color-on-secondary: #003044;
-  --color-on-error-container: #ffb2b9;
-  --color-on-tertiary-fixed: #270048;
-  --color-secondary-fixed: #9bdaff;
-  --color-background: #0e0e10;
-  --color-on-surface: #f9f5f8;
-  --color-surface-bright: #2c2c2f;
-  --color-secondary-dim: #05a9e3;
-  --color-on-secondary-container: #f2f9ff;
-  --color-error-container: #a70138;
-  --color-error-dim: #d73357;
-  --color-on-primary-container: #2b006e;
-  --color-on-error: #490013;
-  --color-on-tertiary-fixed-variant: #53108c;
-  --color-on-secondary-fixed: #00394f;
-  --color-tertiary-container: #bc80f8;
-  --color-inverse-surface: #fcf8fb;
-  --color-tertiary: #c890ff;
-  --color-on-primary-fixed-variant: #370086;
+  /* Light Theme Palette */
+  --color-background: #F8FAFC;
+  --color-surface: #FFFFFF;
+  --color-surface-container: #FFFFFF;
+  --color-surface-container-low: #F8FAFC;
+  --color-surface-container-high: #F1F5F9;
+  --color-surface-container-highest: #E2E8F0;
+  --color-surface-dim: #F1F5F9;
+  --color-surface-bright: #FFFFFF;
+  --color-surface-variant: #F1F5F9;
+
+  --color-outline-variant: #E2E8F0;
+  --color-outline: #CBD5E1;
+
+  --color-on-background: #0F172A;
+  --color-on-surface: #0F172A;
+  --color-on-surface-variant: #64748B;
+  --color-inverse-surface: #0F172A;
+  --color-inverse-on-surface: #F8FAFC;
+
+  --color-primary: #4F46E5;
+  --color-primary-dim: #4338CA;
+  --color-primary-container: #EEF2FF;
+  --color-primary-fixed: #E0E7FF;
+  --color-primary-fixed-dim: #C7D2FE;
+  --color-on-primary: #FFFFFF;
+  --color-on-primary-container: #312E81;
+  --color-on-primary-fixed: #1E1B4B;
+  --color-on-primary-fixed-variant: #3730A3;
+  --color-surface-tint: #4F46E5;
+
+  --color-secondary: #0284C7;
+  --color-secondary-dim: #0369A1;
+  --color-secondary-container: #E0F2FE;
+  --color-secondary-fixed: #BAE6FD;
+  --color-secondary-fixed-dim: #7DD3FC;
+  --color-on-secondary: #FFFFFF;
+  --color-on-secondary-container: #075985;
+  --color-on-secondary-fixed: #082F49;
+  --color-on-secondary-fixed-variant: #0369A1;
+
+  --color-tertiary: #8B5CF6;
+  --color-tertiary-dim: #7C3AED;
+  --color-tertiary-container: #F5F3FF;
+  --color-tertiary-fixed: #DDD6FE;
+  --color-tertiary-fixed-dim: #C4B5FD;
+  --color-on-tertiary: #FFFFFF;
+  --color-on-tertiary-container: #5B21B6;
+  --color-on-tertiary-fixed: #2E1065;
+  --color-on-tertiary-fixed-variant: #6D28D9;
+
+  --color-error: #EF4444;
+  --color-error-dim: #DC2626;
+  --color-error-container: #FEF2F2;
+  --color-on-error: #FFFFFF;
+  --color-on-error-container: #991B1B;
 
   /* Landing Page Fonts */
   --font-headline: 'Inter', system-ui, sans-serif;
   --font-body: 'Inter', system-ui, sans-serif;
   --font-label: 'Inter', system-ui, sans-serif;
 }
+
 @layer base {
   * {
     margin: 0;
@@ -99,8 +105,8 @@
 
   body {
     font-family: var(--font-sans);
-    background-color: var(--color-bg-primary);
-    color: var(--color-text-primary);
+    background-color: var(--color-background);
+    color: var(--color-on-surface);
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
   }
@@ -111,23 +117,25 @@
   h4,
   h5,
   h6 {
-    font-family: var(--font-display);
+    font-family: var(--font-headline);
+    color: var(--color-on-surface);
   }
 
   ::selection {
-    background-color: var(--color-accent);
-    color: white;
+    background-color: #E0E7FF;
+    color: #312E81;
   }
 }
 
 @layer utilities {
   .glass-panel {
-    background: rgba(38, 37, 40, 0.4);
-    backdrop-filter: blur(20px);
-    border-top: 1px solid rgba(72, 71, 74, 0.2);
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(16px);
+    border: 1px solid #E2E8F0;
   }
   .hero-gradient {
-    background: linear-gradient(135deg, #ba9eff 0%, #8455ef 100%);
+    background: linear-gradient(135deg, #4F46E5 0%, #6366F1 100%);
+    color: #FFFFFF;
   }
   .material-symbols-outlined {
     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;

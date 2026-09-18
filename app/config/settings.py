@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     # Skip expensive model warmups during local development so auth/session
     # endpoints become available immediately after startup.
     SKIP_HEAVY_STARTUP: bool = True
+    # ── Session & Assessment Settings
+    SESSION_TIMEOUT_MINUTES: int = 180
     # ── Coding Round
     CODING_ROUND_TIME_LIMIT_MINUTES: int = 30
     # Maximum test cases evaluated per problem to avoid long sync runs

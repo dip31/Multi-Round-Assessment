@@ -91,6 +91,13 @@ class AssessmentRound(Base):
     # ── Relationships ─────────────────────────────────────────────────
     session: Mapped["AssessmentSession"] = relationship("AssessmentSession", back_populates="rounds")
 
+    @property
+    def duration_seconds(self) -> int | None:
+        """Calculate elapsed seconds for completed round."""
+        if self.completed_at and self.started_at:
+            return max(0, int((self.completed_at - self.started_at).total_seconds()))
+        return None
+
     def __repr__(self) -> str:
         return (
             f"<AssessmentRound id={self.id} type={self.round_type!r} "

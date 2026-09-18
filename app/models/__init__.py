@@ -6,9 +6,14 @@ from .proctoring import ProctoringEvent
 from .advanced_proctoring import AdvancedProctoringEvent
 from .interview import InterviewSession, ApprovedQuestionPool, InterviewTurn, ProctoringViolation
 from .admin_question_feedback import AdminQuestionFeedback
+from .profile import StudentProfile, FacultyProfile, TPOProfile, UserResume
 
 __all__ = [
     "User",
+    "StudentProfile",
+    "FacultyProfile",
+    "TPOProfile",
+    "UserResume",
     "AssessmentSession", 
     "AptitudeQuestion",
     "AptitudeAttempt",

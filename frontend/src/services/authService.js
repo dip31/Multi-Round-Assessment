@@ -15,8 +15,8 @@ const writeUserNameMap = (map) => {
     localStorage.setItem(USER_NAME_MAP_KEY, JSON.stringify(map));
 };
 
-export const registerUser = async (name, email, password) => {
-    const response = await api.post('/auth/register', { name, email, password });
+export const registerUser = async (name, email, password, role = 'student') => {
+    const response = await api.post('/auth/register', { name, email, password, role });
 
     // Persist mapping so future logins can resolve display name from email.
     const normalizedEmail = email.trim().toLowerCase();
@@ -33,35 +33,42 @@ export const loginUser = async (email, password) => {
     if (response.data.access_token) {
         const normalizedEmail = email.trim().toLowerCase();
         const userNameMap = readUserNameMap();
-        const resolvedName = userNameMap[normalizedEmail] || email.split('@')[0] || 'Candidate';
+        const apiUser = response.data.user;
+        const role = response.data.role || apiUser?.role || 'student';
+        const resolvedName = apiUser?.name || userNameMap[normalizedEmail] || email.split('@')[0] || 'User';
+
+        const userData = {
+            id: apiUser?.id,
+            name: resolvedName,
+            email: normalizedEmail,
+            role: role,
+        };
 
         localStorage.setItem('access_token', response.data.access_token);
         localStorage.setItem('user_email', normalizedEmail);
         localStorage.setItem('email', normalizedEmail);
         localStorage.setItem('user_name', resolvedName);
         localStorage.setItem('full_name', resolvedName);
-        localStorage.setItem('user', JSON.stringify({ name: resolvedName, email: normalizedEmail }));
+        localStorage.setItem('role', role);
+        localStorage.setItem('user', JSON.stringify(userData));
 
-        // Resolve the profile in the background so login is never blocked by /auth/me.
+        const existingMap = readUserNameMap();
+        existingMap[normalizedEmail] = resolvedName;
+        writeUserNameMap(existingMap);
+
+        // Fetch /auth/me to refresh full details if needed
         api.get('/auth/me', { skipAuthRedirect: true })
             .then((meResponse) => {
-                const me = meResponse.data;
-                const finalName = me?.name || resolvedName;
-                const finalEmail = (me?.email || normalizedEmail).toLowerCase();
-
-                localStorage.setItem('user_email', finalEmail);
-                localStorage.setItem('email', finalEmail);
-                localStorage.setItem('user_name', finalName);
-                localStorage.setItem('full_name', finalName);
-                localStorage.setItem('user', JSON.stringify(me));
-
-                const existingMap = readUserNameMap();
-                existingMap[finalEmail] = finalName;
-                writeUserNameMap(existingMap);
+                if (meResponse.data) {
+                    const me = meResponse.data;
+                    const mergedUser = { ...userData, ...me };
+                    localStorage.setItem('user', JSON.stringify(mergedUser));
+                    localStorage.setItem('role', me.role || role);
+                }
             })
-            .catch(() => {
-                // Keep the fallback identity from login so the UI can proceed.
-            });
+            .catch(() => {});
+
+        return { ...response.data, user: userData, role };
     }
     
     return response.data;

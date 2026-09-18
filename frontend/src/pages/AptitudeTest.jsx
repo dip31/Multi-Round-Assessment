@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import QuestionCard from '../components/QuestionCard';
 import Timer from '../components/Timer';
 import Toast from '../components/shared/Toast';
@@ -11,6 +11,14 @@ import { useAdvancedProctoring } from '../hooks/useAdvancedProctoring';
 const MAX_QUESTIONS = 10;
 
 export default function AptitudeTest() {
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    // Read practice configuration from location state or localStorage
+    const practiceConfig = location.state?.practice_config || JSON.parse(localStorage.getItem('edi5_practice_config') || '{}');
+    const practiceType = practiceConfig.practice_type || 'mcq';
+    const subject = practiceConfig.subject || null;
+
     const [question, setQuestion] = useState(null);
     const [selectedOption, setSelectedOption] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -27,9 +35,9 @@ export default function AptitudeTest() {
     const [proctoringWarnings, setProctoringWarnings] = useState([]);
     const [proctoringBlocked, setProctoringBlocked] = useState(false);
     const [testTerminated, setTestTerminated] = useState(false);
+    const [testFinished, setTestFinished] = useState(null);
 
     const startTimeRef = useRef(null);
-    const navigate = useNavigate();
     const retryTimeoutRef = useRef(null);
     const questionCountRef = useRef(0);
     const noFaceTimeoutRef = useRef(null);
@@ -51,14 +59,10 @@ export default function AptitudeTest() {
             if (violation.terminate) {
                 setTestTerminated(true);
                 setProctoringBlocked(true);
-                setToast({
-                    type: 'error',
-                    message: 'Test terminated due to multiple proctoring violations.',
-                    duration: 5000
+                setTestFinished({
+                    reason: 'terminated',
+                    message: 'Assessment concluded due to proctoring policy violations. Click below to view your results.'
                 });
-                setTimeout(() => {
-                    finalizeAndGoToResult();
-                }, 3000);
             } else {
                 const warning = {
                     type: violation.eventType,
@@ -129,14 +133,9 @@ export default function AptitudeTest() {
                 const responseTime = (endTime - startTimeRef.current) / 1000;
                 submitAnswer(question.question_id, null, responseTime).catch(() => {});
             }
-            // Navigate after 5 seconds to let user read the warning
-            const tm = setTimeout(() => {
-                finalizeAndGoToResult();
-            }, 5000);
-            return () => clearTimeout(tm);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [testTerminated, finalizeAndGoToResult]);
+    }, [testTerminated]);
 
     // Keep a ref so logic can read the latest count without creating effect loops.
     useEffect(() => {
@@ -149,8 +148,11 @@ export default function AptitudeTest() {
         if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
 
         if (questionCountRef.current >= MAX_QUESTIONS) {
-            console.log('🔍 DEBUG: Max questions reached, navigating to result');
-            await finalizeAndGoToResult();
+            console.log('🔍 DEBUG: Max questions reached, setting testFinished');
+            setTestFinished({
+                reason: 'completed',
+                message: 'You have completed all 10 questions in this round. Click below to review your results.'
+            });
             return;
         }
 
@@ -159,8 +161,8 @@ export default function AptitudeTest() {
         setSelectedOption(null);
         setToast(null);
         try {
-            console.log('🔍 DEBUG: Calling getNextQuestion...');
-            const data = await getNextQuestion();
+            console.log('🔍 DEBUG: Calling getNextQuestion with practiceType:', practiceType, 'subject:', subject);
+            const data = await getNextQuestion(practiceType, subject);
             console.log('🔍 DEBUG: Received question data:', data);
             setQuestion(data);
             startTimeRef.current = Date.now();
@@ -169,7 +171,10 @@ export default function AptitudeTest() {
         } catch (err) {
             console.error('🔍 DEBUG: Error in fetchQuestion:', err);
             if (err.response?.status === 404) {
-                await finalizeAndGoToResult();
+                setTestFinished({
+                    reason: 'completed',
+                    message: 'All available questions for this round have been completed. Click below to view your results.'
+                });
             } else if (!err.response) {
                 setNetworkOffline(true);
                 setToast({
@@ -184,7 +189,7 @@ export default function AptitudeTest() {
             console.log('🔍 DEBUG: Setting loading to false');
             setLoading(false);
         }
-    }, [navigate, finalizeAndGoToResult]);
+    }, [practiceType, subject, finalizeAndGoToResult]);
 
     const isInitialized = useRef(false);
 
@@ -237,7 +242,9 @@ export default function AptitudeTest() {
             await submitAnswer(
                 question.question_id,
                 optionToSubmit, // null if skipped
-                responseTime
+                responseTime,
+                practiceType,
+                subject
             );
 
             // Record history
@@ -246,7 +253,10 @@ export default function AptitudeTest() {
             await fetchQuestion();
         } catch (err) {
             if (err.response?.status === 404) {
-                await finalizeAndGoToResult();
+                setTestFinished({
+                    reason: 'completed',
+                    message: 'All questions for this round have been completed. Click below to view your results.'
+                });
             } else if (!err.response) {
                 setNetworkOffline(true);
             } else {
@@ -262,6 +272,10 @@ export default function AptitudeTest() {
 
     const handleTimerExpire = useCallback(() => {
         handleSubmission(selectedOption || null);
+        setTestFinished({
+            reason: 'time_up',
+            message: 'Time limit has expired for this assessment. Click below to view your results.'
+        });
     }, [selectedOption, question]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleWarningDismiss = (warningIndex) => {
@@ -348,7 +362,11 @@ export default function AptitudeTest() {
                 <div className="rounded-xl border border-[var(--color-border)] bg-white px-4 py-3 shadow-sm flex items-center justify-between">
                     <div>
                         <p className="text-xs uppercase tracking-wider text-[var(--color-text-secondary)] font-semibold">Assessment In Progress</p>
-                        <p className="text-sm font-bold text-[var(--color-text-primary)]">Aptitude Test</p>
+                        <p className="text-sm font-bold text-[var(--color-text-primary)]">
+                            {practiceType === 'technical' ? (subject ? `Technical Round — ${subject.toUpperCase()}` : 'Technical Round') :
+                             practiceType === 'combined' ? 'Combined Round (Aptitude + Technical)' :
+                             'MCQ Round'}
+                        </p>
                     </div>
                     {timeRemaining !== null && (
                         <div className="flex items-center gap-3">
@@ -573,6 +591,43 @@ export default function AptitudeTest() {
                                 Submit Test
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Test Finished / Completion Modal */}
+            {testFinished && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+                    <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 shadow-2xl text-center">
+                        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 text-2xl font-bold">
+                            ✓
+                        </div>
+                        <h3 className="mb-2 text-2xl font-bold text-slate-900">
+                            {testFinished.reason === 'completed' ? 'Assessment Completed!' : 'Session Concluded'}
+                        </h3>
+                        <p className="mb-6 text-sm text-slate-600 leading-relaxed">
+                            {testFinished.message}
+                        </p>
+                        <div className="mb-6 p-4 rounded-2xl bg-slate-50 border border-slate-200 flex justify-around text-center">
+                            <div>
+                                <span className="text-xs font-semibold text-slate-500 uppercase block">Answered</span>
+                                <span className="text-xl font-bold text-emerald-600">{answeredCount}</span>
+                            </div>
+                            <div>
+                                <span className="text-xs font-semibold text-slate-500 uppercase block">Skipped</span>
+                                <span className="text-xl font-bold text-slate-700">{skippedCount}</span>
+                            </div>
+                            <div>
+                                <span className="text-xs font-semibold text-slate-500 uppercase block">Total</span>
+                                <span className="text-xl font-bold text-indigo-600">{displayCount - 1}</span>
+                            </div>
+                        </div>
+                        <button
+                            onClick={finalizeAndGoToResult}
+                            className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 shadow-sm transition-all text-sm flex items-center justify-center gap-2"
+                        >
+                            View Detailed Results →
+                        </button>
                     </div>
                 </div>
             )}

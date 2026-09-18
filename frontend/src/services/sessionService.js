@@ -26,3 +26,8 @@ export const startCodingAfterAptitude = async () => {
     const response = await api.post('/coding/start-after-aptitude');
     return response.data;
 };
+
+export const startFreshSession = async () => {
+    const response = await api.post('/session/fresh');
+    return response.data;
+};
