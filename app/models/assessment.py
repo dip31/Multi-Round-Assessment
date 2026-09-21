@@ -28,6 +28,7 @@ class AssessmentSession(Base):
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default=text("'not_started'"))
     started_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     total_score: Mapped[float] = mapped_column(Float, server_default=text("0"))
 
@@ -58,11 +59,12 @@ class AssessmentSession(Base):
     @property
     def time_remaining_seconds(self) -> int:
         """Calculate the remaining seconds out of a 30-minute global limit."""
+        if self.expires_at:
+            now = datetime.now()
+            return max(0, int((self.expires_at - now).total_seconds()))
         if not self.started_at:
             return 1800
-        # Use simple naive local time to match Postgres timezone-naive func.now() behavior
-        now = datetime.now()
-        elapsed = (now - self.started_at).total_seconds()
+        elapsed = (datetime.now() - self.started_at).total_seconds()
         return max(0, int(1800 - elapsed))
 
 
@@ -86,6 +88,7 @@ class AssessmentRound(Base):
     score: Mapped[float] = mapped_column(Float, server_default=text("0"))
     max_questions: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("20"))
     started_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # ── Relationships ─────────────────────────────────────────────────

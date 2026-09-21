@@ -46,7 +46,7 @@ class ProctoringEvent(Base):
     )
     event_type: str = Column(String(50), nullable=False, index=True)
     event_metadata: Optional[str] = Column(Text, nullable=True)
-    created_at: datetime = Column(DateTime, server_default=text("NOW()"))
+    created_at: datetime = Column(DateTime, server_default=text("CURRENT_TIMESTAMP"), nullable=False)
 
     # ── Relationships ─────────────────────────────────────────────────
     session = relationship(

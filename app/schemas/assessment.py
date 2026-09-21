@@ -38,6 +38,7 @@ class RoundResponse(BaseModel):
     score: float
     max_questions: int
     started_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
 
     @computed_field
@@ -57,6 +58,7 @@ class SessionResponse(BaseModel):
     user_id: int
     status: str
     started_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     total_score: float
     time_remaining_seconds: Optional[int] = 1800

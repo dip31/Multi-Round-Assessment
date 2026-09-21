@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS assessment_sessions (
     user_id INTEGER NOT NULL,
     status VARCHAR(20) NOT NULL CHECK (status IN ('not_started','in_progress','completed','terminated','expired')),
     started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME,
     completed_at DATETIME,
     total_score REAL DEFAULT 0,
     FOREIGN KEY (user_id) REFERENCES users(id)
@@ -58,6 +59,7 @@ CREATE TABLE IF NOT EXISTS assessment_rounds (
     score REAL DEFAULT 0,
     max_questions INTEGER NOT NULL DEFAULT 20,
     started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME,
     completed_at DATETIME,
     FOREIGN KEY (session_id) REFERENCES assessment_sessions(id) ON DELETE CASCADE
 )

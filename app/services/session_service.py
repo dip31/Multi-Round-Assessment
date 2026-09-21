@@ -1,186 +1,398 @@
-"""
-Business logic for assessment sessions and rounds.
+"""Authoritative assessment session and round lifecycle operations."""
 
-Provides the full session lifecycle: creation → round management → completion.
-
-This service handles ONLY session-level operations. Module-specific logic
-(aptitude, coding, interview) should be in their respective module services.
-"""
-
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Optional
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config.settings import settings
 from app.models.assessment import AssessmentRound, AssessmentSession
 
 
-# ── Constants ─────────────────────────────────────────────────────────
 SESSION_TIMEOUT_MINUTES: int = getattr(settings, "SESSION_TIMEOUT_MINUTES", 180)
+ROUND_TIMEOUT_MINUTES: int = getattr(
+    settings, "ASSESSMENT_ROUND_TIMEOUT_MINUTES", 30
+)
+
+SESSION_STATES = {"not_started", "in_progress", "completed", "terminated", "expired"}
+ROUND_STATES = {"pending", "active", "completed", "terminated", "expired"}
 
 
-# ── Session operations ────────────────────────────────────────────────
+def _now() -> datetime:
+    """Return a naive UTC timestamp matching the existing DateTime columns."""
+    return datetime.utcnow()
 
-from sqlalchemy import text
+
+def _session_expiry(started_at: datetime) -> datetime:
+    return started_at + timedelta(minutes=SESSION_TIMEOUT_MINUTES)
+
+
+def _round_expiry(started_at: datetime) -> datetime:
+    return started_at + timedelta(minutes=ROUND_TIMEOUT_MINUTES)
+
 
 def _expire_stale_session(db: Session, user_id: int) -> None:
-    """Auto-close any in_progress session that has exceeded the timeout.
-
-    This ensures stale sessions (e.g. user left without completing) are
-    cleaned up automatically so a new session can be started.
-    """
-    timeout_mins = getattr(settings, "SESSION_TIMEOUT_MINUTES", SESSION_TIMEOUT_MINUTES)
-    # Use a DB-agnostic datetime cutoff instead of SQL-specific INTERVAL
-    cutoff_dt = datetime.now(timezone.utc) - timedelta(minutes=timeout_mins)
-
+    """Expire stale sessions and their active rounds using backend time."""
+    now = _now()
     stale = (
         db.query(AssessmentSession)
         .filter(
             AssessmentSession.user_id == user_id,
             AssessmentSession.status == "in_progress",
-            AssessmentSession.started_at < cutoff_dt,
+            (
+                (AssessmentSession.expires_at.isnot(None))
+                & (AssessmentSession.expires_at <= now)
+            )
+            | (
+                AssessmentSession.expires_at.is_(None)
+                & (AssessmentSession.started_at <= now - timedelta(minutes=SESSION_TIMEOUT_MINUTES))
+            ),
         )
         .all()
     )
-
-    for s in stale:
-        s.status = "expired"
-        s.completed_at = datetime.now(timezone.utc)
-
-    if stale:
-        # Also close any active rounds in those sessions
-        stale_ids = [s.id for s in stale]
+    for session in stale:
+        session.status = "expired"
+        session.completed_at = now
         db.query(AssessmentRound).filter(
-            AssessmentRound.session_id.in_(stale_ids),
+            AssessmentRound.session_id == session.id,
             AssessmentRound.status == "active",
         ).update(
-            {"status": "expired", "completed_at": datetime.now(timezone.utc)},
+            {"status": "expired", "completed_at": now},
             synchronize_session="fetch",
         )
+    if stale:
         db.commit()
 
 
+def _expire_stale_rounds(db: Session, session_id: int) -> None:
+    """Expire overdue active rounds before returning them to callers."""
+    now = _now()
+    db.query(AssessmentRound).filter(
+        AssessmentRound.session_id == session_id,
+        AssessmentRound.status == "active",
+        AssessmentRound.expires_at.isnot(None),
+        AssessmentRound.expires_at <= now,
+    ).update(
+        {"status": "expired", "completed_at": now},
+        synchronize_session="fetch",
+    )
+    db.commit()
+
+
+def get_owned_session(
+    db: Session,
+    session_id: int,
+    user_id: int,
+    *,
+    for_update: bool = False,
+) -> Optional[AssessmentSession]:
+    """Load a session only when it belongs to the authenticated user."""
+    query = db.query(AssessmentSession).filter(
+        AssessmentSession.id == session_id,
+        AssessmentSession.user_id == user_id,
+    )
+    if for_update:
+        query = query.with_for_update()
+    return query.first()
+
+
+def get_owned_round(
+    db: Session,
+    round_id: int,
+    user_id: int,
+    *,
+    for_update: bool = False,
+) -> Optional[AssessmentRound]:
+    """Load a round only through its owning session and authenticated user."""
+    query = (
+        db.query(AssessmentRound)
+        .join(AssessmentSession, AssessmentSession.id == AssessmentRound.session_id)
+        .filter(
+            AssessmentRound.id == round_id,
+            AssessmentSession.user_id == user_id,
+        )
+    )
+    if for_update:
+        query = query.with_for_update()
+    return query.first()
+
+
+def get_active_session(
+    db: Session, user_id: int, *, for_update: bool = False
+) -> Optional[AssessmentSession]:
+    """Return the user's active session, expiring it first when necessary."""
+    _expire_stale_session(db, user_id)
+    query = db.query(AssessmentSession).filter(
+        AssessmentSession.user_id == user_id,
+        AssessmentSession.status == "in_progress",
+    )
+    if for_update:
+        query = query.with_for_update()
+    return query.order_by(AssessmentSession.id.desc()).first()
+
+
 def create_session(db: Session, user_id: int) -> AssessmentSession:
-    """Create a new assessment session for *user_id*.
+    """Start or return the user's existing active session idempotently."""
+    existing = get_active_session(db, user_id, for_update=True)
+    if existing is not None:
+        return existing
 
-    The session is initialised with status ``in_progress``.
-
-    Returns:
-        The newly created ``AssessmentSession``.
-    """
+    started_at = _now()
     session = AssessmentSession(
         user_id=user_id,
         status="in_progress",
+        started_at=started_at,
+        expires_at=_session_expiry(started_at),
     )
     db.add(session)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        existing = get_active_session(db, user_id)
+        if existing is None:
+            raise
+        return existing
     db.refresh(session)
     return session
 
 
-def get_active_session(db: Session, user_id: int) -> Optional[AssessmentSession]:
-    """Return the currently active (``in_progress``) session for *user_id*.
-
-    Automatically expires sessions older than ``SESSION_TIMEOUT_MINUTES``.
-
-    Returns:
-        The ``AssessmentSession`` if one is active, otherwise ``None``.
-    """
-    # Clean up stale sessions first
-    _expire_stale_session(db, user_id)
-
-    return (
-        db.query(AssessmentSession)
-        .filter(
-            AssessmentSession.user_id == user_id,
-            AssessmentSession.status == "in_progress",
-        )
-        .first()
-    )
-
-
-def complete_session(db: Session, session_id: int) -> Optional[AssessmentSession]:
-    """Mark an assessment session as ``completed`` and set *completed_at*.
-
-    Returns:
-        The updated ``AssessmentSession``, or ``None`` if not found.
-    """
-    session = (
-        db.query(AssessmentSession)
-        .filter(AssessmentSession.id == session_id)
-        .first()
-    )
+def complete_session(
+    db: Session,
+    session_id: int,
+    user_id: int | None = None,
+) -> Optional[AssessmentSession]:
+    """Complete a session; repeated completion is safe and has no side effects."""
+    query = db.query(AssessmentSession).filter(AssessmentSession.id == session_id)
+    if user_id is not None:
+        query = query.filter(AssessmentSession.user_id == user_id)
+    session = query.with_for_update().first()
     if session is None:
         return None
+    if session.status == "completed":
+        return session
+    if session.status in {"expired", "terminated"}:
+        raise ValueError(f"Cannot complete a {session.status} session")
+    if session.status != "in_progress":
+        raise ValueError(f"Invalid session transition from {session.status}")
 
+    now = _now()
     session.status = "completed"
-    session.completed_at = datetime.now(timezone.utc)
+    session.completed_at = now
+    db.query(AssessmentRound).filter(
+        AssessmentRound.session_id == session.id,
+        AssessmentRound.status == "active",
+    ).update({"status": "completed", "completed_at": now}, synchronize_session="fetch")
     db.commit()
     db.refresh(session)
     return session
 
 
-# ── Round operations ──────────────────────────────────────────────────
+def expire_session(
+    db: Session,
+    session_id: int,
+    user_id: int | None = None,
+) -> Optional[AssessmentSession]:
+    """Expire an active session and its active round exactly once."""
+    query = db.query(AssessmentSession).filter(AssessmentSession.id == session_id)
+    if user_id is not None:
+        query = query.filter(AssessmentSession.user_id == user_id)
+    session = query.with_for_update().first()
+    if session is None:
+        return None
+    if session.status == "expired":
+        return session
+    if session.status != "in_progress":
+        raise ValueError(f"Invalid session expiration from {session.status}")
+    now = _now()
+    session.status = "expired"
+    session.completed_at = now
+    db.query(AssessmentRound).filter(
+        AssessmentRound.session_id == session.id,
+        AssessmentRound.status == "active",
+    ).update({"status": "expired", "completed_at": now}, synchronize_session="fetch")
+    db.commit()
+    db.refresh(session)
+    return session
 
-def create_round(
+
+def get_round(
+    db: Session,
+    round_id: int,
+    user_id: int | None = None,
+) -> Optional[AssessmentRound]:
+    if user_id is None:
+        return db.query(AssessmentRound).filter(AssessmentRound.id == round_id).first()
+    return get_owned_round(db, round_id, user_id)
+
+
+def get_active_round(
+    db: Session,
+    session_id: int,
+    *,
+    for_update: bool = False,
+) -> Optional[AssessmentRound]:
+    _expire_stale_rounds(db, session_id)
+    query = db.query(AssessmentRound).filter(
+        AssessmentRound.session_id == session_id,
+        AssessmentRound.status == "active",
+    )
+    if for_update:
+        query = query.with_for_update()
+    return query.order_by(AssessmentRound.id.desc()).first()
+
+
+def start_round(
     db: Session,
     session_id: int,
     round_type: str,
 ) -> AssessmentRound:
-    """Create a new round of *round_type* within the given session.
-
-    The round is initialised with status ``active``.
-
-    Returns:
-        The newly created ``AssessmentRound``.
-    """
-    assessment_round = AssessmentRound(
-        session_id=session_id,
-        round_type=round_type,
-        status="active",
+    """Activate one round for an active session, idempotently."""
+    session = (
+        db.query(AssessmentSession)
+        .filter(AssessmentSession.id == session_id)
+        .with_for_update()
+        .first()
     )
-    db.add(assessment_round)
-    db.commit()
-    db.refresh(assessment_round)
-    return assessment_round
+    if session is None:
+        raise ValueError("Assessment session not found")
+    if session.status != "in_progress":
+        raise ValueError(f"Cannot start a round for a {session.status} session")
+    if session.expires_at and session.expires_at <= _now():
+        session.status = "expired"
+        session.completed_at = _now()
+        db.commit()
+        raise ValueError("Cannot start a round for an expired session")
 
+    active = get_active_round(db, session_id, for_update=True)
+    if active is not None:
+        if active.round_type == round_type:
+            return active
+        raise ValueError("Another assessment round is already active")
 
-def get_active_round(db: Session, session_id: int) -> Optional[AssessmentRound]:
-    """Return the currently active round for the given session.
-
-    Returns:
-        The ``AssessmentRound`` if one is active, otherwise ``None``.
-    """
-    return (
+    pending = (
         db.query(AssessmentRound)
         .filter(
             AssessmentRound.session_id == session_id,
-            AssessmentRound.status == "active",
+            AssessmentRound.round_type == round_type,
+            AssessmentRound.status == "pending",
         )
+        .with_for_update()
+        .order_by(AssessmentRound.id.desc())
         .first()
     )
-
-
-def end_round(db: Session, round_id: int) -> Optional[AssessmentRound]:
-    """Mark a round as ``completed`` and set *completed_at*.
-
-    Returns:
-        The updated ``AssessmentRound``, or ``None`` if not found.
-    """
-    assessment_round = (
-        db.query(AssessmentRound)
-        .filter(AssessmentRound.id == round_id)
-        .first()
+    started_at = _now()
+    assessment_round = pending or AssessmentRound(
+        session_id=session_id,
+        round_type=round_type,
+        status="pending",
+        started_at=started_at,
     )
+    assessment_round.status = "active"
+    assessment_round.started_at = started_at
+    assessment_round.expires_at = _round_expiry(started_at)
+    db.add(assessment_round)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        existing = get_active_round(db, session_id)
+        if existing is None:
+            raise
+        return existing
+    db.refresh(assessment_round)
+    return assessment_round
+
+
+def create_round(db: Session, session_id: int, round_type: str) -> AssessmentRound:
+    """Compatibility wrapper for existing module services."""
+    return start_round(db, session_id, round_type)
+
+
+def complete_round(
+    db: Session,
+    round_id: int,
+    user_id: int | None = None,
+) -> Optional[AssessmentRound]:
+    """Complete an active round; repeated completion is idempotent."""
+    query = db.query(AssessmentRound).filter(AssessmentRound.id == round_id)
+    if user_id is not None:
+        query = query.join(AssessmentSession).filter(
+            AssessmentSession.user_id == user_id
+        )
+    assessment_round = query.with_for_update().first()
     if assessment_round is None:
         return None
-
+    if assessment_round.status == "completed":
+        return assessment_round
+    if assessment_round.status in {"expired", "terminated"}:
+        raise ValueError(f"Cannot complete a {assessment_round.status} round")
+    if assessment_round.status != "active":
+        raise ValueError(f"Invalid round transition from {assessment_round.status}")
     assessment_round.status = "completed"
-    assessment_round.completed_at = datetime.now(timezone.utc)
+    assessment_round.completed_at = _now()
     db.commit()
     db.refresh(assessment_round)
     return assessment_round
+
+
+def end_round(
+    db: Session,
+    round_id: int,
+    user_id: int | None = None,
+) -> Optional[AssessmentRound]:
+    """Compatibility wrapper for existing module services."""
+    return complete_round(db, round_id, user_id)
+
+
+def expire_round(
+    db: Session,
+    round_id: int,
+    user_id: int | None = None,
+) -> Optional[AssessmentRound]:
+    """Expire an active round exactly once."""
+    query = db.query(AssessmentRound).filter(AssessmentRound.id == round_id)
+    if user_id is not None:
+        query = query.join(AssessmentSession).filter(
+            AssessmentSession.user_id == user_id
+        )
+    assessment_round = query.with_for_update().first()
+    if assessment_round is None:
+        return None
+    if assessment_round.status == "expired":
+        return assessment_round
+    if assessment_round.status != "active":
+        raise ValueError(f"Invalid round expiration from {assessment_round.status}")
+    assessment_round.status = "expired"
+    assessment_round.completed_at = _now()
+    db.commit()
+    db.refresh(assessment_round)
+    return assessment_round
+
+
+def advance_to_next_round(
+    db: Session,
+    session_id: int,
+    next_round_type: str,
+) -> AssessmentRound:
+    """Complete the current round and activate exactly one next round."""
+    session = (
+        db.query(AssessmentSession)
+        .filter(AssessmentSession.id == session_id)
+        .with_for_update()
+        .first()
+    )
+    if session is None:
+        raise ValueError("Assessment session not found")
+    if session.status != "in_progress":
+        raise ValueError(f"Cannot advance a {session.status} session")
+    active = get_active_round(db, session_id, for_update=True)
+    if active is not None:
+        if active.round_type == next_round_type:
+            return active
+        complete_round(db, active.id)
+    return start_round(db, session_id, next_round_type)
 
 
 def get_user_active_round(
@@ -188,41 +400,22 @@ def get_user_active_round(
     user_id: int,
     round_type: str = "aptitude",
 ) -> Optional[AssessmentRound]:
-    """Return the active round of *round_type* for a user's in-progress session.
-
-    Chains: user_id → active session → active round of the given type.
-
-    Args:
-        db: Active database session.
-        user_id: The authenticated user's ID.
-        round_type: ``aptitude``, ``coding``, or ``interview``.
-
-    Returns:
-        The ``AssessmentRound`` if found, otherwise ``None``.
-    """
+    """Return an active round owned by the authenticated user."""
     active_session = get_active_session(db, user_id)
     if active_session is None:
         return None
-
     if round_type in ("aptitude", "mcq", "technical", "combined"):
         match_types = ["aptitude", "mcq", "technical", "combined"]
-        return (
-            db.query(AssessmentRound)
-            .filter(
-                AssessmentRound.session_id == active_session.id,
-                AssessmentRound.round_type.in_(match_types),
-                AssessmentRound.status == "active",
-            )
-            .first()
-        )
-
+        query = AssessmentRound.round_type.in_(match_types)
+    else:
+        query = AssessmentRound.round_type == round_type
+    _expire_stale_rounds(db, active_session.id)
     return (
         db.query(AssessmentRound)
         .filter(
             AssessmentRound.session_id == active_session.id,
-            AssessmentRound.round_type == round_type,
+            query,
             AssessmentRound.status == "active",
         )
         .first()
     )
-

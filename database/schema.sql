@@ -65,6 +65,7 @@ CREATE TABLE assessment_sessions (
         CHECK (status IN ('not_started','in_progress','completed','terminated','expired')),
     started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at TIMESTAMP,
+    expires_at TIMESTAMP,
     total_score FLOAT DEFAULT 0,
     FOREIGN KEY (user_id) REFERENCES users(id)
 );
@@ -88,6 +89,7 @@ CREATE TABLE assessment_rounds (
     score FLOAT DEFAULT 0,
     max_questions INTEGER NOT NULL DEFAULT 20,
     started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP,
     completed_at TIMESTAMP,
     FOREIGN KEY (session_id)
         REFERENCES assessment_sessions(id) ON DELETE CASCADE

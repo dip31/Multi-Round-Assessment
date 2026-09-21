@@ -15,11 +15,11 @@ from app.database.db import get_db
 from app.models.user import User
 from app.services.auth_service import get_user_by_id
 
-bearer_scheme = HTTPBearer()
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
     """Decode the JWT bearer token and return the corresponding user.
@@ -33,6 +33,9 @@ def get_current_user(
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+    if credentials is None:
+        raise credentials_exception
 
     token = credentials.credentials
 

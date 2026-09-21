@@ -12,7 +12,15 @@ from app.database.db import get_db
 from app.models.user import User
 from app.models.assessment import AssessmentSession
 from app.schemas.assessment import SessionResponse
-from app.services.session_service import create_session, create_round, get_active_session, complete_session, end_round, get_user_active_round
+from app.services.session_service import (
+    complete_session,
+    create_round,
+    create_session,
+    end_round,
+    get_active_round,
+    get_active_session,
+    get_user_active_round,
+)
 
 router = APIRouter(prefix="/session", tags=["Assessment Sessions"])
 
@@ -41,7 +49,8 @@ def start_session(
     session = create_session(db, user_id=current_user.id)
 
     # Auto-create the first round (aptitude)
-    create_round(db, session_id=session.id, round_type="aptitude")
+    if get_user_active_round(db, current_user.id, "aptitude") is None:
+        create_round(db, session_id=session.id, round_type="aptitude")
 
     # Refresh to include the new round in the response
     db.refresh(session)
@@ -101,13 +110,14 @@ def start_fresh_session(
     """Complete any existing active session and create a brand new assessment session."""
     active = get_active_session(db, user_id=current_user.id)
     if active:
-        active_round = get_user_active_round(db, current_user.id, round_type="aptitude")
+        active_round = get_active_round(db, active.id)
         if active_round is not None:
-            end_round(db, active_round.id)
-        complete_session(db, active.id)
+            end_round(db, active_round.id, current_user.id)
+        complete_session(db, active.id, current_user.id)
 
     session = create_session(db, user_id=current_user.id)
-    create_round(db, session_id=session.id, round_type="aptitude")
+    if get_user_active_round(db, current_user.id, "aptitude") is None:
+        create_round(db, session_id=session.id, round_type="aptitude")
     db.refresh(session)
     return session
 
@@ -124,13 +134,23 @@ def complete_current_session(
     """Mark the current active session and round as completed."""
     session = get_active_session(db, user_id=current_user.id)
     if session is None:
+        latest = (
+            db.query(AssessmentSession)
+            .filter(AssessmentSession.user_id == current_user.id)
+            .order_by(AssessmentSession.id.desc())
+            .first()
+        )
+        if latest is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No session found")
+        if latest.status in {"completed", "expired", "terminated"}:
+            return latest
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active session found")
 
-    active_round = get_user_active_round(db, current_user.id, round_type="aptitude")
+    active_round = get_active_round(db, session.id)
     if active_round is not None:
-        end_round(db, active_round.id)
+        end_round(db, active_round.id, current_user.id)
 
-    completed_session = complete_session(db, session.id)
+    completed_session = complete_session(db, session.id, current_user.id)
     if completed_session is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active session found")
 

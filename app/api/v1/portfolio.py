@@ -26,7 +26,7 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import func
 
 from app.database.db import get_db
@@ -184,7 +184,9 @@ def get_my_portfolio(
 
     interview_sessions = []
     if session_ids:
-        interview_sessions = db.query(InterviewSession).filter(
+        interview_sessions = db.query(InterviewSession).options(
+            selectinload(InterviewSession.turns)
+        ).filter(
             InterviewSession.session_id.in_(session_ids)
         ).all()
 
@@ -221,7 +223,11 @@ def get_my_portfolio(
     comm_ints = [s for s in interview_sessions if getattr(s, "interview_type", "") == "communication"]
 
     def _best_interview_score(sess_list):
-        scores = [round(s.final_score * 100, 1) for s in sess_list if s.final_score is not None]
+        scores = []
+        for s in sess_list:
+            for t in getattr(s, "turns", []):
+                if t.final_score is not None:
+                    scores.append(round(t.final_score * 100, 1))
         return max(scores, default=None)
 
     best_tech_int = _best_interview_score(tech_ints)
