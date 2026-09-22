@@ -1,4 +1,7 @@
-"""Authoritative assessment session and round lifecycle operations."""
+"""Authoritative assessment session and round lifecycle operations.
+
+M2-E: Context-aware session creation with policy-driven timing.
+"""
 
 from datetime import datetime, timedelta
 from typing import Optional
@@ -8,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.config.settings import settings
 from app.models.assessment import AssessmentRound, AssessmentSession
+from app.models.assessment_context import AssessmentContext
 
 
 SESSION_TIMEOUT_MINUTES: int = getattr(settings, "SESSION_TIMEOUT_MINUTES", 180)
@@ -24,12 +28,30 @@ def _now() -> datetime:
     return datetime.utcnow()
 
 
-def _session_expiry(started_at: datetime) -> datetime:
-    return started_at + timedelta(minutes=SESSION_TIMEOUT_MINUTES)
+def _session_expiry(started_at: datetime, context: Optional[AssessmentContext] = None) -> datetime:
+    """Calculate session expiry from policy or fallback to global config."""
+    if context and context.policy:
+        duration_minutes = context.policy.session_duration_minutes
+    else:
+        duration_minutes = SESSION_TIMEOUT_MINUTES
+    
+    expiry = started_at + timedelta(minutes=duration_minutes)
+    
+    # Respect availability window if set
+    if context and context.availability_end:
+        expiry = min(expiry, context.availability_end)
+    
+    return expiry
 
 
-def _round_expiry(started_at: datetime) -> datetime:
-    return started_at + timedelta(minutes=ROUND_TIMEOUT_MINUTES)
+def _round_expiry(started_at: datetime, context: Optional[AssessmentContext] = None) -> datetime:
+    """Calculate round expiry from policy or fallback to global config."""
+    if context and context.policy:
+        duration_minutes = context.policy.round_duration_minutes
+    else:
+        duration_minutes = ROUND_TIMEOUT_MINUTES
+    
+    return started_at + timedelta(minutes=duration_minutes)
 
 
 def _expire_stale_session(db: Session, user_id: int) -> None:
@@ -132,18 +154,30 @@ def get_active_session(
     return query.order_by(AssessmentSession.id.desc()).first()
 
 
-def create_session(db: Session, user_id: int) -> AssessmentSession:
-    """Start or return the user's existing active session idempotently."""
+def create_session(db: Session, user_id: int, context_id: Optional[int] = None) -> AssessmentSession:
+    """Start or return the user's existing active session idempotently.
+    
+    M2-E: Context-aware session creation.
+    - If context_id provided, uses policy from context
+    - Otherwise falls back to legacy behavior
+    """
     existing = get_active_session(db, user_id, for_update=True)
     if existing is not None:
         return existing
 
     started_at = _now()
+    
+    # Fetch context for policy-driven timing
+    context = None
+    if context_id:
+        context = db.query(AssessmentContext).filter(AssessmentContext.id == context_id).first()
+    
     session = AssessmentSession(
         user_id=user_id,
+        context_id=context_id,
         status="in_progress",
         started_at=started_at,
-        expires_at=_session_expiry(started_at),
+        expires_at=_session_expiry(started_at, context),
     )
     db.add(session)
     try:
@@ -248,7 +282,10 @@ def start_round(
     session_id: int,
     round_type: str,
 ) -> AssessmentRound:
-    """Activate one round for an active session, idempotently."""
+    """Activate one round for an active session, idempotently.
+    
+    M2-E: Context-aware round expiry from policy.
+    """
     session = (
         db.query(AssessmentSession)
         .filter(AssessmentSession.id == session_id)
@@ -283,6 +320,12 @@ def start_round(
         .first()
     )
     started_at = _now()
+    
+    # Get context for policy-driven timing
+    context = None
+    if session.context_id:
+        context = db.query(AssessmentContext).filter(AssessmentContext.id == session.context_id).first()
+    
     assessment_round = pending or AssessmentRound(
         session_id=session_id,
         round_type=round_type,
@@ -291,7 +334,7 @@ def start_round(
     )
     assessment_round.status = "active"
     assessment_round.started_at = started_at
-    assessment_round.expires_at = _round_expiry(started_at)
+    assessment_round.expires_at = _round_expiry(started_at, context)
     db.add(assessment_round)
     try:
         db.commit()

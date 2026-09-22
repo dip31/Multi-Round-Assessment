@@ -622,9 +622,9 @@ def get_detailed_student_analytics(
         "success_rate": cod_success_rate,
         "test_cases_passed_pct": round(
             sum(
-                (float(s.passed_test_cases) / float(s.total_test_cases) * 100)
+                (float(s.score) * 100)
                 for s in cod_submissions
-                if s.total_test_cases and s.total_test_cases > 0
+                if s.score is not None
             ) / len(cod_submissions),
             1,
         ) if cod_submissions else None,
@@ -748,6 +748,7 @@ def get_detailed_student_analytics(
     trend = [
         {
             "id": r.id,
+            "session_id": r.session_id,
             "date": r.completed_at.strftime("%b %d") if r.completed_at else "Recent",
             "round_type": r.round_type,
             "round_name": round_label_map.get(r.round_type, r.round_type.title()),

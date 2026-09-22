@@ -107,7 +107,12 @@ def start_fresh_session(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> SessionResponse:
-    """Complete any existing active session and create a brand new assessment session."""
+    """Complete any existing active session and create a brand new assessment session.
+    
+    NOTE: `/session/fresh` is a legacy session-start endpoint that uses
+    sequential progression (always creates an aptitude round first).
+    Independent Practice uses `/practice/start`.
+    """
     active = get_active_session(db, user_id=current_user.id)
     if active:
         active_round = get_active_round(db, active.id)

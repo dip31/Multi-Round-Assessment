@@ -32,6 +32,7 @@ export default function AptitudeTest() {
     const [toast, setToast] = useState(null);
     const [networkOffline, setNetworkOffline] = useState(false);
     const [sessionId, setSessionId] = useState(null);
+    const [roundId, setRoundId] = useState(null);
     const [proctoringWarnings, setProctoringWarnings] = useState([]);
     const [proctoringBlocked, setProctoringBlocked] = useState(false);
     const [testTerminated, setTestTerminated] = useState(false);
@@ -48,14 +49,28 @@ export default function AptitudeTest() {
         } catch {
             // Ignore session finalization errors and continue to the result page.
         } finally {
-            navigate('/result');
+            if (sessionId && roundId) {
+                // For practice mode, go to the summary page first
+                navigate(`/result/${sessionId}/${roundId}`);
+            } else {
+                // Fallback for non-practice mode
+                navigate('/result');
+            }
         }
-    }, [navigate]);
+    }, [navigate, sessionId, roundId]);
+
+    // Guard: proctoring violations should not terminate the test until the first
+    // question has been shown. This prevents camera-init errors from killing
+    // the test before it even starts.
+    const testHasStartedRef = useRef(false);
 
     // Initialize advanced proctoring hook
     const { videoRef, isMonitoring, enterFullscreen, detectionResults } = useAdvancedProctoring(
         sessionId,
         (violation) => {
+            // Don't allow proctoring to terminate before the first question loads.
+            if (!testHasStartedRef.current) return;
+
             if (violation.terminate) {
                 setTestTerminated(true);
                 setProctoringBlocked(true);
@@ -133,6 +148,11 @@ export default function AptitudeTest() {
                 const responseTime = (endTime - startTimeRef.current) / 1000;
                 submitAnswer(question.question_id, null, responseTime).catch(() => {});
             }
+            // Auto-redirect after 3 seconds to back up the "Redirecting..." message
+            const timer = setTimeout(() => {
+                finalizeAndGoToResult();
+            }, 3000);
+            return () => clearTimeout(timer);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [testTerminated]);
@@ -165,16 +185,27 @@ export default function AptitudeTest() {
             const data = await getNextQuestion(practiceType, subject);
             console.log('🔍 DEBUG: Received question data:', data);
             setQuestion(data);
+            testHasStartedRef.current = true;  // first question received — proctoring active
             startTimeRef.current = Date.now();
             setQuestionCount(prev => prev + 1);
             console.log('🔍 DEBUG: Question set, new count:', questionCountRef.current + 1);
         } catch (err) {
             console.error('🔍 DEBUG: Error in fetchQuestion:', err);
             if (err.response?.status === 404) {
-                setTestFinished({
-                    reason: 'completed',
-                    message: 'All available questions for this round have been completed. Click below to view your results.'
-                });
+                // 404 = no active aptitude round OR no more questions.
+                // Only treat as "completed" if at least 1 question has already been shown.
+                // If 0 questions answered, this is a startup/session error, not completion.
+                if (questionCountRef.current > 0) {
+                    setTestFinished({
+                        reason: 'completed',
+                        message: 'All available questions for this round have been completed. Click below to view your results.'
+                    });
+                } else {
+                    // No active round found before test started — session problem.
+                    // Navigate back to dashboard so user can restart cleanly.
+                    console.error('No active aptitude round found on test start. Redirecting to dashboard.');
+                    navigate('/dashboard');
+                }
             } else if (!err.response) {
                 setNetworkOffline(true);
                 setToast({
@@ -189,7 +220,7 @@ export default function AptitudeTest() {
             console.log('🔍 DEBUG: Setting loading to false');
             setLoading(false);
         }
-    }, [practiceType, subject, finalizeAndGoToResult]);
+    }, [practiceType, subject]);
 
     const isInitialized = useRef(false);
 
@@ -201,6 +232,13 @@ export default function AptitudeTest() {
         try {
             const status = await getSessionStatus();
             setSessionId(status.id);
+            if (status.rounds && status.rounds.length > 0) {
+                // Find the active aptitude round (or the last completed one if just finished)
+                const aptRounds = status.rounds.filter(r => ['aptitude', 'mcq', 'technical', 'combined'].includes(r.round_type));
+                if (aptRounds.length > 0) {
+                    setRoundId(aptRounds[aptRounds.length - 1].id);
+                }
+            }
             setTimeRemaining(status.time_remaining_seconds ?? 1800);
         } catch (err) {
             if (!err.response) {

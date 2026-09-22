@@ -8,7 +8,7 @@ export const startSession = async () => {
 export const getSessionStatus = async () => {
     console.log('🔍 DEBUG: Calling getSessionStatus...');
     try {
-        const response = await api.get('/session/status');
+        const response = await api.get(`/session/status?t=${Date.now()}`);
         console.log('🔍 DEBUG: Session status response:', response);
         return response.data;
     } catch (error) {
@@ -29,5 +29,10 @@ export const startCodingAfterAptitude = async () => {
 
 export const startFreshSession = async () => {
     const response = await api.post('/session/fresh');
+    return response.data;
+};
+
+export const startPractice = async (roundType) => {
+    const response = await api.post('/practice/start', { round_type: roundType });
     return response.data;
 };

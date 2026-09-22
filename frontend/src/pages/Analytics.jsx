@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import Navbar from '../components/Navbar';
+import StudentModeLayout from '../components/StudentModeLayout';
 import { getStudentAnalytics, getAnalytics } from '../services/reportService';
 import {
     ResponsiveContainer,
@@ -49,19 +49,22 @@ export default function Analytics() {
 
     if (loading) {
         return (
-            <div className="bg-slate-50 text-slate-900 font-['Inter'] min-h-screen flex items-center justify-center antialiased">
-                <div className="text-center">
-                    <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-slate-500 text-sm font-semibold">Loading student analytics...</p>
+            <StudentModeLayout>
+                <div className="min-h-screen flex items-center justify-center">
+                    <div className="text-center">
+                        <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                        <p className="text-slate-500 text-sm font-semibold">Loading student analytics...</p>
+                    </div>
                 </div>
-            </div>
+            </StudentModeLayout>
         );
     }
 
     if (error) {
         return (
-            <div className="bg-slate-50 text-slate-900 font-['Inter'] min-h-screen flex items-center justify-center p-6 antialiased">
-                <div className="bg-white border border-slate-200 rounded-3xl p-8 max-w-md w-full text-center shadow-sm">
+            <StudentModeLayout>
+                <div className="min-h-screen flex items-center justify-center p-6">
+                    <div className="bg-white border border-slate-200 rounded-3xl p-8 max-w-md w-full text-center shadow-sm">
                     <div className="w-14 h-14 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl font-bold">
                         ⚠️
                     </div>
@@ -74,7 +77,8 @@ export default function Analytics() {
                         Try Again
                     </button>
                 </div>
-            </div>
+                </div>
+            </StudentModeLayout>
         );
     }
 
@@ -95,9 +99,7 @@ export default function Analytics() {
     const hasAnyAttempts = (summary.questions_attempted || 0) > 0 || trend.length > 0;
 
     return (
-        <div className="bg-slate-50 text-slate-900 font-['Inter'] antialiased min-h-screen">
-            <Navbar position="sticky" />
-
+        <StudentModeLayout>
             <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
                 {/* Header Strip */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
@@ -228,6 +230,58 @@ export default function Analytics() {
                     ) : (
                         <div className="py-12 text-center text-xs text-slate-400 italic">
                             No historical sessions completed yet. Practice rounds will populate your progression chart.
+                        </div>
+                    )}
+                </section>
+
+                {/* 2.5 PRACTICE HISTORY LIST */}
+                <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs mt-6">
+                    <div className="mb-6">
+                        <h2 className="text-base font-bold text-slate-900 tracking-tight">
+                            Recent Practice History
+                        </h2>
+                        <p className="text-xs text-slate-500">Detailed review of your past attempts</p>
+                    </div>
+                    
+                    {trend.length > 0 ? (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider bg-slate-50">
+                                        <th className="p-4 rounded-tl-xl">Date</th>
+                                        <th className="p-4">Assessment Type</th>
+                                        <th className="p-4">Score</th>
+                                        <th className="p-4 rounded-tr-xl">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {[...trend].reverse().map((item, idx) => (
+                                        <tr key={`${item.id}-${idx}`} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
+                                            <td className="p-4 text-sm font-medium text-slate-900">{item.date}</td>
+                                            <td className="p-4 text-sm text-slate-600">{item.round_name}</td>
+                                            <td className="p-4">
+                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${item.score >= 75 ? 'bg-emerald-100 text-emerald-800' : item.score >= 50 ? 'bg-indigo-100 text-indigo-800' : 'bg-amber-100 text-amber-800'}`}>
+                                                    {item.score}%
+                                                </span>
+                                            </td>
+                                            <td className="p-4">
+                                                {item.session_id && (
+                                                    <Link 
+                                                        to={`/practice/result/${item.session_id}/${item.id}`}
+                                                        className="text-indigo-600 hover:text-indigo-900 text-sm font-medium"
+                                                    >
+                                                        View Details →
+                                                    </Link>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    ) : (
+                        <div className="py-8 text-center text-xs text-slate-400 italic">
+                            No historical sessions available.
                         </div>
                     )}
                 </section>
@@ -497,6 +551,6 @@ export default function Analytics() {
                     </div>
                 </div>
             </main>
-        </div>
+        </StudentModeLayout>
     );
 }

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Navbar from '../components/Navbar';
 import { Toast } from '../components/Toast';
 import PageSkeleton from '../components/shared/PageSkeleton';
+import StudentLayout from '../components/StudentLayout';
+import Navbar from '../components/Navbar';
 
 import { getProfile } from '../services/profileService';
 import { getResumes, getResumeFileUrl, viewResumeFile } from '../services/resumeService';
@@ -24,7 +25,6 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [toast, setToast] = useState(null);
-    const [activePillarTab, setActivePillarTab] = useState('practice'); // 'practice' | 'portfolio' | 'mock_drive'
     const [startingRound, setStartingRound] = useState(null);
     const [showFreshModal, setShowFreshModal] = useState(false);
     const [freshLoading, setFreshLoading] = useState(false);
@@ -112,13 +112,17 @@ export default function Dashboard() {
     const codRound = getRoundData('coding');
     const intRound = getRoundData('interview');
 
-    // Also factor in analytics completed rounds for historical completion
+    // Use ONLY the current session's round status for card state.
+    // analyticsCompletedRounds spans all historical sessions and incorrectly
+    // marks a round as "completed" when the current session has it active.
     const analyticsCompletedRounds = Array.isArray(analytics?.completed_rounds) ? analytics.completed_rounds : [];
 
-    const isAptitudeCompleted = aptRound?.status === 'completed' || analyticsCompletedRounds.includes('aptitude');
-    const isCodingCompleted = codRound?.status === 'completed' || analyticsCompletedRounds.includes('coding');
-    const isInterviewCompleted = intRound?.status === 'completed' || analyticsCompletedRounds.includes('interview');
+    const isAptitudeCompleted = aptRound?.status === 'completed';
+    const isCodingCompleted = codRound?.status === 'completed';
+    const isInterviewCompleted = intRound?.status === 'completed';
 
+    // For progress KPIs (dashboard metrics), include historical data so the
+    // overall score / percentile / rounds-done count remains meaningful.
     const completedRoundsCount = [isAptitudeCompleted, isCodingCompleted, isInterviewCompleted].filter(Boolean).length;
     const progressPercent = Math.round((completedRoundsCount / 3) * 100);
 
@@ -140,7 +144,14 @@ export default function Dashboard() {
         try {
             const config = { practice_type: practiceType, subject: subject };
             localStorage.setItem('edi5_practice_config', JSON.stringify(config));
-            await startSession();
+
+            // Always use startFreshSession for practice starts.
+            // - If there is no active session: creates one with a fresh aptitude round.
+            // - If there IS an active session: completes it first, then creates a new one.
+            // This avoids stale React state causing the wrong branch to execute.
+            // startFreshSession is defined in session_router as POST /session/fresh.
+            await startFreshSession();
+
             navigate('/aptitude', { state: { practice_config: config } });
         } catch (err) {
             setToast({ type: 'error', message: err.response?.data?.detail || 'Failed to initialize practice round' });
@@ -367,25 +378,7 @@ export default function Dashboard() {
                         </div>
                     </div>
 
-                    {/* KPI 2: Rounds Progress */}
-                    <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs">
-                        <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Rounds Progress</span>
-                            <span className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-sm">
-                                🎯
-                            </span>
-                        </div>
-                        <div className="flex items-baseline gap-2">
-                            <span className="text-3xl font-black text-slate-900">{completedRoundsCount} / 3</span>
-                            <span className="text-xs text-emerald-600 font-semibold">{progressPercent}% Done</span>
-                        </div>
-                        <div className="w-full h-1.5 bg-slate-100 rounded-full mt-3 overflow-hidden">
-                            <div
-                                className="h-full bg-emerald-500 rounded-full transition-all duration-500"
-                                style={{ width: `${progressPercent}%` }}
-                            ></div>
-                        </div>
-                    </div>
+
 
                     {/* KPI 3: Percentile Rank */}
                     <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs">
@@ -430,56 +423,8 @@ export default function Dashboard() {
                     </div>
                 </div>
 
-                {/* ── 3. Three Core EDI5 Experience Pillars ── */}
+                {/* ── 3. Practice Rounds ── */}
                 <div className="mb-8">
-                    {/* Navigation Pills */}
-                    <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-6">
-                        <div className="flex items-center gap-2 overflow-x-auto py-1">
-                            <button
-                                onClick={() => setActivePillarTab('practice')}
-                                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-                                    activePillarTab === 'practice'
-                                        ? 'bg-indigo-600 text-white shadow-sm'
-                                        : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
-                                }`}
-                            >
-                                🎯 Practice Mode — Improve Skills
-                            </button>
-                            <button
-                                onClick={() => setActivePillarTab('portfolio')}
-                                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-                                    activePillarTab === 'portfolio'
-                                        ? 'bg-indigo-600 text-white shadow-sm'
-                                        : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
-                                }`}
-                            >
-                                💼 Digital Portfolio — Prove Capability
-                            </button>
-                            <button
-                                onClick={() => setActivePillarTab('mock_drive')}
-                                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-                                    activePillarTab === 'mock_drive'
-                                        ? 'bg-indigo-600 text-white shadow-sm'
-                                        : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
-                                }`}
-                            >
-                                🏢 Mock Drive — Simulate Recruitment
-                            </button>
-                        </div>
-
-                        {/* Reset / Fresh Cycle Action */}
-                        <button
-                            onClick={() => setShowFreshModal(true)}
-                            className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 rounded-xl hover:bg-slate-50 transition-all shadow-xs"
-                            title="Start a fresh cycle while preserving past round history"
-                        >
-                            <span>🔄</span> Start Fresh Assessment
-                        </button>
-                    </div>
-
-                    {/* ── PILLAR 1: PRACTICE MODE ── */}
-                    {activePillarTab === 'practice' && (
-                        <div className="space-y-10">
                             {/* Practice Rounds Header */}
                             <div>
                                 <h2 className="text-xl font-black text-slate-900 tracking-tight">Practice Assessment Rounds</h2>
@@ -689,12 +634,21 @@ export default function Dashboard() {
 
                                     <div>
                                         {isCodingCompleted ? (
-                                            <button
-                                                onClick={() => navigate('/coding/result')}
-                                                className="w-full py-2.5 px-4 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 transition-all text-center"
-                                            >
-                                                Review Submissions →
-                                            </button>
+                                            <div className="flex flex-col gap-2">
+                                                <button
+                                                    onClick={() => navigate('/coding/result')}
+                                                    className="w-full py-2.5 px-4 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 transition-all text-center"
+                                                >
+                                                    Review Submissions →
+                                                </button>
+                                                <button
+                                                    onClick={() => handleStartPractice('mcq')}
+                                                    disabled={startingRound === 'mcq'}
+                                                    className="w-full py-2.5 px-4 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                                                >
+                                                    {startingRound === 'mcq' ? 'Starting...' : 'New Practice Attempt →'}
+                                                </button>
+                                            </div>
                                         ) : codRound?.status === 'active' ? (
                                             <button
                                                 onClick={() => navigate('/coding')}
@@ -807,15 +761,9 @@ export default function Dashboard() {
                                 </div>
                             </div>
                         </div>
-                    )}
 
-                    {/* ── PILLAR 2: DIGITAL PORTFOLIO ── */}
-                    {activePillarTab === 'portfolio' && (
-                        <PortfolioView />
-                    )}
-
-                    {/* ── PILLAR 3: MOCK DRIVE ── */}
-                    {activePillarTab === 'mock_drive' && (
+                {/* ── 3B. Mock Drive Simulation ── */}
+                <div className="mb-8">
                         <div className="space-y-6">
                             <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-8 shadow-sm">
                                 <div className="mb-6">
@@ -990,7 +938,6 @@ export default function Dashboard() {
                                 </div>
                             </div>
                         </div>
-                    )}
                 </div>
 
                 {/* ── 4. Technical Subject & Competency Breakdown (Real Backend Data) ── */}

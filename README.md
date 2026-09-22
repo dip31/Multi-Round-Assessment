@@ -455,6 +455,8 @@ createdb ai_placement_platform
 psql -d ai_placement_platform -f database/schema.sql
 ```
 
+> **Note**: For a complete reference of the current SQLAlchemy database models and schema definitions, please see [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md).
+
 ## Testing and Verification
 
 ### Backend tests

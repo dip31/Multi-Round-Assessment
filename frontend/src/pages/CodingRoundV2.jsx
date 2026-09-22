@@ -38,6 +38,7 @@ export default function CodingRoundV2() {
     || null;
   // sessionId is resolved separately so we only pass a real id to proctoring.
   const [sessionId, setSessionId] = useState(null); // Don't use stale localStorage value
+  const [roundId, setRoundId] = useState(null);
 
   const { startMonitoring, stopMonitoring, isMonitoring, videoRef } = useAdvancedProctoring(sessionId, (violation) => {
     if (violation.terminate) {
@@ -78,8 +79,15 @@ export default function CodingRoundV2() {
     } catch (e) {
       console.error('Auto-submit failed:', e);
     }
-    navigate('/coding/result');
-  }, [problems, selectedIndex, codes, language, navigate]);
+    
+    // Check if it's a practice round or not
+    const practiceConfig = JSON.parse(localStorage.getItem('edi5_practice_config') || '{}');
+    if (practiceConfig && practiceConfig.practice_type && sessionId && roundId) {
+        navigate(`/result/${sessionId}/${roundId}`);
+    } else {
+        navigate('/coding/result');
+    }
+  }, [problems, selectedIndex, codes, language, navigate, sessionId, roundId]);
 
   // Timer starts as unresolved (null) and is populated from the real session.
   const { timeRemaining, setTimeRemaining } = useTimer(null, handleTimeExpired);
@@ -100,15 +108,29 @@ export default function CodingRoundV2() {
 
     try {
       const started = await startRound();
-      // Backend returns {round, assigned, problems}
-      if (started && started.problems && started.problems.length > 0) {
-        setProblems(started.problems);
-        
-        if (started.round?.session_id) {
-          localStorage.setItem('coding_round_id', started.round.session_id.toString());
-          setSessionId(started.round.session_id);
+      // Backend returns either:
+      //   - An array of problems directly (when round already active, returns problems list)
+      //   - A {round, assigned, problems} object (new round creation)
+      // In both cases extract the problems array.
+      let problemList = null;
+      let roundSessionId = null;
+
+      if (Array.isArray(started)) {
+        // Flat array returned by /coding/start when resuming existing round
+        problemList = started;
+      } else if (started && Array.isArray(started.problems)) {
+        problemList = started.problems;
+        roundSessionId = started.round?.session_id ?? null;
+      }
+
+      if (problemList && problemList.length > 0) {
+        setProblems(problemList);
+        if (roundSessionId) {
+          localStorage.setItem('coding_round_id', roundSessionId.toString());
+          setSessionId(roundSessionId);
         }
       } else {
+        // Fallback: get problems assigned to the active round
         const fallback = await getProblems();
         setProblems(Array.isArray(fallback) ? fallback : []);
       }
@@ -143,6 +165,12 @@ export default function CodingRoundV2() {
         if (data?.id && data.id !== sessionId) {
           setSessionId(data.id);
           localStorage.setItem('coding_round_id', data.id.toString());
+        }
+        if (data?.rounds && data.rounds.length > 0) {
+            const codingRounds = data.rounds.filter(r => r.round_type === 'coding');
+            if (codingRounds.length > 0) {
+                setRoundId(codingRounds[codingRounds.length - 1].id);
+            }
         }
         const remaining = data?.time_remaining_seconds;
         if (typeof remaining === 'number' && Number.isFinite(remaining) && remaining >= 0) {
@@ -242,7 +270,12 @@ export default function CodingRoundV2() {
     setIsFinishing(true);
     try {
       const res = await finishRound();
-      navigate('/coding/result');
+      const practiceConfig = JSON.parse(localStorage.getItem('edi5_practice_config') || '{}');
+      if (practiceConfig && practiceConfig.practice_type && sessionId && roundId) {
+          navigate(`/result/${sessionId}/${roundId}`);
+      } else {
+          navigate('/coding/result');
+      }
     } catch (e) {
       console.error('Finish round failed:', e);
       setIsFinishing(false);

@@ -277,9 +277,15 @@ export default function ResultPage() {
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                             <h2 className="text-lg font-bold text-slate-900">Next action</h2>
-                            <p className="text-sm text-slate-500">Move to another round, review the summary, or retry the assessment flow.</p>
+                            <p className="text-sm text-slate-500">Move to the coding round, retry the aptitude round, or return to the dashboard.</p>
                         </div>
                         <div className="flex flex-wrap gap-3">
+                            <button
+                                onClick={() => navigate('/coding')}
+                                className="rounded-xl bg-emerald-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 shadow-sm"
+                            >
+                                Start Coding Round →
+                            </button>
                             <button
                                 onClick={() => navigate('/dashboard')}
                                 className="rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700 shadow-sm"

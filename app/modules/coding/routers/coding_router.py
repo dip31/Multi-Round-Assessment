@@ -37,10 +37,22 @@ router = APIRouter(prefix="/coding", tags=["Coding Round"])
 
 
 @router.get("/problems", response_model=List[CodingProblemResponse])
-def get_problems(db: Session = Depends(get_db)):
-	"""List assigned coding problems for the current round (visible test cases only)."""
-	# Return problems for the user's active coding round if one exists
-	return list_problems(db)
+def get_problems(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+	"""List coding problems assigned to the user's active round (visible test cases only)."""
+	active_round = session_service.get_user_active_round(db, current_user.id, round_type="coding")
+	if active_round is None:
+		# No active round — return global fallback for dashboard preview only
+		return list_problems(db)
+	# Return only problems assigned to this specific round
+	from app.models.session_problem import SessionProblem as SP
+	assigned = db.query(SP).filter(SP.round_id == active_round.id).order_by(SP.problem_order).all()
+	problems = []
+	for sp in assigned:
+		p = db.query(CodingProblem).filter(CodingProblem.id == sp.problem_id).first()
+		if p is not None:
+			p.test_cases = [t for t in p.test_cases if not t.is_hidden]
+			problems.append(p)
+	return problems if problems else list_problems(db)
 
 
 @router.post("/run", response_model=CodingRunResponse)
@@ -62,7 +74,7 @@ def run_code(payload: CodingSubmissionRequest, db: Session = Depends(get_db), cu
 	# If the round has expired, finalize automatically and reject runs
 	limit_minutes = settings.CODING_ROUND_TIME_LIMIT_MINUTES
 	end_time = active_round.started_at + timedelta(minutes=limit_minutes)
-	if datetime.now() > end_time:
+	if datetime.utcnow() > end_time:
 		finalize_coding_round(db, active_round.id)
 		raise HTTPException(status_code=400, detail="coding round has expired")
 
@@ -91,7 +103,7 @@ def submit_code(payload: CodingSubmissionRequest, db: Session = Depends(get_db),
 	# enforce timer and auto-finalize on expiry
 	limit_minutes = settings.CODING_ROUND_TIME_LIMIT_MINUTES
 	end_time = active_round.started_at + timedelta(minutes=limit_minutes)
-	if datetime.now() > end_time:
+	if datetime.utcnow() > end_time:
 		# finalize and unlock interview
 		finalize_coding_round(db, active_round.id)
 		raise HTTPException(status_code=400, detail="coding round has expired")

@@ -5,6 +5,7 @@ SQLAlchemy ORM models for assessment sessions and rounds.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, text
 from sqlalchemy.sql import func
@@ -14,18 +15,26 @@ from app.database.base import Base
 from app.models.proctoring import ProctoringEvent
 from app.models.advanced_proctoring import AdvancedProctoringEvent
 
+if TYPE_CHECKING:
+    from app.models.assessment_context import AssessmentContext
+
 
 class AssessmentSession(Base):
     """Represents one full assessment attempt by a user.
 
     Status lifecycle: ``not_started`` → ``in_progress`` → ``completed`` | ``terminated``.
     Columns mirror ``assessment_sessions`` in ``database/schema.sql``.
+    
+    M2-E: Sessions now link to AssessmentContext for mode/policy awareness.
     """
 
     __tablename__ = "assessment_sessions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    context_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("assessment_contexts.id"), nullable=True, index=True
+    )
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default=text("'not_started'"))
     started_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -34,6 +43,11 @@ class AssessmentSession(Base):
 
     # ── Relationships ─────────────────────────────────────────────────
     user: Mapped["User"] = relationship("User", back_populates="assessment_sessions")
+    context: Mapped[Optional["AssessmentContext"]] = relationship(
+        "AssessmentContext",
+        back_populates="sessions",
+        lazy="select",
+    )
     rounds: Mapped[list["AssessmentRound"]] = relationship(
         "AssessmentRound",
         back_populates="session",
@@ -58,13 +72,13 @@ class AssessmentSession(Base):
 
     @property
     def time_remaining_seconds(self) -> int:
-        """Calculate the remaining seconds out of a 30-minute global limit."""
+        """Calculate the remaining seconds based on persisted expires_at (UTC)."""
+        now = datetime.utcnow()
         if self.expires_at:
-            now = datetime.now()
             return max(0, int((self.expires_at - now).total_seconds()))
         if not self.started_at:
             return 1800
-        elapsed = (datetime.now() - self.started_at).total_seconds()
+        elapsed = (now - self.started_at).total_seconds()
         return max(0, int(1800 - elapsed))
 
 

@@ -86,14 +86,14 @@ const PROCTORING_CONFIG = {
     COPY_PASTE: { max: 1, riskWeight: 0.7 },
     NETWORK_DISCONNECT: { max: 2, riskWeight: 0.8 },
     DEVICE_CHANGE: { max: 1, riskWeight: 0.8 },
-    MULTIPLE_PERSON_DETECTED: { max: 0, riskWeight: 1.0 },
-    FACE_NOT_VISIBLE: { max: 3, riskWeight: 0.8 },
-    MOUTH_MOVEMENT_DETECTED: { max: 3, riskWeight: 0.6 },
-    LOOKING_AWAY: { max: 5, riskWeight: 0.4 },
-    HEAD_TURN_DETECTED: { max: 3, riskWeight: 0.5 },
-    VOICE_ACTIVITY_DETECTED: { max: 2, riskWeight: 0.7 },
-    CAMERA_PERMISSION_DENIED: { max: 0, riskWeight: 1.0 },
-    MICROPHONE_PERMISSION_DENIED: { max: 0, riskWeight: 0.8 },
+    MULTIPLE_PERSON_DETECTED: { max: 3, riskWeight: 1.0 },
+    FACE_NOT_VISIBLE: { max: 5, riskWeight: 0.8 },
+    MOUTH_MOVEMENT_DETECTED: { max: 5, riskWeight: 0.6 },
+    LOOKING_AWAY: { max: 8, riskWeight: 0.4 },
+    HEAD_TURN_DETECTED: { max: 5, riskWeight: 0.5 },
+    VOICE_ACTIVITY_DETECTED: { max: 4, riskWeight: 0.7 },
+    CAMERA_PERMISSION_DENIED: { max: 3, riskWeight: 1.0 },
+    MICROPHONE_PERMISSION_DENIED: { max: 3, riskWeight: 0.8 },
   }
 };
 
@@ -134,6 +134,8 @@ export const useAdvancedProctoring = (sessionId, onViolation = null) => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isMonitoring, setIsMonitoring] = useState(false);
   const isMonitoringRef = useRef(false);
+  // Grace period: don't fire terminate callbacks during first 8s of monitoring startup.
+  const monitoringStartTimeRef = useRef(null);
   const [violations, setViolations] = useState([]);
   const [riskScore, setRiskScore] = useState(0);
   const [cameraStream, setCameraStream] = useState(null);
@@ -314,14 +316,25 @@ export const useAdvancedProctoring = (sessionId, onViolation = null) => {
           EVENT_TYPES.PROCTORING_ERROR,
           EVENT_TYPES.NETWORK_RECONNECT,
         ]);
+        // Permission denials are warnings only — never terminate (proctoring degrades gracefully).
+        const neverTerminateTypes = new Set([
+          EVENT_TYPES.CAMERA_PERMISSION_DENIED,
+          EVENT_TYPES.MICROPHONE_PERMISSION_DENIED,
+          EVENT_TYPES.PROCTORING_ERROR,
+        ]);
         const currentViolationCallback = onViolationRef.current;
         if (currentViolationCallback && !nonViolationTypes.has(eventType) && shouldCallbackViolation(eventType, 1000)) {
+          // Don't fire terminate=true during the first 8s of startup (camera/mic init grace period).
+          const withinGrace = monitoringStartTimeRef.current
+            ? (Date.now() - monitoringStartTimeRef.current) < 8000
+            : true;
+          const effectiveTerminate = shouldTerminate && !withinGrace && !neverTerminateTypes.has(eventType);
           currentViolationCallback({
             eventType,
             riskScore: result.risk_score,
             metadata,
             violationCount,
-            terminate: shouldTerminate,
+            terminate: effectiveTerminate,
           });
         }
     } catch (error) {
@@ -1117,6 +1130,8 @@ export const useAdvancedProctoring = (sessionId, onViolation = null) => {
       
       setIsInitialized(true);
       setIsMonitoring(true);
+      isMonitoringRef.current = true;
+      monitoringStartTimeRef.current = Date.now();
       
       console.log('✅ Advanced proctoring system initialized successfully');
     } catch (error) {
@@ -1128,6 +1143,8 @@ export const useAdvancedProctoring = (sessionId, onViolation = null) => {
       // Still enable monitoring for browser-level proctoring even if some subsystems failed
       setIsInitialized(true);
       setIsMonitoring(true);
+      isMonitoringRef.current = true;
+      monitoringStartTimeRef.current = Date.now();
     }
   }, [
     enterFullscreen,
