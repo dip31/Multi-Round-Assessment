@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import StudentModeLayout from '../components/StudentModeLayout';
 import { getPracticeRoundResult, getPracticeRoundReview } from '../services/practiceResultService';
-import { startFreshSession } from '../services/sessionService';
+import { startPractice } from '../services/sessionService';
 
 const ROUND_LABELS = {
     aptitude: 'MCQ Round',
@@ -70,18 +70,31 @@ export default function PracticeResultDashboard() {
     const handlePracticeAgain = async () => {
         setStartingAgain(true);
         try {
-            await startFreshSession();
-            const roundType = summary?.round_type;
-            if (roundType === 'coding') {
+            // M2-E: Use the authoritative Practice flow (POST /practice/start).
+            // The roundType from the completed summary is the correct backend round_type.
+            const apiRoundType = summary?.round_type || 'aptitude';
+            const practiceType = summary?.practice_type || null;
+            await startPractice(apiRoundType, practiceType);
+
+            // Restore practice config in localStorage for the assessment page
+            const practiceTypeForConfig = practiceType || apiRoundType;
+            const config = { practice_type: practiceTypeForConfig, subject: null };
+            localStorage.setItem('edi5_practice_config', JSON.stringify(config));
+
+            if (apiRoundType === 'coding') {
                 navigate('/coding');
-            } else if (roundType === 'interview') {
+            } else if (apiRoundType === 'interview') {
                 navigate('/resume-upload');
             } else {
                 navigate('/aptitude');
             }
         } catch (err) {
-            console.error('Failed to start fresh session:', err);
-            alert('Failed to start a new practice session.');
+            console.error('Failed to start practice session:', err);
+            if (err.response?.status === 409) {
+                alert(err.response.data?.detail || 'An active practice session is already in progress. Please complete it first.');
+            } else {
+                alert('Failed to start a new practice session.');
+            }
         } finally {
             setStartingAgain(false);
         }

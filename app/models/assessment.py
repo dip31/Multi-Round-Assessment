@@ -98,6 +98,7 @@ class AssessmentRound(Base):
         nullable=False,
     )
     round_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    practice_type: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default=text("'pending'"))
     score: Mapped[float] = mapped_column(Float, server_default=text("0"))
     max_questions: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("20"))

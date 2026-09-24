@@ -39,6 +39,24 @@ def start_coding_round(db: Session, user_id: int) -> dict:
     existing_active = session_service.get_user_active_round(db, user_id, round_type="coding")
     if existing_active is not None:
         assigned_existing = db.query(SessionProblem).filter(SessionProblem.round_id == existing_active.id).order_by(SessionProblem.problem_order.asc()).all()
+        # If the round exists but has no assigned problems (e.g. started by practice router),
+        # assign problems now so /run validation can succeed.
+        if not assigned_existing:
+            problems_to_assign = db.query(CodingProblem).order_by(func.random()).limit(CODING_ROUND_PROBLEMS_COUNT).all()
+            assigned_existing = []
+            for idx, p in enumerate(problems_to_assign, start=1):
+                sp = SessionProblem(
+                    round_id=existing_active.id,
+                    problem_id=p.id,
+                    problem_order=idx,
+                    marked_for_review=False,
+                    assigned_at=datetime.now(),
+                )
+                db.add(sp)
+                assigned_existing.append(sp)
+            db.commit()
+            for sp in assigned_existing:
+                db.refresh(sp)
         problems_existing = []
         for sp in assigned_existing:
             problem = db.query(CodingProblem).filter(CodingProblem.id == sp.problem_id).first()
@@ -131,6 +149,12 @@ def finalize_coding_round(db: Session, round_id: int) -> float:
     # Get assigned problems
     assigned = db.query(SessionProblem).filter(SessionProblem.round_id == round_id).all()
     if not assigned:
+        # No problems assigned — still mark the round completed so result endpoint works
+        rnd = db.query(AssessmentRound).filter(AssessmentRound.id == round_id).first()
+        if rnd and rnd.status != "completed":
+            rnd.score = 0.0
+            rnd.status = "completed"
+            db.commit()
         return 0.0
 
     best_scores = []
@@ -147,7 +171,6 @@ def finalize_coding_round(db: Session, round_id: int) -> float:
     # Update round record
     rnd = db.query(AssessmentRound).filter(AssessmentRound.id == round_id).first()
 
-    created_interview = False
     if rnd:
         # Idempotent: only update if not already completed
         if rnd.status != "completed":
@@ -167,10 +190,9 @@ def finalize_coding_round(db: Session, round_id: int) -> float:
                 sess.total_score = float(completed_scores or 0.0)
                 db.commit()
 
-            # Unlock interview round if there isn't one active already
-            existing_interview = session_service.get_user_active_round(db, sess.user_id, round_type="interview")
-            if existing_interview is None:
-                session_service.create_round(db, session_id=session_id, round_type="interview")
-                created_interview = True
+            # M2-E: Do NOT auto-create interview round.
+            # Practice uses independent progression — the user selects the next
+            # round themselves from the dashboard. Auto-creating interview here
+            # blocks the user from starting other round types (409 conflict).
 
     return round_score

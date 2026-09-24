@@ -31,7 +31,7 @@ export default function PracticeOverview() {
             if (practiceType === 'coding') roundType = "coding";
             if (practiceType === 'interview') roundType = "interview";
 
-            await startPractice(roundType);
+            await startPractice(roundType, practiceType);
 
             // Navigate to appropriate assessment page
             if (practiceType === 'mcq' || practiceType === 'technical' || practiceType === 'combined') {

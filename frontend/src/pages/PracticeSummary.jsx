@@ -57,11 +57,14 @@ export default function PracticeSummary() {
                 setLoading(true);
                 
                 // Check if this is an interview round by trying to get interview data
+                // interview_id is stored in localStorage when the interview session starts
+                const storedInterviewId = localStorage.getItem('interview_id');
+                if (storedInterviewId) {
                 try {
-                    const interviewData = await api.get(`/interview/session/${sessionId}/status`);
-                    if (interviewData.data && interviewData.data.status === 'completed') {
+                    const interviewData = await api.get(`/interview/session/${storedInterviewId}/status`);
+                    if (interviewData.data && (interviewData.data.status === 'COMPLETED' || interviewData.data.status === 'completed')) {
                         setIsInterviewRound(true);
-                        setInterviewId(sessionId);
+                        setInterviewId(storedInterviewId);
                         // Create a summary object from interview data
                         setSummary({
                             round_type: 'interview',
@@ -77,6 +80,7 @@ export default function PracticeSummary() {
                     }
                 } catch (interviewErr) {
                     // Not an interview round, proceed with normal practice round
+                }
                 }
                 
                 // Load regular practice round data

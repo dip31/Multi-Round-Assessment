@@ -30,8 +30,11 @@ class AdvancedProctoringEvent(Base):
         index=True,
     )
     event_type: str = Column(String(50), nullable=False, index=True)
+    # severity and round_type are populated by the DB trigger update_event_risk_score
+    severity: str = Column(String(20), nullable=False, server_default="INFO")
+    round_type: Optional[str] = Column(String(20), nullable=True)
     confidence: Optional[float] = Column(Float, nullable=True)  # AI model confidence (0.0-1.0)
-    event_metadata: Optional[dict] = Column(JSON, nullable=True)  # Detailed detection data
+    event_metadata: dict = Column(JSON, nullable=False, default=dict)  # Detailed detection data; trigger writes risk_score here
     created_at: datetime = Column(DateTime, default=datetime.utcnow, index=True)
 
     # ── Relationships ─────────────────────────────────────────────────

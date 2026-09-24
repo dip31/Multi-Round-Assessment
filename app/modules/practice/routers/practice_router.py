@@ -93,6 +93,7 @@ class PracticeStatusResponse(BaseModel):
 
 class PracticeStartRequest(BaseModel):
     round_type: str
+    practice_type: Optional[str] = None  # mcq | technical | combined | coding | interview
 
 
 class PracticeStartResponse(BaseModel):
@@ -202,50 +203,48 @@ def start_practice(
     existing_session = get_active_session(db, current_user.id)
 
     if existing_session is not None:
-        # Resume: return existing active session and round.
+        # Resume or switch: return existing active session and round.
         _require_session_not_expired(existing_session)
+
+        # Practice mode always allows free round switching — no blocking.
+        # Determine if this session belongs to a practice context.
+        context_obj = None
+        if existing_session.context_id:
+            from app.services.assessment_context_service import get_context
+            context_obj = get_context(db, existing_session.context_id)
+        is_practice = (context_obj is None) or (context_obj.mode == "practice")
+        progression_mode = (
+            "independent"
+            if is_practice
+            else (context_obj.policy.progression_mode if context_obj and context_obj.policy else "sequential")
+        )
+
         active_round = get_active_round(db, existing_session.id)
         if active_round is None:
-            # Session is active but no active round — shouldn't normally happen,
-            # but handle gracefully by re-activating the first incomplete round.
-            # Check if all rounds are completed → session should have been completed.
-            completed_rounds = [
-                r for r in existing_session.rounds if r.status == "completed"
-            ]
-            completed_types = {r.round_type for r in completed_rounds}
-            # Find the next round in order that hasn't been completed yet.
-            next_type = None
-            for rt in ROUND_ORDER:
-                if rt not in completed_types:
-                    next_type = rt
-                    break
-            if next_type is not None:
-                active_round = start_round(db, existing_session.id, next_type)
-            else:
-                # All rounds completed but session not marked complete — fix it.
-                complete_session(db, existing_session.id, current_user.id)
-                db.refresh(existing_session)
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="All rounds are complete. Session has been completed. Start a new practice attempt.",
-                )
+            # No active round — start the requested one.
+            active_round = start_round(db, existing_session.id, payload.round_type, payload.practice_type)
+            message = f"Started {active_round.round_type} round."
+        elif active_round.round_type == payload.round_type and active_round.practice_type == payload.practice_type:
+            # Same round already active — resume it.
+            message = f"Resuming active {active_round.round_type} round."
+        elif progression_mode == "independent":
+            # Practice mode: close current round, start the requested one.
+            complete_round(db, active_round.id, current_user.id)
+            active_round = start_round(db, existing_session.id, payload.round_type, payload.practice_type)
+            message = f"Switched to {active_round.round_type} round."
         else:
-            if active_round.round_type != payload.round_type:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail=f"An active {active_round.round_type} round is already in progress. Please complete or finish it before starting a {payload.round_type} round.",
-                )
+            # Sequential/non-practice mode: block mid-round switching.
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"An active {active_round.round_type} round is already in progress. Please complete it before starting a {payload.round_type} round.",
+            )
 
-        from fastapi import Response as FastAPIResponse
-        # FastAPI doesn't support changing status_code mid-function easily,
-        # so we use a workaround: the client receives 200 on resume.
-        # We signal resume via is_new=False.
         return PracticeStartResponse(
             session_id=existing_session.id,
             session_status=existing_session.status,
             active_round=RoundResponse.model_validate(active_round),
             is_new=False,
-            message=f"Resuming active {active_round.round_type} round.",
+            message=message,
         )
 
     # New session: create context + session + activate first round.
@@ -272,10 +271,12 @@ def start_practice(
     progression_mode = context.policy.progression_mode if context.policy else "sequential"
     if progression_mode == "independent":
         round_type_to_start = payload.round_type
+        practice_type_to_use = payload.practice_type
     else:
         round_type_to_start = ROUND_ORDER[0]
+        practice_type_to_use = None
         
-    first_round = start_round(db, new_session.id, round_type_to_start)
+    first_round = start_round(db, new_session.id, round_type_to_start, practice_type_to_use)
 
     return PracticeStartResponse(
         session_id=new_session.id,
@@ -409,19 +410,32 @@ def complete_practice_round(
     if session.context_id:
         from app.services.assessment_context_service import get_context
         context_obj = get_context(db, session.context_id)
-        
-    progression_mode = context_obj.policy.progression_mode if context_obj and context_obj.policy else "sequential"
+
+    # Practice mode is always independent; fall back to policy only for non-practice modes.
+    is_practice = (context_obj is None) or (context_obj.mode == "practice")
+    progression_mode = (
+        "independent"
+        if is_practice
+        else (context_obj.policy.progression_mode if context_obj and context_obj.policy else "sequential")
+    )
 
     if progression_mode == "independent":
-        # Independent practice: complete session immediately, no next round.
-        _finalize_session_score(db, session.id)
-        completed_sess = complete_session(db, session.id, current_user.id)
-        session_completed = True
+        # Independent practice: complete ROUND only, session remains active for more practice
+        # This allows the user to practice multiple rounds in the same session
+        message = f"{payload.round_type.capitalize()} round completed. Ready for next practice."
+        if completed.practice_type:
+            practice_label = {
+                'mcq': 'MCQ',
+                'technical': 'Technical MCQ',
+                'combined': 'Combined MCQ',
+                'coding': 'Coding',
+                'interview': 'Interview'
+            }.get(completed.practice_type, payload.round_type.capitalize())
+            message = f"{practice_label} round completed. Ready for next practice."
+        
+        # Session stays in_progress, user can start another practice round
+        session_completed = False
         next_round_obj = None
-        message = f"{payload.round_type.capitalize()} round completed. Independent practice session finished."
-        if completed_sess:
-            db.refresh(completed_sess)
-            session = completed_sess
     else:
         next_type = _next_round_type(payload.round_type)
         next_round_obj = None
@@ -492,22 +506,26 @@ def advance_practice_round(
     if session.context_id:
         from app.services.assessment_context_service import get_context
         context_obj = get_context(db, session.context_id)
-        
-    progression_mode = context_obj.policy.progression_mode if context_obj and context_obj.policy else "sequential"
+
+    is_practice = (context_obj is None) or (context_obj.mode == "practice")
+    progression_mode = (
+        "independent"
+        if is_practice
+        else (context_obj.policy.progression_mode if context_obj and context_obj.policy else "sequential")
+    )
 
     if progression_mode == "independent":
         if assessment_round.status != "completed":
             complete_round(db, assessment_round.id, current_user.id)
-        _finalize_session_score(db, session.id)
-        complete_session(db, session.id, current_user.id)
+        # Independent practice: round completed, session remains active
         db.refresh(session)
         return AdvanceRoundResponse(
             previous_round_id=assessment_round.id,
             previous_round_status="completed",
             next_round=None,
             session_status=session.status,
-            session_completed=True,
-            message="Independent practice: no automatic next round.",
+            session_completed=False,
+            message="Independent practice: round completed, ready for next practice.",
         )
 
     if next_type is None:

@@ -7,7 +7,7 @@ import Navbar from '../components/Navbar';
 
 import { getProfile } from '../services/profileService';
 import { getResumes, getResumeFileUrl, viewResumeFile } from '../services/resumeService';
-import { getSessionStatus, startSession, startFreshSession } from '../services/sessionService';
+import { getSessionStatus, startSession, startFreshSession, startPractice } from '../services/sessionService';
 import { getAnalytics } from '../services/reportService';
 import api from '../services/api';
 import PortfolioView from '../components/portfolio/PortfolioView';
@@ -145,16 +145,28 @@ export default function Dashboard() {
             const config = { practice_type: practiceType, subject: subject };
             localStorage.setItem('edi5_practice_config', JSON.stringify(config));
 
-            // Always use startFreshSession for practice starts.
-            // - If there is no active session: creates one with a fresh aptitude round.
-            // - If there IS an active session: completes it first, then creates a new one.
-            // This avoids stale React state causing the wrong branch to execute.
-            // startFreshSession is defined in session_router as POST /session/fresh.
-            await startFreshSession();
+            // M2-E: Use the authoritative Practice flow (POST /practice/start).
+            // Pass both round_type and practice_type to backend
+            let roundType = 'aptitude';
+            if (practiceType === 'coding') roundType = 'coding';
+            if (practiceType === 'interview') roundType = 'interview';
 
-            navigate('/aptitude', { state: { practice_config: config } });
+            await startPractice(roundType, practiceType);
+
+            // Navigate to the appropriate assessment page
+            if (practiceType === 'mcq' || practiceType === 'technical' || practiceType === 'combined') {
+                navigate('/aptitude', { state: { practice_config: config } });
+            } else if (practiceType === 'coding') {
+                navigate('/coding');
+            } else if (practiceType === 'interview') {
+                navigate('/resume-upload');
+            }
         } catch (err) {
-            setToast({ type: 'error', message: err.response?.data?.detail || 'Failed to initialize practice round' });
+            if (err.response?.status === 409) {
+                setToast({ type: 'error', message: err.response.data?.detail || 'An active practice session is already in progress. Please complete it first.' });
+            } else {
+                setToast({ type: 'error', message: err.response?.data?.detail || 'Failed to initialize practice round' });
+            }
         } finally {
             setStartingRound(null);
         }
@@ -642,11 +654,11 @@ export default function Dashboard() {
                                                     Review Submissions →
                                                 </button>
                                                 <button
-                                                    onClick={() => handleStartPractice('mcq')}
-                                                    disabled={startingRound === 'mcq'}
+                                                    onClick={() => handleStartPractice('coding')}
+                                                    disabled={startingRound === 'coding'}
                                                     className="w-full py-2.5 px-4 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-sm active:scale-95 disabled:opacity-50"
                                                 >
-                                                    {startingRound === 'mcq' ? 'Starting...' : 'New Practice Attempt →'}
+                                                    {startingRound === 'coding' ? 'Starting...' : 'New Practice Attempt →'}
                                                 </button>
                                             </div>
                                         ) : codRound?.status === 'active' ? (

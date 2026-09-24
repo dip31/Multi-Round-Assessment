@@ -70,6 +70,8 @@ export const useBasicAdvancedProctoring = (sessionId, onViolation = null) => {
   
   // Log proctoring event to backend (MOVED UP - declared before use)
   const logProctoringEvent = useCallback(async (eventType, metadata = {}) => {
+    // Don't fire if sessionId isn't resolved yet — avoids 401/403 storms
+    if (!sessionId) return;
     try {
       const eventData = {
         session_id: sessionId,

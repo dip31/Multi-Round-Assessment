@@ -34,6 +34,7 @@ class RoundResponse(BaseModel):
     id: int
     session_id: int
     round_type: str
+    practice_type: Optional[str] = None
     status: str
     score: float
     max_questions: int

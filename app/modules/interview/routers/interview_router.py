@@ -1044,6 +1044,40 @@ async def synthesize_speech(
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# ENDPOINT: GET /interview/session/{interview_id}/status
+# Return interview session status, scores, and timing info
+# ═══════════════════════════════════════════════════════════════════════════
+@router.get("/session/{interview_id}/status")
+async def get_interview_status(
+    interview_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return status and score summary for an interview session."""
+    interview = db.query(InterviewSession).filter(InterviewSession.id == interview_id).first()
+    if not interview:
+        raise HTTPException(status_code=404, detail="Interview not found")
+
+    turns = db.query(InterviewTurn).filter(
+        InterviewTurn.interview_id == interview_id,
+        InterviewTurn.is_followup == False,
+    ).all()
+    scores = [t.final_score for t in turns if t.final_score is not None]
+    avg_score = round(sum(scores) / max(len(scores), 1), 2) if scores else 0.0
+
+    return {
+        "interview_id": interview.id,
+        "status": interview.status,
+        "phase": interview.phase,
+        "total_questions": interview.total_turns,
+        "questions_attempted": interview.current_turn,
+        "average_score": avg_score,
+        "start_time": interview.created_at.isoformat() if interview.created_at else None,
+        "end_time": interview.completed_at.isoformat() if interview.completed_at else None,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # ENDPOINT: POST /interview/session/{interview_id}/complete
 # Early interview completion - idempotent
 # ═══════════════════════════════════════════════════════════════════════════

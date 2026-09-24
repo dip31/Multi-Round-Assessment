@@ -46,6 +46,14 @@ class InterviewSession(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
     created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), server_default=func.now(), nullable=True)
 
+    # ── Personalization metadata (added for question personalization feature) ──
+    extraction_confidence: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    retrieval_success_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    question_personalization_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    personalization_metadata: Mapped[Dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    follow_up_quality_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    personalization_warnings: Mapped[List[str] | None] = mapped_column(JSONB, nullable=True)
+
     # ── Relationships ─────────────────────────────────────────────────
     turns: Mapped[list["InterviewTurn"]] = relationship(
         "InterviewTurn",
@@ -149,6 +157,13 @@ class InterviewTurn(Base):
     followup_number: Mapped[int] = mapped_column(Integer, server_default=text("0"), nullable=False)
     parent_turn_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("interview_turns.id"), nullable=True)
     created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), server_default=func.now(), nullable=True)
+
+    # ── Personalization metadata (added for question personalization feature) ──
+    personalization_source: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    question_grounding_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    answer_classification: Mapped[Dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    followup_grounding_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    followup_targeted_aspect: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     # ── Relationships ─────────────────────────────────────────────────
     interview: Mapped["InterviewSession"] = relationship(

@@ -281,10 +281,15 @@ def start_round(
     db: Session,
     session_id: int,
     round_type: str,
+    practice_type: Optional[str] = None,
 ) -> AssessmentRound:
     """Activate one round for an active session, idempotently.
     
     M2-E: Context-aware round expiry from policy.
+    
+    Args:
+        practice_type: Optional practice variant (mcq/technical/combined/coding/interview)
+                      Used for independent practice sessions to track the specific practice type
     """
     session = (
         db.query(AssessmentSession)
@@ -304,21 +309,26 @@ def start_round(
 
     active = get_active_round(db, session_id, for_update=True)
     if active is not None:
-        if active.round_type == round_type:
+        if active.round_type == round_type and active.practice_type == practice_type:
             return active
         raise ValueError("Another assessment round is already active")
 
-    pending = (
-        db.query(AssessmentRound)
-        .filter(
-            AssessmentRound.session_id == session_id,
-            AssessmentRound.round_type == round_type,
-            AssessmentRound.status == "pending",
+    # For independent practice, always create a new round (don't reuse pending)
+    # For sequential modes, check for pending round first
+    pending = None
+    if not practice_type:  # Only reuse pending for non-practice rounds
+        pending = (
+            db.query(AssessmentRound)
+            .filter(
+                AssessmentRound.session_id == session_id,
+                AssessmentRound.round_type == round_type,
+                AssessmentRound.status == "pending",
+            )
+            .with_for_update()
+            .order_by(AssessmentRound.id.desc())
+            .first()
         )
-        .with_for_update()
-        .order_by(AssessmentRound.id.desc())
-        .first()
-    )
+    
     started_at = _now()
     
     # Get context for policy-driven timing
@@ -329,12 +339,15 @@ def start_round(
     assessment_round = pending or AssessmentRound(
         session_id=session_id,
         round_type=round_type,
+        practice_type=practice_type,
         status="pending",
         started_at=started_at,
     )
     assessment_round.status = "active"
     assessment_round.started_at = started_at
     assessment_round.expires_at = _round_expiry(started_at, context)
+    if practice_type and not pending:  # Set practice_type for new rounds
+        assessment_round.practice_type = practice_type
     db.add(assessment_round)
     try:
         db.commit()

@@ -29,6 +29,8 @@ htmlcov/
 
 # Alembic
 alembic/versions/__pycache__/
+logs/rag_pipeline.log
+
 
 # mypy / Pyre
 .mypy_cache/
@@ -48,3 +50,10 @@ test_*.py
 !tests/test_*.py
 tests/
 !tests/
+debug_*.py
+verify_*.py
+cleanup_*.py
+check_*.py
+diagnose_*.py
+seed_*.py
+apply_*.py

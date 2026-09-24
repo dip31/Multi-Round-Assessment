@@ -34,8 +34,11 @@ api.interceptors.response.use(
             const requestUrl = error.config?.url || '';
             const skipAuthRedirect = error.config?.skipAuthRedirect === true;
 
+            // Proctoring events are best-effort — a 401 here should not log the user out.
+            const isProctoringRequest = requestUrl.includes('/advanced-proctoring/');
+
             // Allow auth flows to handle their own error states without global logout.
-            if (!skipAuthRedirect && !requestUrl.includes('/auth/login') && !requestUrl.includes('/auth/me') && !requestUrl.includes('/auth/register')) {
+            if (!skipAuthRedirect && !isProctoringRequest && !requestUrl.includes('/auth/login') && !requestUrl.includes('/auth/me') && !requestUrl.includes('/auth/register')) {
                 localStorage.removeItem('access_token');
                 if (window.location.pathname.startsWith('/admin')) {
                     window.location.href = '/admin/login';

@@ -48,25 +48,24 @@ class AdvancedProctoringService:
         Returns:
             Tuple of (created event, calculated risk score)
         """
-        # Create the event
+        # Always provide a dict so the NOT NULL constraint and trigger are satisfied
+        metadata = dict(event_data.metadata) if event_data.metadata else {}
+
+        # Create the event — the DB trigger will populate severity and write
+        # risk_score into event_metadata automatically on INSERT
         event = AdvancedProctoringEvent(
             session_id=event_data.session_id,
             event_type=event_data.event_type,
             confidence=event_data.confidence,
-            event_metadata=event_data.metadata or {}
+            event_metadata=metadata,
         )
         
         db.add(event)
-        db.flush()
-        
-        # Calculate risk score
-        risk_score = self._calculate_event_risk(event)
-        
-        # Update event metadata with risk score
-        event.event_metadata["risk_score"] = risk_score
-        event.event_metadata["processed_at"] = datetime.now().isoformat()
-        
         db.commit()
+        db.refresh(event)
+
+        # Calculate risk score in Python (trigger may have written it too)
+        risk_score = self._calculate_event_risk(event)
         
         return event, risk_score
 
