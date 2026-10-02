@@ -21,6 +21,7 @@ pymupdf
 pytest
 pytest-asyncio
 httpx
+retell-sdk
 ultralytics
 opencv-python-headless
 numpy<2
