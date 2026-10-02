@@ -260,8 +260,8 @@ export default function Analytics() {
                                             <td className="p-4 text-sm font-medium text-slate-900">{item.date}</td>
                                             <td className="p-4 text-sm text-slate-600">{item.round_name}</td>
                                             <td className="p-4">
-                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${item.score >= 75 ? 'bg-emerald-100 text-emerald-800' : item.score >= 50 ? 'bg-indigo-100 text-indigo-800' : 'bg-amber-100 text-amber-800'}`}>
-                                                    {item.score}%
+                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${item.score == null ? 'bg-slate-100 text-slate-600' : item.score >= 75 ? 'bg-emerald-100 text-emerald-800' : item.score >= 50 ? 'bg-indigo-100 text-indigo-800' : 'bg-amber-100 text-amber-800'}`}>
+                                                    {item.score == null ? 'Not scored' : `${item.score}%`}
                                                 </span>
                                             </td>
                                             <td className="p-4">

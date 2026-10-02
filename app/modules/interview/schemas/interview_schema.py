@@ -2,7 +2,7 @@
 Pydantic schemas for interview round request / response payloads.
 """
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 from pydantic import BaseModel
 
@@ -45,12 +45,59 @@ class ApprovePoolResponse(BaseModel):
     status: str  # "approved" or "rejected"
 
 
+# ── Interviewer Selection ──────────────────────────────────────────────
+class InterviewerVoiceInfo(BaseModel):
+    """Voice descriptor for an interviewer.
+
+    Exposed so the UI can label the voice; the frontend never sends these
+    values back. The server resolves voice settings from the interviewer id on
+    every synthesis call, so a tampered payload cannot change what is spoken.
+    """
+    speaker: str
+    language_code: str
+
+
+class InterviewerProfileResponse(BaseModel):
+    """A selectable interviewer, as shown on the setup screen.
+
+    Presentation only. Nothing here affects question selection, scoring or
+    interview length.
+    """
+    id: str
+    name: str
+    title: str
+    tagline: str
+    avatar_initials: str
+    accent: str
+    voice: InterviewerVoiceInfo
+    greeting: str
+    is_default: bool = False
+    is_dynamic: bool = False
+
+
+class InterviewerListResponse(BaseModel):
+    """The interviewer roster plus which id is used when none is chosen."""
+    interviewers: List[InterviewerProfileResponse]
+    default_interviewer_id: str
+
+
 # ── Interview Session ──────────────────────────────────────────────────
 class StartInterviewResponse(BaseModel):
     """Response after starting interview session."""
     interview_id: int
     phase: str  # HR or TECHNICAL
     total_turns: int
+    # Echoes the interviewer actually recorded, which may differ from what was
+    # requested if an unknown id was sent and fell back to the default. The
+    # frontend should render from this rather than its own local selection.
+    interviewer_id: str
+    
+    # Retell integration fields (populated when voice_provider == "retell")
+    retell_call_id: Optional[str] = None
+    retell_access_token: Optional[str] = None
+    retell_ice_servers: Optional[List[Dict[str, Any]]] = None
+    voice_provider: str = "legacy"  # "legacy" or "retell"
+    voice_mode: Optional[str] = None  # "retell_hosted" or "edi5_core"
 
 
 # ── Next Question ──────────────────────────────────────────────────────
@@ -176,10 +223,10 @@ class TurnReviewItem(BaseModel):
 
 class InterviewReportResponse(BaseModel):
     """Complete interview assessment report."""
-    overall_score: float  # 0.0-1.0
-    content_score: float  # 0.0-1.0 (avg from main turns)
-    behavior_score: float  # 0.0-1.0 (avg from behavioral)
-    final_score: float  # 0.0-1.0 (avg final_score from main turns)
+    overall_score: Optional[float] = None  # 0.0-1.0; unset when not scored by EDI5
+    content_score: Optional[float] = None  # 0.0-1.0 (avg from main turns)
+    behavior_score: Optional[float] = None  # 0.0-1.0 (avg from behavioral)
+    final_score: Optional[float] = None  # 0.0-1.0 (avg final_score from main turns)
     intent_score: Optional[float] = None  # 0.0-1.0 (avg intent-based score)
     completion_ratio: Optional[float] = None  # attempted / total
     completion_reason: Optional[str] = None  # ALL_QUESTIONS_COMPLETED | USER_SUBMITTED | TIME_EXPIRED
@@ -188,3 +235,7 @@ class InterviewReportResponse(BaseModel):
     total_turns: int
     followup_rate: float  # percentage
     followup_interpretation: str  # human-readable interpretation
+    is_edi5_scored: bool = True
+    voice_mode: Optional[str] = None
+    retell_transcript: Optional[str] = None
+    retell_analysis: Optional[Dict[str, Any]] = None

@@ -16,6 +16,7 @@ export default function AdminLayout({ children }) {
         { to: '/admin/analytics', label: 'Candidate Reports', icon: '👥' },
         { to: '/admin/review', label: 'Question Review', icon: '📋' },
         { to: '/admin/proctoring', label: 'Proctoring Monitor', icon: '🔍' },
+        { to: '/admin/interviewers', label: 'Interviewer Management', icon: '🎤' },
     ];
 
     return (

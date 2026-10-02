@@ -31,7 +31,7 @@ class RAGOrchestrator:
             openai_api_key: Optional OpenAI API key for embeddings (defaults to local)
         """
         self.client = Groq(api_key=groq_api_key)
-        self.model = "llama-3.3-70b-versatile"
+        self.model = "gpt/oss-120b"
         self.groq_llm = None
         
         self.index = None

@@ -9,10 +9,16 @@ Endpoints:
 - PUT /interview/pool/{pool_id}/approve - Approve/reject question pool
 - POST /interview/session/start - Start interview session
 - GET /interview/session/{interview_id}/next - Get next question (initial load only)
-- POST /interview/session/{interview_id}/respond - Submit response (10-step pipeline)
+- POST /interview/session/{interview_id}/respond - Submit response (delegates to InterviewOrchestrator)
 - POST /interview/stt - Speech-to-text
 - POST /interview/tts - Text-to-speech
 - GET /interview/session/{interview_id}/report - Get interview report
+- WS /interview/retell/llm/{call_id} - Custom LLM WebSocket for Retell integration
+
+Routes here stay thin: they resolve and authorise the session, then delegate.
+The per-turn interview pipeline lives in
+``app.modules.interview.services.interview_orchestrator``; question selection
+lives in ``question_planner``; the follow-up rules live in ``followup_policy``.
 """
 
 import hashlib
@@ -20,7 +26,7 @@ import json
 import logging
 import tempfile
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 import redis
 from fastapi import (
@@ -30,9 +36,11 @@ from fastapi import (
     HTTPException,
     Query,
     UploadFile,
+    WebSocket,
 )
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
+from sqlalchemy import select
 
 from app.config.settings import settings
 from app.core.auth import get_current_user
@@ -43,7 +51,9 @@ from app.models.interview import (
     InterviewSession,
     ApprovedQuestionPool,
     InterviewTurn,
+    DynamicInterviewer,
 )
+from app.models.assessment import AssessmentRound
 from app.models.assessment import AssessmentSession
 from app.services.resume_service import parse_resume
 from app.services.groq_service import GroqService
@@ -66,8 +76,19 @@ from app.modules.interview.schemas.interview_schema import (
     InterviewSummaryInfo,
     RealtimeFeedbackRequest,
     RealtimeFeedbackResponse,
+    InterviewerListResponse,
+    InterviewerProfileResponse,
+    InterviewerVoiceInfo,
+)
+from app.modules.interview.config import interviewer_profiles
+from app.modules.interview.services import question_planner
+from app.modules.interview.services.interview_orchestrator import (
+    InterviewError,
+    InterviewOrchestrator,
 )
 from app.modules.interview.services.interview_rl_engine import InterviewRLEngine
+from app.modules.interview.services.retell_adapter import get_retell_adapter, RetellCallConfig
+from app.modules.interview.services.retell_llm_websocket import retell_llm_websocket_endpoint
 from app.services.phone_detection_service import detect_phones
 from app.services.proctoring_logger import log_violation
 from pydantic import BaseModel
@@ -79,6 +100,16 @@ router = APIRouter(
     tags=["Interview Round"],
 )
 
+# ── Retell Custom LLM WebSocket Endpoint ──────────────────────────────────
+@router.websocket("/retell/llm/{call_id}")
+async def retell_llm_websocket(
+    websocket: WebSocket,
+    call_id: str,
+    adapter = Depends(get_retell_adapter),
+):
+    """Custom LLM WebSocket for Retell real-time voice integration."""
+    await retell_llm_websocket_endpoint(websocket, call_id, adapter)
+
 
 class LogEventRequest(BaseModel):
     session_id: int
@@ -86,6 +117,11 @@ class LogEventRequest(BaseModel):
     confidence_score: float | None = None
     face_count: int | None = None
     metadata: dict | None = None
+
+
+class RetellTranscriptRequest(BaseModel):
+    transcript: str
+
 
 # Global instances (will be set by app lifespan)
 ml_models = {}  # To be populated by app/main.py
@@ -399,14 +435,126 @@ async def approve_pool(
     )
 
 
+# ── ENDPOINT 3.5: GET /interview/interviewers ──────────────────────────
+@router.get("/interviewers", response_model=InterviewerListResponse)
+async def list_interviewers(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List the interviewers a candidate can choose from.
+
+    Includes both static interviewers (from config) and dynamic interviewers
+    (created by admins and stored in database with Retell integration).
+
+    Choosing an interviewer changes the name, face, voice and tone of the
+    interview. It does not change the questions, the scoring, or how long the
+    interview runs.
+    """
+    # Get static interviewers from config
+    static_profiles = interviewer_profiles.list_interviewers()
+    
+    # Get dynamic interviewers from database (active only)
+    dynamic_interviewers = db.execute(
+        select(DynamicInterviewer).where(DynamicInterviewer.is_active == True)
+    ).scalars().all()
+    
+    all_interviewers = []
+    
+    # Add static interviewers
+    for p in static_profiles:
+        all_interviewers.append(InterviewerProfileResponse(
+            id=p.id,
+            name=p.name,
+            title=p.title,
+            tagline=p.tagline,
+            avatar_initials=p.avatar_initials,
+            accent=p.accent,
+            voice=InterviewerVoiceInfo(
+                speaker=p.voice.speaker,
+                language_code=p.voice.language_code,
+            ),
+            greeting=p.render_greeting(),
+            is_default=(p.id == interviewer_profiles.DEFAULT_INTERVIEWER_ID),
+            is_dynamic=False,
+        ))
+    
+    # Add dynamic interviewers
+    for di in dynamic_interviewers:
+        all_interviewers.append(InterviewerProfileResponse(
+            id=di.slug,
+            name=di.name,
+            title=di.title,
+            tagline=di.tagline,
+            avatar_initials=di.avatar_initials,
+            accent=di.accent,
+            voice=InterviewerVoiceInfo(
+                speaker=di.voice_id,
+                language_code=di.language_code,
+            ),
+            greeting=di.greeting,
+            is_default=False,
+            is_dynamic=True,
+        ))
+    
+    return InterviewerListResponse(
+        interviewers=all_interviewers,
+        default_interviewer_id=interviewer_profiles.DEFAULT_INTERVIEWER_ID,
+    )
+
+
+@router.get("/voice-modes")
+async def get_voice_modes(current_user: User = Depends(get_current_user)):
+    """Report which Retell interview modes can be started with current settings."""
+    retell_ready = bool(settings.RETELL_API_KEY and settings.RETELL_AGENT_ID)
+    return {
+        "retell_hosted": {
+            "available": retell_ready,
+            "reason": None if retell_ready else "Configure RETELL_API_KEY and RETELL_AGENT_ID.",
+        },
+        "edi5_core": {
+            "available": retell_ready and bool(settings.RETELL_LLM_WEBSOCKET_URL),
+            "reason": (
+                None
+                if retell_ready and settings.RETELL_LLM_WEBSOCKET_URL
+                else "EDI5 Core requires Retell credentials and RETELL_LLM_WEBSOCKET_URL."
+            ),
+        },
+    }
+
+
 # ── ENDPOINT 4: POST /interview/session/start ──────────────────────────
 @router.post("/session/start", response_model=StartInterviewResponse)
 async def start_interview(
     pool_id: int = Query(..., description="Question pool ID"),
+    interviewer_id: Optional[str] = Query(
+        None,
+        description="Selected interviewer persona. Omit to use the default.",
+    ),
+    voice_mode: Optional[Literal["retell_hosted", "edi5_core"]] = Query(
+        None,
+        description="Retell-hosted LLM or EDI5 Core interview intelligence.",
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    adapter = Depends(get_retell_adapter),
 ):
     """Start a new interview session using an approved question pool."""
+    
+    # An explicit mode selection enables Retell for this interview only.
+    use_retell = voice_mode is not None or settings.INTERVIEW_VOICE_PROVIDER == "retell"
+    selected_voice_mode = voice_mode or (
+        "edi5_core" if settings.INTERVIEW_VOICE_PROVIDER == "retell" else None
+    )
+    if use_retell and not settings.RETELL_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="Retell voice is enabled but RETELL_API_KEY is not configured.",
+        )
+    if selected_voice_mode == "edi5_core" and not settings.RETELL_LLM_WEBSOCKET_URL:
+        raise HTTPException(
+            status_code=503,
+            detail="EDI5 Core mode requires RETELL_LLM_WEBSOCKET_URL. Choose Retell-hosted mode or configure the public WebSocket URL.",
+        )
 
     approved_pool = db.query(ApprovedQuestionPool).filter(
         ApprovedQuestionPool.id == pool_id,
@@ -420,6 +568,16 @@ async def start_interview(
         )
 
     session_id = approved_pool.session_id
+    active_round = (
+        db.query(AssessmentRound)
+        .filter(
+            AssessmentRound.session_id == session_id,
+            AssessmentRound.round_type == "interview",
+            AssessmentRound.status == "active",
+        )
+        .order_by(AssessmentRound.id.desc())
+        .first()
+    )
 
     first_q = approved_pool.question_pool[0] if (approved_pool.question_pool and len(approved_pool.question_pool) > 0) else {}
     interview_phase = first_q.get("phase", "HR").upper()
@@ -428,21 +586,150 @@ async def start_interview(
     initial_state = rl_engine.to_dict()
     initial_state["interview_type"] = interview_phase.lower()
 
+    # Resolved, not trusted: an unknown id becomes the default rather than a
+    # 400, so a stale frontend build can never block a candidate from starting
+    # their interview. The interviewer has no bearing on assessment, so the
+    # fallback is harmless. Note this is deliberately NOT written into
+    # rl_state — persona must stay out of the Q-learning state.
+    resolved_interviewer_id = interviewer_profiles.resolve_selection(interviewer_id)
+    
+    # Check if interviewer is a dynamic interviewer with its own Retell Agent
+    dynamic_interviewer = None
+    retell_agent_id_override = None
+    if resolved_interviewer_id:
+        dynamic_interviewer = db.execute(
+            select(DynamicInterviewer).where(
+                DynamicInterviewer.slug == resolved_interviewer_id,
+                DynamicInterviewer.is_active == True
+            )
+        ).scalar_one_or_none()
+        if dynamic_interviewer and dynamic_interviewer.retell_agent_id:
+            retell_agent_id_override = dynamic_interviewer.retell_agent_id
+
+    # Determine which Retell agent to use: dynamic interviewer's agent or global default
+    effective_agent_id = retell_agent_id_override or settings.RETELL_AGENT_ID
+    if use_retell and not effective_agent_id:
+        raise HTTPException(
+            status_code=503,
+            detail="Retell voice is enabled but no Retell agent is configured for this interviewer.",
+        )
+
     interview = InterviewSession(
         session_id=session_id,
+        round_id=active_round.id if active_round else None,
         phase=interview_phase,
         current_turn=0,
         total_turns=10,
         rl_state=initial_state,
+        interviewer_id=resolved_interviewer_id,
     )
     db.add(interview)
     db.commit()
     db.refresh(interview)
+    
+    # If using Retell, create web call and link it
+    retell_call_id = None
+    retell_agent_id = None
+    retell_access_token = None
+    retell_ice_servers = None
+
+    if use_retell:
+        try:
+            # Build agent override for selected interviewer
+            # Note: For retell_hosted, providing a partial retell_llm override crashes Retell.
+            # We rely entirely on the Retell Dashboard agent configuration for hosted mode.
+            agent_override = None
+            if selected_voice_mode != "retell_hosted":
+                agent_override = adapter.build_agent_override_for_interviewer(
+                    interviewer_id=resolved_interviewer_id,
+                    interview_type=interview_phase.lower(),
+                )
+                if dynamic_interviewer and dynamic_interviewer.greeting:
+                    agent_override.setdefault("retell_llm", {})["begin_message"] = dynamic_interviewer.greeting
+
+            # Extract questions for both hosted prompt and dynamic variables
+            questions = [
+                item.get("question", "").strip()
+                for item in (approved_pool.question_pool or [])[:interview.total_turns]
+                if isinstance(item, dict) and item.get("question")
+            ]
+
+            if selected_voice_mode == "retell_hosted":
+                # We don't need to override the general_prompt here anymore.
+                # The prompt is configured in the Retell dashboard using {{variables}} 
+                # which are populated by the dynamic_variables dict below.
+                pass
+            
+            # Build dynamic variables
+            candidate_name = current_user.name or current_user.email.split("@")[0]
+            dynamic_variables = adapter.build_dynamic_variables(
+                candidate_name=candidate_name,
+                interview_type=interview_phase.lower(),
+                interviewer_id=resolved_interviewer_id,
+                edi5_session_id=interview.id,
+                questions=questions,
+                detected_role=approved_pool.detected_role,
+                total_turns=interview.total_turns,
+            )
+            
+            # Metadata for webhook correlation
+            metadata = {
+                "edi5_interview_session_id": interview.id,
+                "candidate_id": current_user.id,
+                "assessment_session_id": session_id,
+                "interviewer_id": resolved_interviewer_id,
+            }
+            
+            call_config = RetellCallConfig(
+                agent_id=effective_agent_id,
+                agent_override=agent_override,
+                metadata=metadata,
+                dynamic_variables=dynamic_variables,
+                llm_websocket_url=(
+                    settings.RETELL_LLM_WEBSOCKET_URL
+                    if selected_voice_mode == "edi5_core"
+                    else None
+                ),
+            )
+            
+            web_call = await adapter.create_web_call(call_config)
+            
+            retell_call_id = web_call.call_id
+            retell_agent_id = effective_agent_id
+            retell_access_token = web_call.access_token
+            retell_ice_servers = web_call.ice_servers
+            
+            # Update interview session with Retell info
+            interview.retell_call_id = retell_call_id
+            interview.retell_agent_id = retell_agent_id
+            interview.personalization_metadata = {
+                **(interview.personalization_metadata or {}),
+                "voice_mode": selected_voice_mode or "edi5_core",
+            }
+            db.commit()
+            
+            logger.info(f"Created Retell web call {retell_call_id} for EDI5 interview {interview.id} using agent {effective_agent_id}")
+            
+        except Exception as e:
+            logger.exception("Failed to create Retell web call for interview %s", interview.id)
+            db.delete(interview)
+            db.commit()
+            raise HTTPException(
+                status_code=502,
+                detail="Retell could not start the voice call. Check the Retell configuration and backend logs.",
+            ) from e
 
     return StartInterviewResponse(
         interview_id=interview.id,
         phase=interview_phase,
         total_turns=10,
+        interviewer_id=resolved_interviewer_id,
+        # Retell-specific fields (added to response for frontend)
+        retell_call_id=retell_call_id,
+        retell_access_token=retell_access_token,
+        retell_ice_servers=retell_ice_servers,
+        voice_provider="retell" if use_retell else "legacy",
+        voice_mode=selected_voice_mode,
     )
 
 
@@ -501,48 +788,33 @@ async def get_next_question(
     # Select difficulty using RL
     difficulty = rl_engine.select_difficulty(state)
 
-    # Question selection (strict uniqueness)
+    # Question selection (strict uniqueness — no pool reuse on initial load)
     pool = approved_pool.question_pool
     asked_ids = set(rl_engine.asked_question_ids)
 
-    # Step a: Filter out already-asked questions
-    available = [q for q in pool if q.get("id") not in asked_ids]
+    selected = question_planner.select_question(
+        pool,
+        asked_question_ids=asked_ids,
+        phase=interview.phase,
+        difficulty=difficulty,
+        reuse_exhausted_pool=False,
+    )
 
-    # Step b: Filter by phase
-    phase_filtered = [q for q in available if q.get("phase") == interview.phase]
-
-    # Step c: Filter by RL-selected difficulty
-    diff_filtered = [q for q in phase_filtered if q.get("difficulty") == difficulty]
-
-    # Step d: Relax difficulty if needed
-    if diff_filtered:
-        selected = diff_filtered[0]
-    elif phase_filtered:
-        selected = phase_filtered[0]
-    elif available:
-        selected = available[0]
-    else:
-        # Step f: All exhausted — use full pool
-        logger.warning("Question pool exhausted, reusing questions")
-        selected = pool[0] if pool else None
-        if not selected:
-            raise HTTPException(status_code=400, detail="No questions available")
+    if not selected:
+        raise HTTPException(status_code=400, detail="No questions available")
 
     question_text = selected["question"]
-    question_id = selected.get("id", hashlib.md5(question_text.encode()).hexdigest()[:8])
+    question_id = question_planner.resolve_question_id(selected)
 
     # CRITICAL: Check if this question was already asked
     if question_id in asked_ids:
         logger.warning(f"Question {question_id} was already asked! This should not happen.")
-        # Try to find a different question
-        for q in available:
-            alt_id = q.get("id", hashlib.md5(q["question"].encode()).hexdigest()[:8])
-            if alt_id not in asked_ids:
-                selected = q
-                question_text = selected["question"]
-                question_id = alt_id
-                logger.info(f"Switched to alternative question {question_id}")
-                break
+        alternative = question_planner.find_unasked_alternative(pool, asked_ids)
+        if alternative:
+            selected = alternative
+            question_text = selected["question"]
+            question_id = question_planner.resolve_question_id(selected)
+            logger.info(f"Switched to alternative question {question_id}")
 
     logger.info(f"Selected question {question_id}: {question_text[:50]}... (asked_ids: {len(asked_ids)})")
 
@@ -588,10 +860,7 @@ async def get_next_question(
     )
 
 
-# ══════════════════════════════════════════════════════════════════════════
-# ENDPOINT 6: POST /interview/session/{interview_id}/respond
-# 10-STEP DETERMINISTIC PIPELINE
-# ══════════════════════════════════════════════════════════════════════════
+# ── ENDPOINT 6: POST /interview/session/{interview_id}/respond ─────────
 @router.post("/session/{interview_id}/respond", response_model=SubmitResponseResponse)
 async def submit_response(
     interview_id: int,
@@ -600,14 +869,14 @@ async def submit_response(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Submit interview response — 10-step deterministic pipeline.
+    Submit an interview response and get the interviewer's reply.
 
-    1. Load state  2. Silence check  3. Classify  4. Behavior score
-    5. Final score  6. Decision engine  7. Pre-fetch  8. Brain
-    9. RL update  10. Persist + return
+    The turn pipeline (silence handling, classification, scoring, follow-up
+    decision, question pre-fetch, RL update, persistence) lives in
+    ``InterviewOrchestrator``. This route only resolves the session and
+    translates domain errors into HTTP responses.
     """
 
-    # ── STEP 0: Load state ──────────────────────────────────────────────
     interview = db.query(InterviewSession).filter(
         InterviewSession.id == interview_id
     ).first()
@@ -615,330 +884,12 @@ async def submit_response(
     if not interview:
         raise HTTPException(status_code=404, detail="Interview not found")
 
-    rl_state = dict(interview.rl_state or {})
+    orchestrator = InterviewOrchestrator(db, groq_service)
 
-    rl_engine = InterviewRLEngine()
-    rl_engine.from_dict(rl_state)
-
-    # Question from rl_state — NEVER from request body
-    question = rl_state.get("current_question_text", "")
-    difficulty = rl_state.get("current_question_difficulty", "MEDIUM")
-
-    if not question:
-        raise HTTPException(status_code=400, detail="No active question found")
-
-    transcript = (req.transcript or "").strip()
-
-    # ── STEP 1: Silence check ───────────────────────────────────────────
-    force_next = False
-
-    if not transcript or len(transcript) < 5:
-        if rl_state.get("silence_count", 0) == 0:
-            rl_state["silence_count"] = 1
-            interview.rl_state = rl_state
-            db.commit()
-
-            return SubmitResponseResponse(
-                action="RETRY",
-                message="I didn't catch that. Could you please repeat your answer?",
-                is_complete=False,
-                scores=None,
-                next_question=None,
-            )
-        else:
-            # Second silence — force move on with 0 score
-            content_score = 0.0
-            intent = "NEUTRAL"
-            quality = "SHORT"
-            missing_part = None
-            force_next = True
-    else:
-        content_score = 0.0
-        intent = "NEUTRAL"
-        quality = "SHORT"
-        missing_part = None
-
-    # ── STEP 2: Classifier (skip if force_next) ─────────────────────────
-    if not force_next:
-        classifier_result = groq_service.classify_answer(
-            question,
-            transcript,
-            interview_type=rl_state.get("interview_type", "technical"),
-        )
-        quality = classifier_result["quality"]
-        intent = classifier_result["intent"]
-        missing_part = classifier_result.get("missing_part")
-        content_score = classifier_result["content_score"]
-
-    # ── STEP 3: Behavior scoring ────────────────────────────────────────
-    snapshot = {}
-    if req.behavioral_snapshot:
-        snapshot = req.behavioral_snapshot.model_dump()
-
-    response_time_sec = req.response_time_sec or 0.0
-
-    eye_contact = snapshot.get("eye_contact_pct", 0.5)
-    head_stability = snapshot.get("head_stability", 0.5)
-
-    if response_time_sec > 5:
-        voice_score = 1.0
-    elif response_time_sec > 2:
-        voice_score = 0.5
-    else:
-        voice_score = 0.0
-
-    behavior_score = (
-        0.4 * eye_contact +
-        0.3 * voice_score +
-        0.3 * head_stability
-    )
-
-    # ── STEP 4: Final score ─────────────────────────────────────────────
-    intent_score_map = {
-        "POSITIVE": 1.0,
-        "NEUTRAL": 0.6,
-        "NEGATIVE": 0.3,
-    }
-    intent_score = intent_score_map.get(intent, 0.6)
-
-    final_score = (
-        0.5 * content_score +
-        0.3 * intent_score +
-        0.2 * behavior_score
-    )
-
-    # ── STEP 5: Decision engine ─────────────────────────────────────────
-    followup_type = None
-    action = "NEXT"  # default
-
-    if force_next:
-        action = "NEXT"
-
-    elif rl_state.get("followup_count", 0) >= 2:
-        # Hard cap — ALWAYS checked first
-        action = "NEXT"
-
-    elif intent == "NEGATIVE":
-        if rl_state.get("negative_count", 0) == 0:
-            rl_state["negative_count"] = rl_state.get("negative_count", 0) + 1
-            rl_state["followup_count"] = rl_state.get("followup_count", 0) + 1
-            action = "FOLLOWUP"
-            followup_type = "NEGATIVE"
-        else:
-            action = "NEXT"
-
-    elif quality == "IRRELEVANT":
-        if rl_state.get("irrelevant_count", 0) == 0:
-            rl_state["irrelevant_count"] = rl_state.get("irrelevant_count", 0) + 1
-            rl_state["followup_count"] = rl_state.get("followup_count", 0) + 1
-            action = "FOLLOWUP"
-            followup_type = "IRRELEVANT"
-        else:
-            action = "NEXT"
-
-    elif quality == "SHORT":
-        rl_state["followup_count"] = rl_state.get("followup_count", 0) + 1
-        action = "FOLLOWUP"
-        followup_type = "SHORT"
-
-    elif quality == "PARTIAL":
-        rl_state["followup_count"] = rl_state.get("followup_count", 0) + 1
-        action = "FOLLOWUP"
-        followup_type = "PARTIAL"
-
-    elif quality == "GOOD":
-        action = "NEXT"
-
-    # Turn advancement check
-    if action == "NEXT":
-        if interview.current_turn + 1 >= interview.total_turns:
-            action = "COMPLETE"
-        else:
-            interview.current_turn += 1
-            # Reset turn counters
-            rl_state["followup_count"] = 0
-            rl_state["irrelevant_count"] = 0
-            rl_state["negative_count"] = 0
-            rl_state["silence_count"] = 0
-
-    # ── STEP 6: Pre-fetch next question ─────────────────────────────────
-    next_question_obj = None
-
-    if action == "NEXT":
-        approved_pool = db.query(ApprovedQuestionPool).filter(
-            ApprovedQuestionPool.session_id == interview.session_id,
-            ApprovedQuestionPool.admin_approved == True,
-        ).first()
-
-        if approved_pool:
-            pool = approved_pool.question_pool
-            all_asked = set(rl_state.get("asked_question_ids", []))
-
-            available = [q for q in pool if q.get("id") not in all_asked]
-            if not available:
-                available = pool  # All exhausted — reuse
-
-            # Determine phase for next question
-            next_phase = "TECHNICAL" if interview.current_turn >= 5 else interview.phase
-
-            # Filter by phase then difficulty
-            next_rl_state = {
-                "last_score": final_score,
-                "turn": interview.current_turn,
-            }
-            next_difficulty = rl_engine.select_difficulty(next_rl_state)
-
-            phase_filtered = [q for q in available if q.get("phase") == next_phase]
-            diff_filtered = [q for q in phase_filtered if q.get("difficulty") == next_difficulty]
-
-            if diff_filtered:
-                next_question_obj = diff_filtered[0]
-            elif phase_filtered:
-                next_question_obj = phase_filtered[0]
-            elif available:
-                next_question_obj = available[0]
-            else:
-                next_question_obj = pool[0] if pool else None
-
-    # ── STEP 7: Interviewer Brain ───────────────────────────────────────
-    brain_response = groq_service.generate_interviewer_response(
-        question=question,
-        answer=transcript,
-        quality=quality,
-        intent=intent,
-        missing_part=missing_part,
-        action=action,
-        followup_type=followup_type,
-        next_question=next_question_obj["question"] if next_question_obj else None,
-        conversation_history=rl_state.get("conversation_history", []),
-    )
-
-    # ── STEP 8: RL reward update ────────────────────────────────────────
-    reward = None
-    if action in ("NEXT", "COMPLETE"):
-        reward = rl_engine.compute_reward(
-            final_score=final_score,
-            quality=quality,
-            intent=intent,
-            difficulty=difficulty,
-            content_score=content_score,
-        )
-        current_state = {
-            "last_score": rl_state.get("last_score", 0.5),
-            "turn": interview.current_turn - 1 if action == "NEXT" else interview.current_turn,
-        }
-        next_rl_state_for_update = {
-            "last_score": final_score,
-            "turn": interview.current_turn,
-        }
-        rl_engine.update(current_state, difficulty, reward, next_rl_state_for_update)
-        rl_state["last_score"] = final_score
-
-    # ── STEP 9: Persist state ───────────────────────────────────────────
-
-    # Update conversation history
-    conv_hist = rl_state.get("conversation_history", [])
-    conv_hist.append({"role": "interviewer", "content": question})
-    conv_hist.append({"role": "candidate", "content": transcript})
-    rl_state["conversation_history"] = conv_hist[-6:]  # Cap at 6
-
-    # Save next question to rl_state ONLY here (not in pre-fetch)
-    if action == "NEXT" and next_question_obj:
-        rl_state["current_question_text"] = next_question_obj["question"]
-        rl_state["current_question_difficulty"] = next_question_obj.get("difficulty", "MEDIUM")
-        rl_state["current_question_id"] = next_question_obj.get("id")
-        asked_ids = rl_state.get("asked_question_ids", [])
-        asked_ids.append(next_question_obj.get("id"))
-        rl_state["asked_question_ids"] = asked_ids
-
-    # Phase transition
-    if interview.current_turn == 5:
-        interview.phase = "TECHNICAL"
-
-    if action == "COMPLETE":
-        interview.phase = "COMPLETE"
-
-    # Serialize RL engine back to rl_state
-    rl_dict = rl_engine.to_dict()
-    rl_state["q_table"] = rl_dict["q_table"]
-    rl_state["epsilon"] = rl_dict["epsilon"]
-    interview.rl_state = rl_state
-
-    # Get parent_turn_id for followup rows
-    parent_turn_id = None
-    if action == "FOLLOWUP":
-        last_main_turn = db.query(InterviewTurn).filter(
-            InterviewTurn.interview_id == interview.id,
-            InterviewTurn.is_followup == False,
-        ).order_by(InterviewTurn.id.desc()).first()
-        parent_turn_id = last_main_turn.id if last_main_turn else None
-
-    # Save InterviewTurn row
-    turn = InterviewTurn(
-        interview_id=interview.id,
-        turn_number=interview.current_turn,
-        question_text=question,
-        question_difficulty=difficulty,
-        candidate_response=transcript,
-        response_time_sec=response_time_sec,
-        content_score=content_score,
-        final_score=final_score,
-        intent=intent,
-        behavioral_snapshot=snapshot,
-        rl_reward=reward,
-        is_followup=(action == "FOLLOWUP"),
-        followup_number=rl_state.get("followup_count", 0),
-        parent_turn_id=parent_turn_id,
-    )
-    db.add(turn)
-    db.commit()
-
-    # ── STEP 10: Return response ────────────────────────────────────────
-    scores = ScoresInfo(
-        content_score=content_score,
-        intent_score=intent_score,
-        behavior_score=behavior_score,
-        final_score=final_score,
-    )
-
-    next_q_info = None
-    if action == "NEXT" and next_question_obj:
-        next_q_info = NextQuestionInfo(
-            text=next_question_obj["question"],
-            difficulty=next_question_obj.get("difficulty", "MEDIUM"),
-            phase=interview.phase,
-            turn_number=interview.current_turn,
-        )
-
-    summary = None
-    if action == "COMPLETE":
-        all_main_turns = db.query(InterviewTurn).filter(
-            InterviewTurn.interview_id == interview.id,
-            InterviewTurn.is_followup == False,
-        ).all()
-        total_followups = db.query(InterviewTurn).filter(
-            InterviewTurn.interview_id == interview.id,
-            InterviewTurn.is_followup == True,
-        ).count()
-        main_scores = [t.final_score for t in all_main_turns if t.final_score is not None]
-        avg_score = sum(main_scores) / max(len(main_scores), 1)
-        followup_rate = total_followups / max(len(all_main_turns), 1) * 100
-
-        summary = InterviewSummaryInfo(
-            total_turns=len(all_main_turns),
-            avg_final_score=round(avg_score, 2),
-            followup_rate=round(followup_rate, 1),
-        )
-
-    return SubmitResponseResponse(
-        action=action,
-        message=brain_response,
-        is_complete=(action == "COMPLETE"),
-        followup_type=followup_type,
-        next_question=next_q_info,
-        scores=scores,
-        interview_summary=summary,
-    )
+    try:
+        return orchestrator.handle_response(interview, req)
+    except InterviewError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
 
 
 # ── ENDPOINT 7: POST /interview/stt ────────────────────────────────────
@@ -952,48 +903,48 @@ async def speech_to_text(
     """
     Transcribes candidate audio using Groq Whisper API.
     Replaces local Whisper model (was causing 503 errors).
-    
+
     Accepted formats: webm, wav, mp3, mp4, m4a, ogg, flac
     Max file size: 25MB
     """
     import os
     import tempfile
-    
+
     # Read audio bytes
     audio_bytes = await audio.read()
-    
+
     # Validate file size — Groq limit is 25MB
     if len(audio_bytes) > 25 * 1024 * 1024:
         return {"transcript": ""}
-    
+
     # Validate file is not empty
     if len(audio_bytes) < 100:
         return {"transcript": ""}
-    
+
     # Determine file extension from upload filename
     # MediaRecorder default is webm — use as fallback
     original_name = audio.filename or "audio.webm"
     extension = os.path.splitext(original_name)[1]
     if not extension or extension not in [
-        ".webm", ".wav", ".mp3", ".mp4", 
+        ".webm", ".wav", ".mp3", ".mp4",
         ".m4a", ".ogg", ".flac", ".mpga", ".mpeg"
     ]:
         extension = ".webm"
-    
+
     tmp_path = None
     try:
         # Write to temp file with correct extension
         with tempfile.NamedTemporaryFile(suffix=extension, delete=False) as tmp:
             tmp.write(audio_bytes)
             tmp_path = tmp.name
-        
+
         # Transcribe via Groq API
         transcript = groq_service.transcribe_audio(tmp_path)
         return {"transcript": transcript}
-    
+
     except Exception as e:
         error_str = str(e).lower()
-        
+
         if "429" in error_str or "rate limit" in error_str:
             # Return 429 so frontend can retry with backoff
             # Do NOT treat as silence — that would penalize
@@ -1002,12 +953,12 @@ async def speech_to_text(
                 status_code=429,
                 content={"detail": "STT rate limited. Retry shortly."}
             )
-        
+
         # Any other error — return empty transcript
         # /respond endpoint will handle as silence
         print(f"[STT Endpoint Error] {e}")
         return {"transcript": ""}
-    
+
     finally:
         # Always delete temp file
         if tmp_path and os.path.exists(tmp_path):
@@ -1018,13 +969,36 @@ async def speech_to_text(
 @router.post("/tts")
 async def synthesize_speech(
     text: str = Query(..., max_length=2500, description="Text to synthesize (max 2500 chars)"),
+    interviewer_id: Optional[str] = Query(
+        None,
+        description="Speak in this interviewer's voice. Omit for the default voice.",
+    ),
 ):
-    """Synthesize speech using Sarvam.ai Bulbul v3 API."""
+    """Synthesize speech using Sarvam.ai Bulbul v3 API.
+
+    SECURITY NOTE (pre-existing, unchanged here): this endpoint has no
+    ``get_current_user`` dependency, so it is callable unauthenticated. Adding
+    ``interviewer_id`` does not widen that exposure — the parameter only picks
+    between a fixed set of voices and an unknown value falls back to the
+    default. Flagged rather than fixed because adding auth here would break the
+    in-flight audio calls the interview UI makes today; it needs its own change.
+    """
     from app.services.sarvam_service import text_to_speech
     from fastapi.responses import Response
 
+    # Resolved server-side from the id. The client never sends a speaker name,
+    # so it cannot request an arbitrary voice or drive up cost with exotic
+    # parameters.
+    voice = interviewer_profiles.get_interviewer(interviewer_id).voice
+
     try:
-        audio_bytes = await text_to_speech(text)
+        audio_bytes = await text_to_speech(
+            text,
+            speaker=voice.speaker,
+            model=voice.model,
+            language_code=voice.language_code,
+            pace=voice.pace,
+        )
         return Response(
             content=audio_bytes,
             media_type="audio/wav",
@@ -1067,6 +1041,8 @@ async def get_interview_status(
 
     return {
         "interview_id": interview.id,
+        "session_id": interview.session_id,
+        "round_id": interview.round_id,
         "status": interview.status,
         "phase": interview.phase,
         "total_questions": interview.total_turns,
@@ -1088,12 +1064,32 @@ async def complete_interview(
     current_user: User = Depends(get_current_user),
 ):
     """Complete interview session early (user submitted before all questions).
-    
+
     Idempotent: safe to call multiple times, returns existing completion data.
     """
     interview = db.query(InterviewSession).filter(InterviewSession.id == interview_id).first()
     if not interview:
         raise HTTPException(status_code=404, detail="Interview not found")
+
+    linked_round = (
+        db.query(AssessmentRound)
+        .filter(AssessmentRound.id == interview.round_id)
+        .first()
+        if interview.round_id
+        else None
+    )
+
+    def finalize_linked_round(scores: list[float]) -> None:
+        """Keep the shared assessment lifecycle aligned with interview completion."""
+        if linked_round is None or linked_round.status in {"completed", "terminated", "expired"}:
+            return
+        completed_at = interview.completed_at or datetime.now()
+        linked_round.status = "completed"
+        linked_round.completed_at = completed_at
+        if scores:
+            linked_round.score = round(sum(scores) / len(scores), 2)
+        from app.services.proctoring_service import stop_proctoring_session
+        stop_proctoring_session(db, linked_round.session_id)
 
     # Idempotent: if already completed, return existing computed values
     if interview.status == "COMPLETED":
@@ -1102,6 +1098,8 @@ async def complete_interview(
             InterviewTurn.is_followup == False
         ).all()
         scores = [t.final_score for t in turns if t.final_score is not None]
+        finalize_linked_round(scores)
+        db.commit()
         return {
             "status": "COMPLETED",
             "completion_reason": interview.completion_reason,
@@ -1122,6 +1120,8 @@ async def complete_interview(
         InterviewTurn.is_followup == False
     ).all()
     scores = [t.final_score for t in turns if t.final_score is not None]
+    finalize_linked_round(scores)
+    db.commit()
     return {
         "status": "COMPLETED",
         "completion_reason": "USER_SUBMITTED",
@@ -1130,6 +1130,32 @@ async def complete_interview(
         "performance_score": round(sum(scores) / max(len(scores), 1), 2),
         "completion_ratio": round(len(turns) / max(interview.total_turns, 1), 2),
     }
+
+
+@router.post("/session/{interview_id}/retell-transcript")
+async def save_retell_transcript(
+    interview_id: int,
+    request: RetellTranscriptRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Persist a browser-delivered Retell transcript without requiring webhooks."""
+    interview = db.query(InterviewSession).join(
+        AssessmentSession,
+        AssessmentSession.id == InterviewSession.session_id,
+    ).filter(
+        InterviewSession.id == interview_id,
+        AssessmentSession.user_id == current_user.id,
+    ).first()
+    if not interview:
+        raise HTTPException(status_code=404, detail="Interview not found")
+
+    metadata = dict(interview.personalization_metadata or {})
+    metadata["retell_live_transcript"] = request.transcript
+    metadata["retell_transcript_source"] = "browser"
+    interview.personalization_metadata = metadata
+    db.commit()
+    return {"status": "saved"}
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1150,6 +1176,10 @@ async def get_report(
 
     if not interview:
         raise HTTPException(status_code=404, detail="Interview not found")
+
+    metadata = interview.personalization_metadata or {}
+    voice_mode = metadata.get("voice_mode")
+    hosted_mode = voice_mode == "retell_hosted"
 
     # Fetch all turns ordered by creation
     all_turns = db.query(InterviewTurn).filter(
@@ -1236,30 +1266,45 @@ async def get_report(
         }
         for t in main_turns
     ]
-    feedback = groq_service.generate_feedback_summary(turns_data)
-    
+    if hosted_mode:
+        analysis = metadata.get("retell_analysis") or {}
+        feedback = (
+            analysis.get("call_summary")
+            or "This interview used Retell-hosted interview intelligence. EDI5 per-turn scoring is not enabled for this mode."
+        )
+    else:
+        feedback = groq_service.generate_feedback_summary(turns_data)
+
     # Compute intent_score average
     intent_scores = [t.intent for t in main_turns if t.intent]
     intent_map = {"positive": 1.0, "neutral": 0.6, "negative": 0.2}
     avg_intent = sum(intent_map.get(i, 0.6) for i in intent_scores) / max(len(intent_scores), 1) if intent_scores else None
-    
+
     # Compute completion_ratio and get completion_reason
     completion_ratio = len(main_turns) / max(interview.total_turns, 1)
     completion_reason = interview.completion_reason
 
     return InterviewReportResponse(
-        overall_score=round(overall_score, 2),
-        content_score=round(avg_content, 2),
-        behavior_score=round(avg_behavior, 2),
-        final_score=round(avg_final, 2),
+        overall_score=None if hosted_mode else round(overall_score, 2),
+        content_score=None if hosted_mode else round(avg_content, 2),
+        behavior_score=None if hosted_mode else round(avg_behavior, 2),
+        final_score=None if hosted_mode else round(avg_final, 2),
         intent_score=round(avg_intent, 2) if avg_intent is not None else None,
-        completion_ratio=round(completion_ratio, 2),
+        completion_ratio=None if hosted_mode else round(completion_ratio, 2),
         completion_reason=completion_reason,
         feedback_summary=feedback,
-        turn_reviews=turn_reviews,
-        total_turns=len(main_turns),
-        followup_rate=round(followup_rate, 1),
-        followup_interpretation=followup_interp,
+        turn_reviews=[] if hosted_mode else turn_reviews,
+        total_turns=0 if hosted_mode else len(main_turns),
+        followup_rate=0 if hosted_mode else round(followup_rate, 1),
+        followup_interpretation=(
+            "Retell-hosted interviews do not use EDI5 follow-up scoring."
+            if hosted_mode
+            else followup_interp
+        ),
+        is_edi5_scored=not hosted_mode,
+        voice_mode=voice_mode,
+        retell_transcript=metadata.get("retell_live_transcript"),
+        retell_analysis=metadata.get("retell_analysis"),
     )
 
 
@@ -1273,29 +1318,38 @@ async def realtime_feedback(
 ):
     """
     Returns real-time coaching tips based on behavioral metrics.
-    
+
     Called by frontend polling (every 3 seconds) during interview recording.
     Provides actionable feedback to improve candidate presentation.
     """
     # Face not detected - highest priority
     if not snapshot.face_detected:
         return RealtimeFeedbackResponse(tip="Ensure your face is visible in the camera.")
-    
+
     # Poor eye contact
     if snapshot.eye_contact_pct < 0.4:
         return RealtimeFeedbackResponse(tip="Try to maintain eye contact with the camera.")
-    
+
     # Excessive head movement / instability
     if snapshot.head_stability < 0.4:
         return RealtimeFeedbackResponse(tip="Try to keep your head steady while speaking.")
-    
+
     # Looking away too often
     if snapshot.looking_away_count > 5:
         return RealtimeFeedbackResponse(tip="Focus on the camera to show engagement.")
-    
+
     # Moderate eye contact - gentle nudge
     if snapshot.eye_contact_pct < 0.6:
         return RealtimeFeedbackResponse(tip="Good! A bit more eye contact would help.")
-    
+
     # All good
     return RealtimeFeedbackResponse(tip="Great engagement! Keep it up.")
+
+
+# ── Include Retell Webhook Router ────────────────────────────────────────
+from app.modules.interview.routers.retell_webhook import router as retell_webhook_router
+router.include_router(retell_webhook_router)
+
+# ── Include Interviewer Management Router ──────────────────────────────────
+from app.modules.interview.routers.interviewer_management import router as interviewer_management_router
+router.include_router(interviewer_management_router)

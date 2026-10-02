@@ -1,12 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-    getNextQuestion,
-    submitResponse,
-    getInterviewStatus,
-    transcribeAudio,
-    synthesizeSpeech,
-} from '../services/interviewService';
+import { retellClient } from '../services/interviewService';
+import { getInterviewStatus, saveRetellTranscript } from '../services/interviewService';
 import AdvancedProctoringMonitor from '../components/AdvancedProctoringMonitor';
 import ProctoringVideoDisplay from '../components/ProctoringVideoDisplay';
 import useAdvancedProctoring from '../hooks/useAdvancedProctoring';
@@ -15,13 +10,15 @@ import api from '../services/api';
 
 const STATES = {
     LOADING: 'loading',
+    CONNECTING: 'connecting',
     READY: 'ready',
     LISTENING: 'listening',
     PROCESSING: 'processing',
     COMPLETE: 'complete',
+    ERROR: 'error',
 };
 
-export default function InterviewRoom() {
+export default function RetellInterviewRoom() {
     const [roomState, setRoomState] = useState(STATES.LOADING);
     const [currentQuestion, setCurrentQuestion] = useState(null);
     const [turnNumber, setTurnNumber] = useState(0);
@@ -33,25 +30,33 @@ export default function InterviewRoom() {
     const [toast, setToast] = useState(null);
     const [questionScore, setQuestionScore] = useState(null);
     const [isRecording, setIsRecording] = useState(false);
-    const [liveTip, setLiveTip] = useState(''); // Real-time feedback tip
+    const [liveTip, setLiveTip] = useState('');
+    const [liveTranscript, setLiveTranscript] = useState([]);
+    const [connectionStatus, setConnectionStatus] = useState('connecting');
     
     const navigate = useNavigate();
     
-    // Fix: Get interviewId BEFORE hook call, parse as integer
+    // Get interview ID from localStorage (stable refs - these don't change)
     const interviewId = localStorage.getItem('interview_id');
-    const [proctoringSessionId, setProctoringSessionId] = useState(null);
-    const proctoring = useAdvancedProctoring(
-        proctoringSessionId,
-        null
+    const voiceMode = localStorage.getItem('interview_voice_mode') || 'edi5_core';
+    const retellCallId = localStorage.getItem('retell_call_id');
+    const retellAccessToken = localStorage.getItem('retell_access_token');
+    // Parse ice servers once and store in a ref to avoid new array on every render
+    const retellIceServersRef = useRef(
+        JSON.parse(localStorage.getItem('retell_ice_servers') || '[]')
     );
+    const retellIceServers = retellIceServersRef.current;
+    const [proctoringSessionId, setProctoringSessionId] = useState(null);
+    
+    const proctoring = useAdvancedProctoring(proctoringSessionId, null);
     
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
     const startTimeRef = useRef(null);
     const timerIntervalRef = useRef(null);
-    const audioContextRef = useRef(null);
-    const audioSourceRef = useRef(null);
-    const tipPollingRef = useRef(null); // Real-time feedback polling
+    const tipPollingRef = useRef(null);
+    const isInitializedRef = useRef(false);
+    const liveTranscriptRef = useRef([]);
 
     // Check if interview_id exists
     useEffect(() => {
@@ -64,10 +69,20 @@ export default function InterviewRoom() {
             setTimeout(() => {
                 navigate('/dashboard');
             }, 3000);
+        } else if (!retellCallId || !retellAccessToken) {
+            console.error('Retell connection info not found');
+            setToast({
+                type: 'error',
+                message: 'Retell connection info missing. Please start interview again.',
+            });
+            setTimeout(() => {
+                navigate('/dashboard');
+            }, 3000);
         } else {
             console.log('Interview ID found:', interviewId);
+            console.log('Retell Call ID:', retellCallId);
         }
-    }, [interviewId, navigate]);
+    }, [interviewId, retellCallId, retellAccessToken, navigate]);
 
     useEffect(() => {
         if (!interviewId) return;
@@ -76,328 +91,132 @@ export default function InterviewRoom() {
             .catch((error) => console.error('Failed to resolve assessment session:', error));
     }, [interviewId]);
 
-    // Initialize Web Audio API context
-    const getAudioContext = () => {
-        if (!audioContextRef.current) {
-            audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-        }
-        return audioContextRef.current;
-    };
-
-    /**
-     * Play audio from ArrayBuffer with Web Audio API
-     * Returns promise that resolves when playback finishes
-     */
-    const playAudio = async (arrayBuffer) => {
-        try {
-            const audioContext = getAudioContext();
-            
-            // Stop any currently playing audio
-            if (audioSourceRef.current) {
-                try {
-                    audioSourceRef.current.stop();
-                } catch (e) {
-                    // Already stopped
-                }
-                audioSourceRef.current = null;
-            }
-            
-            // Resume AudioContext if suspended (Chrome autoplay policy)
-            if (audioContext.state === 'suspended') {
-                await audioContext.resume();
-            }
-            
-            // Decode audio data
-            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-            
-            // Create source and connect to destination
-            const source = audioContext.createBufferSource();
-            source.buffer = audioBuffer;
-            source.connect(audioContext.destination);
-            
-            // Store reference for cleanup
-            audioSourceRef.current = source;
-            
-            // Play and return promise that resolves on end
-            source.start(0);
-            
-            return new Promise((resolve) => {
-                source.onended = () => {
-                    audioSourceRef.current = null;
-                    resolve();
-                };
-            });
-        } catch (error) {
-            console.warn('Audio playback failed:', error);
-            // Non-blocking error — interview continues
-            throw error;
-        }
-    };
-
-    
-    /**
-     * TTS with retry logic (retry once, then fallback to text)
-     * Demo-safe: won't crash on TTS failures
-     */
-    const playTTSWithRetry = useCallback(async (text) => {
-        try {
-            const audioBytes = await synthesizeSpeech(text);
-            await playAudio(audioBytes);
-        } catch (firstError) {
-            console.warn('TTS failed, retrying once...', firstError);
-            try {
-                // Wait a moment before retry
-                await new Promise(r => setTimeout(r, 500));
-                const audioBytes = await synthesizeSpeech(text);
-                await playAudio(audioBytes);
-            } catch (secondError) {
-                console.error('TTS failed twice → fallback to text display', secondError);
-                // Fallback: just show toast, question is visible on screen
-                setToast({
-                    type: 'info',
-                    message: 'Audio unavailable. Please read the question on screen.',
-                });
-            }
-        }
-    }, []);
-    
-    // Fetch next question (MOVED UP - declared before use in startup)
-    const fetchNextQuestion = useCallback(async () => {
-        if (!interviewId) {
-            console.error('Cannot fetch question: No interview ID');
-            setToast({
-                type: 'error',
-                message: 'Interview session not found',
-            });
-            return;
-        }
+    // Initialize Retell Web Call
+    const initializeRetell = useCallback(async () => {
+        if (isInitializedRef.current) return;
+        isInitializedRef.current = true;
+        
+        setRoomState(STATES.CONNECTING);
+        setConnectionStatus('connecting');
+        
+        console.log('Retell init - callId:', retellCallId);
+        console.log('Retell init - accessToken:', retellAccessToken ? retellAccessToken.substring(0, 20) + '...' : 'MISSING');
+        console.log('Retell init - iceServers:', retellIceServers);
         
         try {
-            console.log('Fetching next question for interview:', interviewId);
-            const res = await getNextQuestion(interviewId);
-            console.log('Question received:', res);
+            // Initialize Retell client
+            await retellClient.initialize(retellCallId, retellAccessToken, retellIceServers);
             
+            // Set up callbacks
+            retellClient.onTranscript((transcriptData) => {
+                liveTranscriptRef.current = transcriptData;
+                setLiveTranscript(transcriptData);
+                // Update current question display with latest transcript
+                if (transcriptData.length > 0) {
+                    const latestUser = [...transcriptData].reverse().find(u => u.role === 'user');
+                    if (latestUser) {
+                        setTranscript(latestUser.content);
+                    }
+                    if (voiceMode === 'edi5_core') {
+                        const latestAgent = [...transcriptData].reverse().find(u => u.role === 'agent');
+                        if (latestAgent) setCurrentQuestion(latestAgent.content);
+                    }
+                }
+            });
+            
+            retellClient.onCallEnded(() => {
+                console.log('Retell call ended');
+                setRoomState(STATES.COMPLETE);
+                handleInterviewComplete();
+            });
+            
+            retellClient.onError((error) => {
+                console.error('Retell error:', error);
+                setToast({
+                    type: 'error',
+                    message: 'Connection error. Please try again.',
+                });
+                setRoomState(STATES.ERROR);
+            });
+            
+            // Start the call (connects WebSocket, WebRTC, starts audio)
+            await retellClient.startCall();
+            setIsRecording(true);
+            setRoomState(STATES.READY);
+            setConnectionStatus('connected');
+            
+        } catch (error) {
+            console.error('Failed to initialize Retell:', error);
+            setToast({
+                type: 'error',
+                message: 'Failed to connect to Retell. Please retry or contact support; this interview will not switch providers automatically.',
+            });
+            setRoomState(STATES.ERROR);
+        }
+    }, [retellCallId, retellAccessToken, retellIceServers, voiceMode]);
+
+    const fetchFirstQuestion = async () => {
+        if (!interviewId) return;
+        
+        try {
+            const res = await getNextQuestion(interviewId);
             setCurrentQuestion(res.question);
             setTurnNumber(res.turn_number);
             setDifficulty(res.difficulty);
             setPhase(res.phase);
             setTranscript('');
             setQuestionScore(null);
-            setRoomState(STATES.READY);
-            
-            // Play question via TTS
-            try {
-                const audioBytes = await synthesizeSpeech(res.question);
-                try {
-                    await playAudio(audioBytes);
-                } catch (audioError) {
-                    // TTS failed but interview continues
-                    console.warn('Audio playback failed, showing text instead');
-                }
-            } catch (ttsError) {
-                console.warn('TTS failed:', ttsError);
-                // Interview continues, question visible on screen
-            }
+        } catch (error) {
+            console.error('Failed to fetch first question:', error);
+            setToast({
+                type: 'error',
+                message: 'Failed to load first question',
+            });
+        }
+    };
+
+    const fetchNextQuestion = async () => {
+        if (!interviewId) return;
+        
+        try {
+            const res = await getNextQuestion(interviewId);
+            setCurrentQuestion(res.question);
+            setTurnNumber(res.turn_number);
+            setDifficulty(res.difficulty);
+            setPhase(res.phase);
+            setTranscript('');
+            setQuestionScore(null);
         } catch (error) {
             console.error('Failed to fetch next question:', error);
-            setToast({
-                type: 'error',
-                message: error.response?.data?.detail || 'Failed to load next question',
-            });
-            setRoomState(STATES.READY);
-        }
-    }, [interviewId]);
-    
-    // Startup: play intro, then fetch first question
-    useEffect(() => {
-        if (!interviewId) {
-            console.log('Skipping startup: No interview ID');
-            return;
-        }
-        
-        const startup = async () => {
-            try {
-                console.log('Starting interview room...');
-                const startupText =
-                    'Welcome. I am your AI interviewer. Please introduce yourself and tell me about your background.';
-                // Use retry-enabled TTS
-                await playTTSWithRetry(startupText);
-                fetchNextQuestion();
-            } catch (error) {
-                console.error('Startup error:', error);
-                fetchNextQuestion();
-            }
-        };
-        
-        startup();
-        
-        // Cleanup on unmount
-        return () => {
-            clearInterval(timerIntervalRef.current);
-            clearInterval(tipPollingRef.current);
-            try { 
-                audioSourceRef.current?.stop(); 
-            } catch (_) {}
-            audioContextRef.current?.close();
-            proctoring.stopMonitoring?.();
-        };
-    }, [interviewId, playTTSWithRetry, fetchNextQuestion]);
-    
-    // ═══════════════════════════════════════════════════════════════════════
-    // REAL-TIME FEEDBACK POLLING (every 3 seconds during recording)
-    // Uses behaviorSnapshotRef to avoid stale closure issues
-    // ═══════════════════════════════════════════════════════════════════════
-    useEffect(() => {
-        // Only poll when recording
-        if (!isRecording || !interviewId) {
-            if (tipPollingRef.current) {
-                clearInterval(tipPollingRef.current);
-                tipPollingRef.current = null;
-            }
-            return;
-        }
-        
-        // Start polling for real-time feedback
-        tipPollingRef.current = setInterval(async () => {
-            try {
-                // Get current snapshot from ref (avoids stale closure)
-                const snapshot = proctoring.getBehaviorSnapshot 
-                    ? proctoring.getBehaviorSnapshot()
-                    : {
-                        face_detected: proctoring.metrics?.faceDetected ?? true,
-                        eye_contact_pct: proctoring.metrics?.eyeContactPercent ?? 0.5,
-                        head_stability: proctoring.metrics?.headStability ?? 0.5,
-                        looking_away_count: proctoring.metrics?.lookingAwayCount ?? 0,
-                        response_time_sec: recordingSeconds,
-                    };
-                
-                const res = await api.post('/interview/realtime-feedback', {
-                    session_id: proctoringSessionId,
-                    ...snapshot,
-                });
-                
-                if (res.data?.tip) {
-                    setLiveTip(res.data.tip);
-                }
-            } catch (error) {
-                // Silent fail - feedback is non-critical
-                console.debug('Realtime feedback poll failed:', error);
-            }
-        }, 3000);
-        
-        return () => {
-            if (tipPollingRef.current) {
-                clearInterval(tipPollingRef.current);
-                tipPollingRef.current = null;
-            }
-        };
-    }, [isRecording, interviewId, proctoring, recordingSeconds]);
-    
-    const startRecording = async () => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                audio: true,
-                video: false,
-            });
-            
-            const mediaRecorder = new MediaRecorder(stream);
-            mediaRecorderRef.current = mediaRecorder;
-            audioChunksRef.current = [];
-            
-            mediaRecorder.ondataavailable = (e) => {
-                audioChunksRef.current.push(e.data);
-            };
-            
-            mediaRecorder.start();
-            startTimeRef.current = Date.now();
-            setIsRecording(true);
-            setRoomState(STATES.LISTENING);
-            
-            setRecordingSeconds(0);
-            timerIntervalRef.current = setInterval(() => {
-                setRecordingSeconds((s) => s + 1);
-            }, 1000);
-        } catch (error) {
-            setToast({
-                type: 'error',
-                message: 'Failed to access microphone',
-            });
         }
     };
-    
-    const stopAndSubmit = async () => {
+
+    // Handle interview completion
+    const handleInterviewComplete = async () => {
+        proctoring.stopMonitoring?.();
         try {
-            mediaRecorderRef.current.stop();
-            clearInterval(timerIntervalRef.current);
-            setIsRecording(false);
-            setLiveTip(''); // Clear live tip
-            setRoomState(STATES.PROCESSING);
-            
-            await new Promise((resolve) => {
-                mediaRecorderRef.current.onstop = resolve;
-            });
-            
-            const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-            const responseTimeSec = (Date.now() - startTimeRef.current) / 1000;
-            
-            let recognizedTranscript = '';
-            try {
-                const sttRes = await transcribeAudio(audioBlob);
-                recognizedTranscript = sttRes.transcript || '';
-            } catch (error) {
-                console.error('STT failed:', error);
+            const transcript = liveTranscriptRef.current
+                .map((utterance) => `${utterance.role === 'user' ? 'Candidate' : 'Interviewer'}: ${utterance.content}`)
+                .join('\n');
+            if (transcript) {
+                await saveRetellTranscript(interviewId, transcript);
             }
-            
-            setTranscript(recognizedTranscript);
-            
-            // ═══════════════════════════════════════════════════════════════
-            // BEHAVIORAL SNAPSHOT - Use proctoring.metrics (reactive state)
-            // Falls back to defaults if metrics unavailable
-            // ═══════════════════════════════════════════════════════════════
-            const behavioralSnapshot = {
-                eye_contact_pct: proctoring.metrics?.eyeContactPercent ?? 0.5,
-                head_stability: proctoring.metrics?.headStability ?? 0.5,
-                face_detected: proctoring.metrics?.faceDetected ?? true,
-                looking_away_count: proctoring.metrics?.lookingAwayCount ?? 0,
-                response_time_sec: responseTimeSec,
-                dominant_emotion: proctoring.metrics?.dominantEmotion ?? 'neutral',
-            };
-            
-            const submitRes = await submitResponse(
-                interviewId,
-                recognizedTranscript,
-                responseTimeSec,
-                behavioralSnapshot
-            );
-            
-            // Reset metrics for next recording
-            if (proctoring.resetMetrics) {
-                proctoring.resetMetrics();
-            }
-            
-            if (submitRes.is_complete) {
-                proctoring.stopMonitoring?.();
-                setQuestionScore(submitRes.score);
-                setRoomState(STATES.COMPLETE);
-            } else {
-                setTranscript('');
-                setTimeout(fetchNextQuestion, 2000);
-            }
+            await api.post(`/interview/session/${interviewId}/complete`);
         } catch (error) {
+            console.error('Failed to persist Retell interview data:', error);
             setToast({
                 type: 'error',
-                message: 'Failed to submit response',
+                message: error.response?.data?.detail || 'Failed to save the interview transcript or completion status.',
             });
-            setRoomState(STATES.READY);
         }
+        setRoomState(STATES.COMPLETE);
     };
-    
+
     const handleViewReport = () => {
         navigate(`/interview/report/${interviewId}`);
     };
 
     const handleSubmitInterview = async () => {
-        // Show confirmation dialog
         const confirmed = window.confirm(
             `Are you sure you want to submit the interview early?\n\n` +
             `Progress: ${turnNumber} out of ${totalTurns} questions answered\n\n` +
@@ -407,33 +226,22 @@ export default function InterviewRoom() {
         if (!confirmed) return;
         
         try {
-            // Stop recording if active
-            if (isRecording && mediaRecorderRef.current) {
-                mediaRecorderRef.current.stop();
-                clearInterval(timerIntervalRef.current);
-                setIsRecording(false);
+            // End Retell call
+            await retellClient.endCall();
+            const transcript = liveTranscriptRef.current
+                .map((utterance) => `${utterance.role === 'user' ? 'Candidate' : 'Interviewer'}: ${utterance.content}`)
+                .join('\n');
+            if (transcript) {
+                await saveRetellTranscript(interviewId, transcript);
             }
-            
-            // Stop audio
-            try { 
-                audioSourceRef.current?.stop(); 
-            } catch (_) {}
             
             // Stop proctoring
             proctoring.stopMonitoring?.();
-            
-            // Close AudioContext
-            audioContextRef.current?.close();
-            
-            // Clear all intervals
-            clearInterval(timerIntervalRef.current);
-            clearInterval(tipPollingRef.current);
             
             // Call complete endpoint
             const response = await api.post(`/interview/session/${interviewId}/complete`);
             console.log('Interview completed:', response.data);
             
-            // Navigate to report
             navigate(`/interview/report/${interviewId}`);
         } catch (error) {
             console.error('Failed to submit interview:', error);
@@ -443,6 +251,43 @@ export default function InterviewRoom() {
             });
         }
     };
+
+    // Timer for recording display
+    useEffect(() => {
+        if (!isRecording) {
+            if (timerIntervalRef.current) {
+                clearInterval(timerIntervalRef.current);
+                timerIntervalRef.current = null;
+            }
+            return;
+        }
+        
+        setRecordingSeconds(0);
+        timerIntervalRef.current = setInterval(() => {
+            setRecordingSeconds((s) => s + 1);
+        }, 1000);
+        
+        return () => {
+            if (timerIntervalRef.current) {
+                clearInterval(timerIntervalRef.current);
+                timerIntervalRef.current = null;
+            }
+        };
+    }, [isRecording]);
+
+    // Initialize on mount — run exactly once
+    useEffect(() => {
+        if (interviewId && retellCallId && retellAccessToken) {
+            initializeRetell();
+        }
+        
+        return () => {
+            clearInterval(timerIntervalRef.current);
+            clearInterval(tipPollingRef.current);
+            retellClient.endCall().catch(() => {});
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // Get phase color
     const getPhaseColor = (p) => {
@@ -463,17 +308,22 @@ export default function InterviewRoom() {
         if (score >= 0.4) return 'text-amber-400';
         return 'text-red-400';
     };
-    
+
     return (
         <div className="h-screen bg-slate-950 text-white flex flex-col overflow-hidden">
             {/* Top Bar */}
             <div className="h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-8">
-                {/* Logo */}
+                {/* Logo & Connection Status */}
                 <div className="flex items-center gap-3">
                     <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
                         <span className="text-white font-bold text-sm">AI</span>
                     </div>
                     <span className="font-semibold text-sm">Interview</span>
+                    {/* Connection Status Indicator */}
+                    <div className="flex items-center gap-1.5">
+                        <div className={`w-2 h-2 rounded-full ${connectionStatus === 'connected' ? 'bg-green-500' : connectionStatus === 'connecting' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'}`}></div>
+                        <span className="text-xs text-slate-400 capitalize">{connectionStatus}</span>
+                    </div>
                 </div>
 
                 {/* Turn Indicator - 10 dots */}
@@ -488,12 +338,12 @@ export default function InterviewRoom() {
                     ))}
                 </div>
 
-                {/* Phase Badge & Timer & REC & Submit */}
+                {/* Phase Badge & Timer & Submit */}
                 <div className="flex items-center gap-4">
                     {/* Submit Interview Button */}
                     <button
                         onClick={handleSubmitInterview}
-                        disabled={roomState === STATES.COMPLETE || roomState === STATES.LOADING}
+                        disabled={roomState === STATES.COMPLETE || roomState === STATES.LOADING || roomState === STATES.CONNECTING}
                         className="flex-shrink-0 px-4 py-1.5 bg-red-600 hover:bg-red-700 disabled:bg-slate-700 disabled:text-slate-500 text-white text-xs font-semibold rounded-full transition-colors"
                     >
                         Finish Round
@@ -504,20 +354,10 @@ export default function InterviewRoom() {
                         {phase?.toUpperCase() || 'INTERVIEW'}
                     </div>
 
-                    {/* Timer (show during recording) */}
-                    {isRecording && (
-                        <div className="text-sm font-mono text-slate-400">
-                            {Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, '0')}
-                        </div>
-                    )}
-
-                    {/* REC Indicator (show during recording) */}
-                    {isRecording && (
-                        <div className="flex items-center gap-1.5 bg-red-900 px-3 py-1.5 rounded-full">
-                            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                            <span className="text-xs font-bold text-red-300">REC</span>
-                        </div>
-                    )}
+                    {/* Timer */}
+                    <div className="text-sm font-mono text-slate-400">
+                        {Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, '0')}
+                    </div>
                 </div>
             </div>
             
@@ -569,7 +409,7 @@ export default function InterviewRoom() {
                             </div>
                         </div>
 
-                        {/* Head Stability (renamed from Engagement) */}
+                        {/* Head Stability */}
                         <div className="mb-4">
                             <div className="flex items-center justify-between mb-2">
                                 <span className="text-xs text-slate-400">Head Stability</span>
@@ -589,7 +429,7 @@ export default function InterviewRoom() {
                             </div>
                         </div>
 
-                        {/* Face Detected Indicator */}
+                        {/* Face Detected */}
                         <div>
                             <div className="flex items-center justify-between mb-2">
                                 <span className="text-xs text-slate-400">Face Detection</span>
@@ -622,29 +462,56 @@ export default function InterviewRoom() {
                             </div>
                         )}
                         
+                        {roomState === STATES.CONNECTING && (
+                            <div className="flex flex-col items-center justify-center h-full">
+                                <div className="w-12 h-12 border-4 border-slate-700 border-t-yellow-500 rounded-full animate-spin mb-4"></div>
+                                <p className="text-slate-400 text-center">Connecting to voice service...</p>
+                            </div>
+                        )}
+                        
                         {(roomState === STATES.READY || roomState === STATES.LISTENING || roomState === STATES.PROCESSING) && (
                             <>
-                                <div className="flex items-center gap-3 mb-4 pb-4 border-b border-slate-800">
-                                    <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Question {turnNumber}</span>
-                                    <div className="flex items-center gap-2">
-                                        {difficulty && (
-                                            <span className="px-2 py-1 bg-slate-800 rounded-full text-xs font-medium text-slate-400">
-                                                {difficulty}
-                                            </span>
-                                        )}
-                                        {phase && (
-                                            <span className={`px-2 py-1 rounded-full text-xs font-medium text-white ${getPhaseColor(phase)} bg-opacity-20`}>
-                                                {phase}
-                                            </span>
-                                        )}
+                                {voiceMode === 'edi5_core' ? (
+                                    <>
+                                        <div className="flex items-center gap-3 mb-4 pb-4 border-b border-slate-800">
+                                            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Question {turnNumber}</span>
+                                            <div className="flex items-center gap-2">
+                                                {difficulty && (
+                                                    <span className="px-2 py-1 bg-slate-800 rounded-full text-xs font-medium text-slate-400">
+                                                        {difficulty}
+                                                    </span>
+                                                )}
+                                                {phase && (
+                                                    <span className={`px-2 py-1 rounded-full text-xs font-medium text-white ${getPhaseColor(phase)} bg-opacity-20`}>
+                                                        {phase}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <p className="text-2xl font-semibold leading-relaxed text-slate-100 mb-8">{currentQuestion}</p>
+                                    </>
+                                ) : (
+                                    <div className="mb-6 rounded-xl border border-slate-700 bg-slate-800/50 p-4 text-sm text-slate-300">
+                                        Retell is conducting this interview. Your live conversation transcript appears below.
                                     </div>
-                                </div>
+                                )}
                                 
-                                <p className="text-2xl font-semibold leading-relaxed text-slate-100 mb-8">
-                                    {currentQuestion}
-                                </p>
+                                {/* Live Transcript Display */}
+                                {liveTranscript.length > 0 && (
+                                    <div className="mb-6 p-4 bg-slate-800/50 rounded-xl border border-slate-700">
+                                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Live Transcript</p>
+                                        <div className="space-y-1 max-h-40 overflow-y-auto">
+                                            {liveTranscript.map((utt, idx) => (
+                                                <div key={idx} className={`text-sm ${utt.role === 'user' ? 'text-blue-300' : 'text-purple-300'}`}>
+                                                    <span className="font-semibold">{utt.role === 'user' ? 'You' : 'Interviewer'}:</span>{' '}
+                                                    {utt.content}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                                 
-                                {transcript && (
+                                {transcript && roomState !== STATES.READY && (
                                     <div className="mt-8 pt-6 border-t border-slate-800">
                                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Your Response</p>
                                         <p className="text-base text-slate-300 leading-relaxed">{transcript}</p>
@@ -664,20 +531,49 @@ export default function InterviewRoom() {
                                 </p>
                             </div>
                         )}
+                        
+                        {roomState === STATES.ERROR && (
+                            <div className="flex flex-col items-center justify-center h-full text-center">
+                                <div className="w-20 h-20 rounded-full bg-red-500 bg-opacity-20 flex items-center justify-center mb-6">
+                                    <span className="text-4xl">⚠️</span>
+                                </div>
+                                <h2 className="text-3xl font-bold text-red-400 mb-3">Connection Error</h2>
+                                <p className="text-slate-400 text-base max-w-sm mb-6">
+                                    Lost connection to voice service. Your progress has been saved.
+                                </p>
+                                <button
+                                    onClick={() => navigate('/dashboard')}
+                                    className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors"
+                                >
+                                    Return to Dashboard
+                                </button>
+                            </div>
+                        )}
                     </div>
                     
                     {/* Control Panel */}
                     <div className="bg-slate-900 rounded-2xl border border-slate-800 p-8">
+                        {roomState === STATES.LOADING && (
+                            <div className="text-center">
+                                <div className="w-12 h-12 border-4 border-slate-700 border-t-blue-500 rounded-full animate-spin mx-auto mb-4"></div>
+                                <p className="text-slate-400">Initializing...</p>
+                            </div>
+                        )}
+                        
+                        {roomState === STATES.CONNECTING && (
+                            <div className="text-center">
+                                <div className="w-12 h-12 border-4 border-slate-700 border-t-yellow-500 rounded-full animate-spin mx-auto mb-4"></div>
+                                <p className="text-slate-400">Connecting to voice service...</p>
+                            </div>
+                        )}
+                        
                         {roomState === STATES.READY && (
                             <div className="text-center">
-                                <p className="text-slate-400 text-base mb-6">Ready to answer?</p>
-                                <button
-                                    onClick={startRecording}
-                                    className="w-full bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-bold py-4 rounded-xl transition-all duration-150 text-lg flex items-center justify-center gap-2"
-                                >
-                                    <span>🎤</span>
-                                    Start Speaking
-                                </button>
+                                <p className="text-slate-400 text-base mb-6">Connected. Ready to answer.</p>
+                                <div className="flex items-center justify-center gap-3 mb-6">
+                                    <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                                    <span className="font-semibold text-green-400">Live</span>
+                                </div>
                             </div>
                         )}
                         
@@ -690,23 +586,6 @@ export default function InterviewRoom() {
                                 <div className="text-4xl font-mono font-bold text-slate-300 mb-6">
                                     {Math.floor(recordingSeconds / 60)}:{String(recordingSeconds % 60).padStart(2, '0')}
                                 </div>
-                                
-                                {/* Real-Time Feedback Tip */}
-                                {liveTip && (
-                                    <div className="mb-6 px-4 py-3 bg-blue-900/30 border border-blue-700/50 rounded-lg">
-                                        <p className="text-sm text-blue-300 flex items-center justify-center gap-2">
-                                            <span>💡</span>
-                                            {liveTip}
-                                        </p>
-                                    </div>
-                                )}
-                                
-                                <button
-                                    onClick={stopAndSubmit}
-                                    className="w-full bg-slate-800 hover:bg-slate-700 active:scale-[0.98] text-white font-bold py-4 rounded-xl transition-all duration-150 text-base"
-                                >
-                                    Done Speaking
-                                </button>
                             </div>
                         )}
                         
@@ -733,6 +612,18 @@ export default function InterviewRoom() {
                                 >
                                     <span>📊</span>
                                     View Full Report
+                                </button>
+                            </div>
+                        )}
+                        
+                        {roomState === STATES.ERROR && (
+                            <div className="text-center">
+                                <button
+                                    onClick={initializeRetell}
+                                    className="w-full bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-bold py-4 rounded-xl transition-all duration-150 text-base flex items-center justify-center gap-2"
+                                >
+                                    <span>🔄</span>
+                                    Retry Connection
                                 </button>
                             </div>
                         )}

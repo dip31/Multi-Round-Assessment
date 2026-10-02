@@ -35,6 +35,12 @@ class InterviewSession(Base):
         nullable=False,
         index=True,
     )
+    round_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
+        ForeignKey("assessment_rounds.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
     phase: Mapped[str] = mapped_column(String(20), server_default="HR", nullable=False)
     current_turn: Mapped[int] = mapped_column(Integer, server_default="0", nullable=False)
     total_turns: Mapped[int] = mapped_column(Integer, server_default="10", nullable=False)
@@ -45,6 +51,23 @@ class InterviewSession(Base):
     )  # ALL_QUESTIONS_COMPLETED | USER_SUBMITTED | TIME_EXPIRED
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), nullable=True)
     created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), server_default=func.now(), nullable=True)
+
+    # ── Interviewer presentation ──────────────────────────────────────
+    # Which interviewer persona the candidate chose. Nullable on purpose:
+    # sessions created before interviewer selection existed have NULL, and
+    # NULL resolves to the default profile rather than being an error. Stored
+    # as a plain slug with no foreign key because the roster lives in
+    # app/modules/interview/config/interviewer_profiles.py, not in a table.
+    #
+    # This is presentation only — it must never be read by scoring, the
+    # follow-up policy, difficulty selection, or the RL state.
+    interviewer_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
+    # ── Retell integration ────────────────────────────────────────────
+    # Maps EDI5 interview session to Retell call for real-time voice transport.
+    # Nullable - only populated when using Retell voice provider.
+    retell_call_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    retell_agent_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # ── Personalization metadata (added for question personalization feature) ──
     extraction_confidence: Mapped[str | None] = mapped_column(String(10), nullable=True)
@@ -219,3 +242,85 @@ class ProctoringViolation(Base):
 
     def __repr__(self) -> str:
         return f"<ProctoringViolation id={self.id} session_id={self.session_id} event_type={self.event_type!r}>"
+
+
+class DynamicInterviewer(Base):
+    """Represents a dynamically created interviewer with Retell integration.
+    
+    Stores interviewer configuration and Retell resource IDs.
+    Created by admins via the frontend interviewer management UI.
+    """
+
+    __tablename__ = "dynamic_interviewers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    
+    # ── Interviewer identity ──────────────────────────────────────────
+    # Stable slug used as interviewer_id in InterviewSession
+    slug: Mapped[str] = mapped_column(String(50), unique=True, index=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    tagline: Mapped[str] = mapped_column(String(500), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    
+    # ── Personality & speaking style ──────────────────────────────────
+    personality: Mapped[str] = mapped_column(Text, nullable=False)
+    speaking_style: Mapped[str] = mapped_column(Text, nullable=False)
+    greeting: Mapped[str] = mapped_column(Text, nullable=False)
+    
+    # ── Avatar & visual ───────────────────────────────────────────────
+    avatar_initials: Mapped[str] = mapped_column(String(10), nullable=False)
+    accent: Mapped[str] = mapped_column(String(20), nullable=False)  # Tailwind color family
+    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    
+    # ── Voice configuration ───────────────────────────────────────────
+    voice_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    voice_model: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    voice_provider: Mapped[str] = mapped_column(String(50), default="retell", nullable=False)
+    language_code: Mapped[str] = mapped_column(String(10), default="en-US", nullable=False)
+    pace: Mapped[float] = mapped_column(Float, default=0.95, nullable=False)
+    
+    # ── Retell integration ────────────────────────────────────────────
+    # Retell LLM ID (created first, then used by Agent)
+    retell_llm_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Retell Agent ID (used for web calls)
+    retell_agent_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    
+    # ── Status & metadata ─────────────────────────────────────────────
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_by: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), server_default=func.now(), nullable=True)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=False), server_default=func.now(), onupdate=func.now(), nullable=True)
+
+    def to_interviewer_profile(self):
+        """Convert to a format compatible with InterviewerProfile for the frontend."""
+        from app.modules.interview.config import interviewer_profiles
+        from app.modules.interview.config.interviewer_profiles import (
+            InterviewerProfile, VoiceSettings, PersonaSettings
+        )
+        
+        voice = VoiceSettings(
+            speaker=self.voice_id,
+            model=self.voice_model or "bulbul:v3",
+            language_code=self.language_code,
+            pace=self.pace,
+        )
+        
+        persona = PersonaSettings(
+            traits=tuple(self.personality.split(", ")) if self.personality else (),
+            transition_hint=self.speaking_style if self.speaking_style else None,
+        )
+        
+        return InterviewerProfile(
+            id=self.slug,
+            name=self.name,
+            title=self.title,
+            tagline=self.tagline,
+            avatar_initials=self.avatar_initials,
+            accent=self.accent,
+            voice=voice,
+            persona=persona,
+            greeting=self.greeting,
+        )

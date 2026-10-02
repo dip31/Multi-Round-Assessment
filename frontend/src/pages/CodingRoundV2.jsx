@@ -32,6 +32,8 @@ export default function CodingRoundV2() {
   const [proctoringWarnings, setProctoringWarnings] = useState([]);
   const [testTerminated, setTestTerminated] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
+  const [finishError, setFinishError] = useState('');
+  const finishAttemptedRef = useRef(false);
 
   const storedSessionId = location.state?.sessionId 
     || parseInt(localStorage.getItem('coding_round_id') || '0', 10) 
@@ -68,6 +70,34 @@ export default function CodingRoundV2() {
     }, 5000);
   });
 
+  const handleFinish = useCallback(async () => {
+    if (finishAttemptedRef.current) return;
+    finishAttemptedRef.current = true;
+    setIsFinishing(true);
+    setFinishError('');
+    stopMonitoring?.();
+
+    try {
+      await finishRound();
+      if (sessionId && roundId) {
+        navigate(`/result/${sessionId}/${roundId}`);
+      } else {
+        navigate('/coding/result');
+      }
+    } catch (e) {
+      console.error('Finish round failed:', e);
+      setFinishError(e.response?.data?.detail || 'Unable to save the coding round result. Please retry.');
+      finishAttemptedRef.current = false;
+      setIsFinishing(false);
+    }
+  }, [navigate, roundId, sessionId, stopMonitoring]);
+
+  useEffect(() => {
+    if (testTerminated) {
+      void handleFinish();
+    }
+  }, [handleFinish, testTerminated]);
+
   // Only auto-submit/navigate once the round is actually loaded. The useTimer hook
   // never fires while timeRemaining is null, so no premature navigation.
   const handleTimeExpired = useCallback(async () => {
@@ -79,15 +109,8 @@ export default function CodingRoundV2() {
     } catch (e) {
       console.error('Auto-submit failed:', e);
     }
-    
-    // Check if it's a practice round or not
-    const practiceConfig = JSON.parse(localStorage.getItem('edi5_practice_config') || '{}');
-    if (practiceConfig && practiceConfig.practice_type && sessionId && roundId) {
-        navigate(`/result/${sessionId}/${roundId}`);
-    } else {
-        navigate('/coding/result');
-    }
-  }, [problems, selectedIndex, codes, language, navigate, sessionId, roundId]);
+    await handleFinish();
+  }, [problems, selectedIndex, codes, language, handleFinish]);
 
   // Timer starts as unresolved (null) and is populated from the real session.
   const { timeRemaining, setTimeRemaining } = useTimer(null, handleTimeExpired);
@@ -266,22 +289,6 @@ export default function CodingRoundV2() {
     }
   };
 
-  const handleFinish = async () => {
-    setIsFinishing(true);
-    try {
-      const res = await finishRound();
-      const practiceConfig = JSON.parse(localStorage.getItem('edi5_practice_config') || '{}');
-      if (practiceConfig && practiceConfig.practice_type && sessionId && roundId) {
-          navigate(`/result/${sessionId}/${roundId}`);
-      } else {
-          navigate('/coding/result');
-      }
-    } catch (e) {
-      console.error('Finish round failed:', e);
-      setIsFinishing(false);
-    }
-  };
-
   const handleSave = useCallback(async () => {
     if (!current) return;
     const toSave = codes[current.id] || '';
@@ -367,14 +374,15 @@ export default function CodingRoundV2() {
   return (
     <div className={`min-h-screen bg-slate-950 text-slate-100 ${isFullscreen ? 'fixed inset-0 z-50' : ''}`}>
       {proctoringWarnings.length > 0 && !testTerminated && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] w-full max-w-xl px-4 space-y-2">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] w-full max-w-xl px-4 space-y-2 pointer-events-none">
           {proctoringWarnings.map((warning, index) => (
-            <ProctoringWarning
-              key={index}
-              warning={warning}
-              onDismiss={() => setProctoringWarnings((prev) => prev.filter((_, i) => i !== index))}
-              onRetry={() => setProctoringWarnings((prev) => prev.filter((_, i) => i !== index))}
-            />
+            <div className="pointer-events-auto" key={index}>
+              <ProctoringWarning
+                warning={warning}
+                onDismiss={() => setProctoringWarnings((prev) => prev.filter((_, i) => i !== index))}
+                onRetry={() => setProctoringWarnings((prev) => prev.filter((_, i) => i !== index))}
+              />
+            </div>
           ))}
         </div>
       )}
@@ -389,15 +397,23 @@ export default function CodingRoundV2() {
             </div>
             <h3 className="text-3xl font-black tracking-tight mb-4 text-red-600">Test Terminated</h3>
             <p className="text-slate-600 text-base mb-6 leading-relaxed">
-              You have exceeded the maximum limit for proctoring violations. Your coding session has been halted.
+              The coding round has ended. Saving your work and preparing your results.
             </p>
+            {finishError && <p role="alert" className="text-red-700 text-sm mb-4">{finishError}</p>}
             <button
-              onClick={() => navigate('/dashboard')}
-              className="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-xl font-bold text-white transition-colors"
+              onClick={handleFinish}
+              disabled={isFinishing}
+              className="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-xl font-bold text-white transition-colors disabled:opacity-60"
             >
-              Return to Dashboard
+              {isFinishing ? 'Saving Results...' : finishError ? 'Retry Save and View Results' : 'Save and View Results'}
             </button>
           </div>
+        </div>
+      )}
+
+      {finishError && !testTerminated && (
+        <div role="alert" className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[220] rounded-lg bg-red-900 px-4 py-3 text-sm text-white shadow-lg">
+          {finishError}
         </div>
       )}
 

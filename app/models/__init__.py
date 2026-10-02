@@ -5,7 +5,7 @@ from .assessment_context import AssessmentContext, AssessmentPolicy
 from .aptitude import AptitudeQuestion, AptitudeAttempt, RLSession
 from .proctoring import ProctoringEvent
 from .advanced_proctoring import AdvancedProctoringEvent
-from .interview import InterviewSession, ApprovedQuestionPool, InterviewTurn, ProctoringViolation
+from .interview import InterviewSession, ApprovedQuestionPool, InterviewTurn, ProctoringViolation, DynamicInterviewer
 from .admin_question_feedback import AdminQuestionFeedback
 from .profile import StudentProfile, FacultyProfile, TPOProfile, UserResume
 
@@ -27,5 +27,6 @@ __all__ = [
     "ApprovedQuestionPool",
     "InterviewTurn",
     "ProctoringViolation",
+    "DynamicInterviewer",
     "AdminQuestionFeedback",
 ]

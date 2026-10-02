@@ -34,6 +34,15 @@ class Settings(BaseSettings):
     SARVAM_API_KEY: str = ""
     REDIS_URL: str = "redis://localhost:6379"
     OPENAI_API_KEY: Optional[str] = None  # Allow but don't require OpenAI key
+    
+    # ── Retell AI (Real-time Voice) ───────────────────────────────────
+    RETELL_API_KEY: str = ""
+    RETELL_AGENT_ID: str = ""  # Base agent ID for interview calls
+    RETELL_LLM_WEBSOCKET_URL: str = ""  # Public WSS URL for /api/v1/interview/retell/llm/{call_id}
+    RETELL_WEBHOOK_URL: str = ""  # https://your-domain.com/integrations/retell/webhook
+    # Voice provider selection: "legacy" (Groq STT + Sarvam TTS) or "retell"
+    INTERVIEW_VOICE_PROVIDER: str = "legacy"
+
     # Skip expensive model warmups during local development so auth/session
     # endpoints become available immediately after startup.
     SKIP_HEAVY_STARTUP: bool = True

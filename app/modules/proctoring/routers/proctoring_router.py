@@ -11,10 +11,36 @@ from sqlalchemy.orm import Session
 from app.core.auth import get_current_user
 from app.database.db import get_db
 from app.models.user import User
+from app.models.assessment import AssessmentSession
 from app.schemas.proctoring import ProctorEventRequest, ProctorEventResponse
-from app.services.proctoring_service import log_proctoring_event, get_session_proctoring_events
+from app.services.proctoring_service import (
+    log_proctoring_event,
+    get_session_proctoring_events,
+    stop_proctoring_session,
+)
 
 router = APIRouter(prefix="/proctoring", tags=["Proctoring"])
+
+
+@router.post("/session/{session_id}/stop")
+def stop_proctoring(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Finalize proctoring for an owned assessment session."""
+    session = db.query(AssessmentSession).filter(
+        AssessmentSession.id == session_id,
+        AssessmentSession.user_id == current_user.id,
+    ).first()
+    if session is None:
+        raise HTTPException(status_code=404, detail="Assessment session not found")
+    event = stop_proctoring_session(db, session_id)
+    return {
+        "status": "completed",
+        "session_id": session_id,
+        "stopped_at": event.created_at if event else None,
+    }
 
 
 @router.post(
@@ -115,7 +141,7 @@ def get_proctoring_events(
         {
             "id": event.id,
             "event_type": event.event_type,
-            "event_metadata": event.event_metadata,
+            "event_metadata": event.metadata_dict,
             "created_at": event.created_at.isoformat(),
         }
         for event in events

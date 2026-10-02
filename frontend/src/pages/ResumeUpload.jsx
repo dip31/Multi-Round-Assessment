@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { startInterview } from '../services/interviewService';
+import { startInterview, getInterviewers, getInterviewVoiceModes, synthesizeSpeech } from '../services/interviewService';
 import api from '../services/api';
 import { Toast } from '../components/Toast';
 
@@ -20,7 +20,6 @@ export default function ResumeUpload() {
     const [state, setState] = useState(STATES.IDLE);
     const [profileResumes, setProfileResumes] = useState([]);
     const [selectedResumeId, setSelectedResumeId] = useState(null);
-    const [loadingResumes, setLoadingResumes] = useState(true);
     const [showUploadNew, setShowUploadNew] = useState(false);
 
     // New resume upload states
@@ -34,6 +33,15 @@ export default function ResumeUpload() {
     const [uploadProgress, setUploadProgress] = useState(0);
     const [detectedRole, setDetectedRole] = useState(null);
 
+    // Interviewer selection state
+    const [interviewers, setInterviewers] = useState([]);
+    const [selectedInterviewerId, setSelectedInterviewerId] = useState(null);
+    const [loadingInterviewers, setLoadingInterviewers] = useState(false);
+    const [previewingVoice, setPreviewingVoice] = useState(null);
+    const [voiceModes, setVoiceModes] = useState(null);
+    const [voiceModesError, setVoiceModesError] = useState(false);
+    const [selectedVoiceMode, setSelectedVoiceMode] = useState('retell_hosted');
+
     const intervalIdRef = useRef(null);
     const fileInputRef = useRef(null);
 
@@ -46,8 +54,65 @@ export default function ResumeUpload() {
         };
     }, []);
 
+    // Fetch interviewers on mount
+    useEffect(() => {
+        const fetchInterviewersList = async () => {
+            setLoadingInterviewers(true);
+            try {
+                const data = await getInterviewers();
+                setInterviewers(data.interviewers || []);
+                // Set default interviewer if none selected
+                if (data.default_interviewer_id && !selectedInterviewerId) {
+                    setSelectedInterviewerId(data.default_interviewer_id);
+                }
+            } catch (err) {
+                console.error('Failed to load interviewers:', err);
+            } finally {
+                setLoadingInterviewers(false);
+            }
+        };
+        fetchInterviewersList();
+    }, [selectedInterviewerId]);
+
+    useEffect(() => {
+        getInterviewVoiceModes()
+            .then((modes) => {
+                setVoiceModes(modes);
+                if (modes.retell_hosted?.available) {
+                    setSelectedVoiceMode('retell_hosted');
+                } else if (modes.edi5_core?.available) {
+                    setSelectedVoiceMode('edi5_core');
+                }
+            })
+            .catch((error) => {
+                console.error('Failed to load interview voice modes:', error);
+                setVoiceModesError(true);
+            });
+    }, []);
+
+    // Voice preview function
+    const previewVoice = async (interviewer) => {
+        if (previewingVoice === interviewer.id) return;
+        setPreviewingVoice(interviewer.id);
+        try {
+            const previewText = interviewer.greeting || `Hello, I'm ${interviewer.name}.`;
+            const audioBytes = await synthesizeSpeech(previewText);
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const audioBuffer = await audioContext.decodeAudioData(audioBytes);
+            const source = audioContext.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(audioContext.destination);
+            source.start(0);
+            source.onended = () => {
+                setPreviewingVoice(null);
+            };
+        } catch (err) {
+            console.warn('Voice preview failed:', err);
+            setPreviewingVoice(null);
+        }
+    };
+
     const fetchProfileResumes = async () => {
-        setLoadingResumes(true);
         try {
             const res = await api.get('/profile/resumes');
             const list = res.data || [];
@@ -60,8 +125,6 @@ export default function ResumeUpload() {
         } catch (err) {
             console.error('Failed to load profile resumes:', err);
             setShowUploadNew(true);
-        } finally {
-            setLoadingResumes(false);
         }
     };
 
@@ -106,6 +169,11 @@ export default function ResumeUpload() {
             return;
         }
 
+        // If interviewer not selected yet, just show the interviewer selection step
+        if (!selectedInterviewerId) {
+            return;
+        }
+
         setState(STATES.UPLOADING);
         setUploadProgress(20);
 
@@ -137,6 +205,11 @@ export default function ResumeUpload() {
                 type: 'error',
                 message: 'Please select a PDF file first',
             });
+            return;
+        }
+
+        // If interviewer not selected yet, just show the interviewer selection step
+        if (!selectedInterviewerId) {
             return;
         }
 
@@ -213,10 +286,22 @@ export default function ResumeUpload() {
 
     const startInterviewSession = async (pId) => {
         try {
-            const res = await startInterview(pId);
+            const res = await startInterview(pId, selectedInterviewerId, selectedVoiceMode);
             if (res && res.interview_id) {
                 setInterviewId(res.interview_id);
                 localStorage.setItem('interview_id', res.interview_id);
+
+                // Store Retell connection info if using Retell voice provider
+                if (res.voice_provider === 'retell' && res.retell_call_id) {
+                    localStorage.setItem('retell_call_id', res.retell_call_id);
+                    localStorage.setItem('retell_access_token', res.retell_access_token);
+                    localStorage.setItem('retell_ice_servers', JSON.stringify(res.retell_ice_servers || []));
+                    localStorage.setItem('voice_provider', 'retell');
+                    localStorage.setItem('interview_voice_mode', res.voice_mode || selectedVoiceMode);
+                } else {
+                    localStorage.setItem('voice_provider', 'legacy');
+                    localStorage.removeItem('interview_voice_mode');
+                }
             } else {
                 setToast({
                     type: 'error',
@@ -233,8 +318,13 @@ export default function ResumeUpload() {
 
     const handleStartInterview = () => {
         const storedInterviewId = localStorage.getItem('interview_id');
+        const voiceProvider = localStorage.getItem('voice_provider') || 'legacy';
         if (interviewId || storedInterviewId) {
-            navigate('/interview');
+            if (voiceProvider === 'retell') {
+                navigate('/interview/retell');
+            } else {
+                navigate('/interview');
+            }
         } else {
             setToast({
                 type: 'error',
@@ -246,6 +336,7 @@ export default function ResumeUpload() {
     const steps = [
         { label: 'Choose Resume', completed: [STATES.UPLOADING, STATES.WAITING_APPROVAL, STATES.APPROVED].includes(state) },
         { label: 'AI Question Generation', completed: [STATES.WAITING_APPROVAL, STATES.APPROVED].includes(state) },
+        { label: 'Select Interviewer', completed: state === STATES.APPROVED },
         { label: 'Session Ready', completed: state === STATES.APPROVED },
         { label: 'AI Mock Interview', completed: false },
     ];
@@ -471,7 +562,10 @@ export default function ResumeUpload() {
                                         return (
                                             <div
                                                 key={res.id}
-                                                onClick={() => setSelectedResumeId(res.id)}
+                                                onClick={() => {
+                                                    setSelectedResumeId(res.id);
+                                                    setSelectedInterviewerId(null);
+                                                }}
                                                 className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between gap-4 ${
                                                     isSelected
                                                         ? 'border-indigo-600 bg-indigo-50/40 shadow-sm'
@@ -526,7 +620,7 @@ export default function ResumeUpload() {
                                         disabled={!selectedResumeId}
                                         className="w-full sm:w-auto px-8 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 uppercase tracking-wider"
                                     >
-                                        Start Interview with Selected CV →
+                                        {selectedInterviewerId ? 'Generate Questions & Continue →' : 'Select Interviewer →'}
                                     </button>
                                 </div>
                             </div>
@@ -545,7 +639,10 @@ export default function ResumeUpload() {
                                     {profileResumes.length > 0 && (
                                         <button
                                             type="button"
-                                            onClick={() => setShowUploadNew(false)}
+                                            onClick={() => {
+                                                setShowUploadNew(false);
+                                                setSelectedInterviewerId(null);
+                                            }}
                                             className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
                                         >
                                             ← Back to Saved Resumes
@@ -627,7 +724,166 @@ export default function ResumeUpload() {
                                         disabled={!selectedFile}
                                         className="px-8 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition-all uppercase tracking-wider"
                                     >
-                                        Save & Start Interview →
+                                        {selectedInterviewerId ? 'Save & Continue →' : 'Select Interviewer →'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Step 3: Interviewer Selection (shown after resume is selected or file chosen for upload) */}
+                        {((poolId || selectedResumeId || (showUploadNew && selectedFile)) && state === STATES.IDLE) && (
+                            <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-8 shadow-sm animate-in fade-in duration-300">
+                                <div className="mb-6">
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-6 h-6 rounded-full bg-indigo-600 text-white font-bold text-xs flex items-center justify-center">3</span>
+                                        <h3 className="text-base font-bold text-slate-900">Select Your Interviewer</h3>
+                                    </div>
+                                    <p className="text-xs text-slate-500 mt-1 ml-8">
+                                        Choose who will conduct your interview. This changes the voice, tone, and style — not the questions or scoring.
+                                    </p>
+                                </div>
+
+                                {loadingInterviewers ? (
+                                    <div className="flex justify-center py-8">
+                                        <div className="w-8 h-8 border-4 border-slate-200 border-t-indigo-500 rounded-full animate-spin"></div>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                        {interviewers.map((interviewer) => {
+                                            const isSelected = selectedInterviewerId === interviewer.id;
+                                            const isDefault = interviewer.is_default;
+                                            return (
+                                                <div
+                                                    key={interviewer.id}
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    onClick={() => setSelectedInterviewerId(interviewer.id)}
+                                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedInterviewerId(interviewer.id); } }}
+                                                    className={`relative p-4 rounded-2xl border-2 transition-all flex flex-col items-center text-center gap-3 cursor-pointer ${
+                                                        isSelected
+                                                            ? 'border-indigo-600 bg-indigo-50/40 shadow-sm ring-2 ring-indigo-500/20'
+                                                            : 'border-slate-200 hover:border-slate-300 bg-white'
+                                                    } ${previewingVoice !== null && previewingVoice !== interviewer.id ? 'opacity-50 pointer-events-none' : ''}`}
+                                                >
+                                                    {/* Selected indicator */}
+                                                    {isSelected && (
+                                                        <div className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-indigo-600 text-white text-xs font-bold flex items-center justify-center">
+                                                            ✓
+                                                        </div>
+                                                    )}
+
+                                                    {/* Default badge */}
+                                                    {isDefault && (
+                                                        <span className="absolute -top-2 left-1/2 -translate-x-1/2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                            Default
+                                                        </span>
+                                                    )}
+
+                                                    {/* Avatar */}
+                                                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-white font-bold text-xl shrink-0 ${
+                                                        interviewer.accent === 'indigo' ? 'bg-indigo-500' :
+                                                        interviewer.accent === 'violet' ? 'bg-violet-500' :
+                                                        interviewer.accent === 'slate' ? 'bg-slate-500' :
+                                                        interviewer.accent === 'emerald' ? 'bg-emerald-500' :
+                                                        'bg-indigo-500'
+                                                    }`}>
+                                                        {interviewer.avatar_initials}
+                                                    </div>
+
+                                                    {/* Name & Title */}
+                                                    <div>
+                                                        <h4 className="font-bold text-slate-900 text-sm">{interviewer.name}</h4>
+                                                        <p className="text-[11px] text-slate-500">{interviewer.title}</p>
+                                                    </div>
+
+                                                    {/* Tagline */}
+                                                    <p className="text-[11px] text-slate-600 leading-relaxed">{interviewer.tagline}</p>
+
+                                                    {/* Voice Preview Button */}
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            previewVoice(interviewer);
+                                                        }}
+                                                        disabled={previewingVoice === interviewer.id}
+                                                        className={`mt-auto w-full px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all flex items-center justify-center gap-1.5 ${
+                                                            previewingVoice === interviewer.id
+                                                                ? 'bg-slate-100 text-slate-500 cursor-wait'
+                                                                : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200'
+                                                        }`}
+                                                    >
+                                                        <span className={`w-3 h-3 rounded-full animate-pulse ${previewingVoice === interviewer.id ? 'bg-indigo-500' : 'bg-slate-300'}`}></span>
+                                                        {previewingVoice === interviewer.id ? 'Playing...' : 'Preview Voice'}
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+
+                                <div className="mt-8 rounded-2xl border border-slate-200 p-5">
+                                    <h4 className="font-bold text-slate-900 text-sm">Choose interview intelligence</h4>
+                                    <p className="mt-1 text-xs text-slate-500">
+                                        Retell-hosted mode is simpler to connect. EDI5 Core mode uses adaptive EDI5 questions and scoring.
+                                    </p>
+                                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {[
+                                            {
+                                                id: 'retell_hosted',
+                                                title: 'Retell-hosted LLM',
+                                                description: 'Retell runs the conversation. Your report includes its transcript and analysis, without EDI5 per-answer scores.',
+                                            },
+                                            {
+                                                id: 'edi5_core',
+                                                title: 'EDI5 Core',
+                                                description: 'EDI5 chooses questions, follow-ups, and scores answers. Requires a public Retell WebSocket endpoint.',
+                                            },
+                                        ].map((mode) => {
+                                            const available = Boolean(voiceModes?.[mode.id]?.available);
+                                            const reason = voiceModes?.[mode.id]?.reason;
+                                            return (
+                                                <button
+                                                    key={mode.id}
+                                                    type="button"
+                                                    disabled={!available || state !== STATES.IDLE}
+                                                    onClick={() => setSelectedVoiceMode(mode.id)}
+                                                    className={`rounded-xl border-2 p-4 text-left transition-colors ${
+                                                        selectedVoiceMode === mode.id
+                                                            ? 'border-indigo-600 bg-indigo-50'
+                                                            : 'border-slate-200 bg-white'
+                                                    } disabled:cursor-not-allowed disabled:opacity-50`}
+                                                >
+                                                    <span className="flex items-center justify-between gap-3">
+                                                        <span className="font-bold text-sm text-slate-900">{mode.title}</span>
+                                                        <span className={`h-4 w-4 rounded-full border-2 ${
+                                                            selectedVoiceMode === mode.id ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'
+                                                        }`} />
+                                                    </span>
+                                                    <span className="mt-2 block text-xs text-slate-600">{mode.description}</span>
+                                                    {!available && (
+                                                        <span className="mt-2 block text-[11px] font-medium text-amber-700">
+                                                            {voiceModesError ? 'Could not check backend mode availability.' : reason || (voiceModes ? 'Not configured on the backend.' : 'Checking backend configuration...')}
+                                                        </span>
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    {!voiceModes?.retell_hosted?.available && !voiceModes?.edi5_core?.available && voiceModes && (
+                                        <p className="mt-3 text-xs text-red-600">
+                                            Neither Retell mode is currently configured. Ask an administrator to configure Retell credentials before starting.
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div className="mt-8 pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+                                    <button
+                                        type="button"
+                                        onClick={handleProceedWithSelectedResume}
+                                        disabled={(!selectedResumeId && !selectedFile) || !voiceModes?.[selectedVoiceMode]?.available}
+                                        className="w-full sm:w-auto px-8 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs shadow-md shadow-indigo-600/30 transition-all flex items-center justify-center gap-2 uppercase tracking-wider"
+                                    >
+                                        {selectedResumeId ? 'Generate Questions & Continue →' : 'Upload & Continue →'}
                                     </button>
                                 </div>
                             </div>

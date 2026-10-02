@@ -7,6 +7,7 @@ import ProctoringWarning from '../components/ProctoringWarning';
 import { getNextQuestion, submitAnswer } from '../services/aptitudeService';
 import { getSessionStatus, startCodingAfterAptitude } from '../services/sessionService';
 import { useAdvancedProctoring } from '../hooks/useAdvancedProctoring';
+import { stopProctoringSession } from '../services/proctoringService';
 
 const MAX_QUESTIONS = 10;
 
@@ -42,9 +43,14 @@ export default function AptitudeTest() {
     const retryTimeoutRef = useRef(null);
     const questionCountRef = useRef(0);
     const noFaceTimeoutRef = useRef(null);
+    const stopMonitoringRef = useRef(null);
 
     const finalizeAndGoToResult = useCallback(async () => {
         try {
+            stopMonitoringRef.current?.();
+            if (sessionId) {
+                await stopProctoringSession(sessionId);
+            }
             await startCodingAfterAptitude();
         } catch {
             // Ignore session finalization errors and continue to the result page.
@@ -65,7 +71,7 @@ export default function AptitudeTest() {
     const testHasStartedRef = useRef(false);
 
     // Initialize advanced proctoring hook
-    const { videoRef, isMonitoring, enterFullscreen, detectionResults } = useAdvancedProctoring(
+    const { videoRef, isMonitoring, enterFullscreen, stopMonitoring, detectionResults } = useAdvancedProctoring(
         sessionId,
         (violation) => {
             // Don't allow proctoring to terminate before the first question loads.
@@ -100,6 +106,7 @@ export default function AptitudeTest() {
             }
         }
     );
+    stopMonitoringRef.current = stopMonitoring;
 
     useEffect(() => {
         if (!isMonitoring || testTerminated) return;

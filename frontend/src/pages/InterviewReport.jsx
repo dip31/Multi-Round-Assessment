@@ -39,9 +39,9 @@ export default function InterviewReport() {
 
             // Also provide instant evaluation summary JSON file
             const reportData = {
-                title: "EDI5 AI Interview Evaluation Report",
+                title: report?.is_edi5_scored ? "EDI5 AI Interview Evaluation Report" : "Retell Interview Transcript Report",
                 date: new Date().toLocaleDateString(),
-                overall_score: report?.overall_score || 0,
+                overall_score: report?.overall_score ?? null,
                 feedback: report?.feedback || "",
                 strengths: report?.strengths || [],
                 improvements: report?.improvements || [],
@@ -133,12 +133,35 @@ export default function InterviewReport() {
                     </div>
                     <h1 className="text-4xl font-bold text-slate-900 mb-2">Interview Assessment Report</h1>
                     <p className="text-slate-600">
-                        {report.total_turns} questions answered
+                        {report.is_edi5_scored
+                            ? `${report.total_turns} questions answered`
+                            : 'Retell-hosted interview transcript and analysis'}
                     </p>
                 </div>
 
+                {!report.is_edi5_scored && (
+                    <section className="mb-8 rounded-2xl border border-indigo-200 bg-indigo-50 p-6">
+                        <h2 className="text-lg font-bold text-indigo-950">Retell-hosted interview report</h2>
+                        <p className="mt-1 text-sm text-indigo-800">
+                            EDI5 did not score individual answers in this mode. Select EDI5 Core for adaptive questions and per-answer scoring.
+                        </p>
+                        {report.retell_analysis?.call_summary && (
+                            <div className="mt-4">
+                                <h3 className="text-sm font-bold text-slate-900">Retell call summary</h3>
+                                <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{report.retell_analysis.call_summary}</p>
+                            </div>
+                        )}
+                        <div className="mt-4">
+                            <h3 className="text-sm font-bold text-slate-900">Transcript</h3>
+                            <pre className="mt-2 max-h-[32rem] overflow-auto whitespace-pre-wrap rounded-xl bg-white p-4 text-sm text-slate-700">
+                                {report.retell_transcript || 'Retell has not sent a transcript for this call yet.'}
+                            </pre>
+                        </div>
+                    </section>
+                )}
+
                 {/* Score Cards Grid */}
-                <div className="grid grid-cols-4 gap-6 mb-12">
+                {report.is_edi5_scored && <div className="grid grid-cols-4 gap-6 mb-12">
                     {/* Overall */}
                     <div className={`rounded-2xl border-4 p-6 text-center ${getScoreColor(report.overall_score)}`}>
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Overall</p>
@@ -170,7 +193,7 @@ export default function InterviewReport() {
                         </div>
                         <p className="text-xs text-slate-500">{report.followup_interpretation}</p>
                     </div>
-                </div>
+                </div>}
 
                 {/* AI Feedback */}
                 <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm mb-12">
@@ -184,7 +207,7 @@ export default function InterviewReport() {
                 </div>
 
                 {/* Turn Breakdown */}
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm mb-12 overflow-hidden">
+                {report.is_edi5_scored && <div className="bg-white rounded-2xl border border-slate-200 shadow-sm mb-12 overflow-hidden">
                     <div className="px-8 py-6 border-b border-slate-200 bg-slate-50">
                         <h2 className="text-lg font-bold text-slate-900">Question-by-Question Breakdown</h2>
                     </div>
@@ -289,7 +312,7 @@ export default function InterviewReport() {
                             </div>
                         ))}
                     </div>
-                </div>
+                </div>}
 
                 {/* Action Buttons */}
                 <div className="flex items-center justify-center gap-4 print:hidden">

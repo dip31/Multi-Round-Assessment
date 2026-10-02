@@ -406,6 +406,9 @@ def complete_practice_round(
     if completed is None:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to complete round.")
 
+    from app.services.proctoring_service import stop_proctoring_session
+    stop_proctoring_session(db, completed.session_id)
+
     context_obj = None
     if session.context_id:
         from app.services.assessment_context_service import get_context

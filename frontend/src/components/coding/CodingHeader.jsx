@@ -47,7 +47,7 @@ export default function CodingHeader({
   };
 
   return (
-    <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-4 py-3 border-b border-white/10 bg-slate-950/80 backdrop-blur sticky top-0 z-20">
+    <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-4 py-3 border-b border-white/10 bg-slate-950/80 backdrop-blur sticky top-0 z-[210]">
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center">

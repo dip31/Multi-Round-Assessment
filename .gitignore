@@ -57,3 +57,7 @@ check_*.py
 diagnose_*.py
 seed_*.py
 apply_*.py
+
+.venv-*/
+database.db
+debug/

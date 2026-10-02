@@ -43,3 +43,8 @@ export const getProctoringEvents = async (sessionId) => {
         return [];
     }
 };
+
+export const stopProctoringSession = async (sessionId) => {
+    const response = await api.post(`/proctoring/session/${sessionId}/stop`);
+    return response.data;
+};

@@ -154,6 +154,7 @@ def finalize_coding_round(db: Session, round_id: int) -> float:
         if rnd and rnd.status != "completed":
             rnd.score = 0.0
             rnd.status = "completed"
+            rnd.completed_at = datetime.utcnow()
             db.commit()
         return 0.0
 
@@ -176,6 +177,7 @@ def finalize_coding_round(db: Session, round_id: int) -> float:
         if rnd.status != "completed":
             rnd.score = round_score
             rnd.status = "completed"
+            rnd.completed_at = datetime.utcnow()
             db.commit()
 
             # Update session total as average of completed rounds

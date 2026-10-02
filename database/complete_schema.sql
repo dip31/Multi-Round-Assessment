@@ -530,6 +530,7 @@ COMMENT ON COLUMN advanced_proctoring_events.event_metadata IS 'Detailed detecti
 CREATE TABLE interview_sessions (
     id SERIAL PRIMARY KEY,
     session_id INTEGER NOT NULL REFERENCES assessment_sessions(id) ON DELETE CASCADE,
+    round_id INTEGER REFERENCES assessment_rounds(id) ON DELETE CASCADE,
     phase VARCHAR(20) NOT NULL DEFAULT 'HR',
     current_turn INTEGER NOT NULL DEFAULT 0,
     total_turns INTEGER NOT NULL DEFAULT 10,
@@ -540,6 +541,7 @@ CREATE TABLE interview_sessions (
     created_at TIMESTAMP DEFAULT NOW()
 );
 CREATE INDEX ix_interview_sessions_session_id ON interview_sessions(session_id);
+CREATE INDEX ix_interview_sessions_round_id ON interview_sessions(round_id);
 
 
 -- ============================================

@@ -97,3 +97,5 @@ app.include_router(api_router)
 def health_check() -> dict:
     """Simple liveness probe."""
     return {"status": "ok"}
+
+# Trigger reload

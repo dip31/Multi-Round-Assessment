@@ -56,6 +56,7 @@ def get_round_result_summary(
         "round_id": round_id,
         "round_type": round_type,
         "status": assessment_round.status,
+        "started_at": assessment_round.started_at.isoformat() if assessment_round.started_at else None,
         "completed_at": assessment_round.completed_at.isoformat() if assessment_round.completed_at else None,
         "review_available": True,
     }
@@ -66,7 +67,7 @@ def get_round_result_summary(
     elif round_type == "coding":
         return {**base, **_coding_result_summary(db, round_id)}
     elif round_type == "interview":
-        return {**base, **_interview_result_summary(db, session_id)}
+        return {**base, **_interview_result_summary(db, session_id, round_id)}
     else:
         # Unknown round type — return the base with the persisted score.
         base["score"] = float(assessment_round.score or 0)
@@ -137,12 +138,23 @@ def _coding_result_summary(db: Session, round_id: int) -> dict[str, Any]:
     }
 
 
-def _interview_result_summary(db: Session, session_id: int) -> dict[str, Any]:
-    """Aggregate from InterviewTurn for one session's interview."""
+def _interview_result_summary(
+    db: Session,
+    session_id: int,
+    round_id: int,
+) -> dict[str, Any]:
+    """Aggregate from InterviewTurn for the requested assessment round."""
     interview = (
         db.query(InterviewSession)
         .filter(InterviewSession.session_id == session_id)
-        .order_by(InterviewSession.id.desc())
+        .filter(
+            (InterviewSession.round_id == round_id)
+            | (InterviewSession.round_id.is_(None))
+        )
+        .order_by(
+            (InterviewSession.round_id == round_id).desc(),
+            InterviewSession.id.desc(),
+        )
         .first()
     )
     if interview is None:

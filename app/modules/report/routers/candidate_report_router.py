@@ -30,7 +30,7 @@ class SessionHistoryItem(BaseModel):
     id: str
     type: str
     date: str
-    score: float
+    score: Optional[float] = None
     duration: str
 
 
@@ -215,9 +215,24 @@ def get_candidate_analytics(
             ))
     
     # 3. Interview metrics
-    interview_sessions = db.query(InterviewSession).filter(
+    # Select only the fields used below. In particular, analytics does not
+    # depend on the optional round_id added for round-specific interview results.
+    interview_sessions = db.query(
+        InterviewSession.id,
+        InterviewSession.session_id,
+        InterviewSession.phase,
+        InterviewSession.status,
+        InterviewSession.rl_state,
+        InterviewSession.created_at,
+        InterviewSession.personalization_metadata,
+    ).filter(
         InterviewSession.session_id.in_(session_ids)
     ).all()
+    retell_hosted_session_ids = {
+        s.session_id
+        for s in interview_sessions
+        if (s.personalization_metadata or {}).get("voice_mode") == "retell_hosted"
+    }
     completed_int_rounds = [
         r for r in rounds 
         if r.round_type in ("interview", "technical_interview", "hr_interview", "communication_interview") 
@@ -239,21 +254,24 @@ def get_candidate_analytics(
         int_correct = sum(1 for t in turns if t.final_score and t.final_score >= 0.5)
         total_questions += int_total
         correct_answers += int_correct
+        int_score = None
         
         for t in turns:
             if t.response_time_sec:
                 total_response_time += t.response_time_sec
                 response_count += 1
         
-        latest_int = completed_int_rounds[-1] if completed_int_rounds else None
-        int_score = latest_int.score if latest_int and latest_int.score is not None else 0.0
-        if not int_score and completed_int_sessions:
-            int_score = 0.8
-        
-        skill_breakdown.append(SkillBreakdownItem(
-            name="Interview Simulation",
-            score=round(int_score * 100, 1)
-        ))
+        scored_int_rounds = [
+            r for r in completed_int_rounds
+            if r.session_id not in retell_hosted_session_ids
+        ]
+        if turns or scored_int_rounds:
+            latest_int = scored_int_rounds[-1] if scored_int_rounds else None
+            int_score = latest_int.score if latest_int and latest_int.score is not None else 0.0
+            skill_breakdown.append(SkillBreakdownItem(
+                name="Interview Simulation",
+                score=round(int_score * 100, 1)
+            ))
         
         def resolve_interview_label(sess, rnd=None):
             if rnd and rnd.round_type == "hr_interview":
@@ -285,7 +303,15 @@ def get_candidate_analytics(
                 id=f"INT-{r.id}",
                 type=lbl,
                 date=r.completed_at.strftime("%b %d, %Y") if r.completed_at else "Recent",
-                score=round((r.score or 0.0) * 100, 1),
+                score=(
+                    None
+                    if r.session_id in retell_hosted_session_ids
+                    and not any(
+                        s.session_id == r.session_id and s.id in {t.interview_id for t in turns}
+                        for s in interview_sessions
+                    )
+                    else round((r.score or 0.0) * 100, 1)
+                ),
                 duration=dur
             ))
         if not completed_int_rounds and completed_int_sessions:
@@ -295,7 +321,11 @@ def get_candidate_analytics(
                     id=f"INT-S{s.id}",
                     type=lbl,
                     date=s.created_at.strftime("%b %d, %Y") if s.created_at else "Recent",
-                    score=round(int_score * 100, 1),
+                    score=(
+                        None
+                        if s.session_id in retell_hosted_session_ids or int_score is None
+                        else round(int_score * 100, 1)
+                    ),
                     duration="25m"
                 ))
     

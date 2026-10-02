@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import StudentModeLayout from '../components/StudentModeLayout';
 import { getPracticeRoundResult } from '../services/practiceResultService';
-import api from '../services/api';
 
 const ROUND_LABELS = {
     aptitude: 'MCQ Round',
@@ -43,47 +42,16 @@ function getPerformanceMessage(pct, roundType) {
 export default function PracticeSummary() {
     const { sessionId, roundId } = useParams();
     const navigate = useNavigate();
-    const location = useLocation();
     
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [summary, setSummary] = useState(null);
-    const [isInterviewRound, setIsInterviewRound] = useState(false);
-    const [interviewId, setInterviewId] = useState(null);
     
     useEffect(() => {
         const loadData = async () => {
             try {
                 setLoading(true);
                 
-                // Check if this is an interview round by trying to get interview data
-                // interview_id is stored in localStorage when the interview session starts
-                const storedInterviewId = localStorage.getItem('interview_id');
-                if (storedInterviewId) {
-                try {
-                    const interviewData = await api.get(`/interview/session/${storedInterviewId}/status`);
-                    if (interviewData.data && (interviewData.data.status === 'COMPLETED' || interviewData.data.status === 'completed')) {
-                        setIsInterviewRound(true);
-                        setInterviewId(storedInterviewId);
-                        // Create a summary object from interview data
-                        setSummary({
-                            round_type: 'interview',
-                            percentage: interviewData.data.average_score * 10, // Convert 0-10 scale to percentage
-                            score: Math.round(interviewData.data.average_score * 10),
-                            max_score: 100,
-                            total_turns: interviewData.data.total_questions || 0,
-                            average_final_score: interviewData.data.average_score,
-                            completed_at: interviewData.data.end_time,
-                        });
-                        setLoading(false);
-                        return;
-                    }
-                } catch (interviewErr) {
-                    // Not an interview round, proceed with normal practice round
-                }
-                }
-                
-                // Load regular practice round data
                 const summaryData = await getPracticeRoundResult(sessionId, roundId);
                 setSummary(summaryData);
             } catch (err) {
@@ -96,9 +64,6 @@ export default function PracticeSummary() {
         
         if (sessionId && roundId) {
             loadData();
-        } else if (sessionId) {
-            // Try loading as interview
-            loadData();
         } else {
             setError('Invalid session or round ID');
             setLoading(false);
@@ -106,11 +71,7 @@ export default function PracticeSummary() {
     }, [sessionId, roundId]);
     
     const handleViewDetailedResult = () => {
-        if (isInterviewRound) {
-            navigate(`/interview/report/${interviewId}`);
-        } else {
-            navigate(`/practice/result/${sessionId}/${roundId}`);
-        }
+        navigate(`/practice/result/${sessionId}/${roundId}`);
     };
     
     if (loading) {

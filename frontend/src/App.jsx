@@ -12,6 +12,7 @@ import AptitudeTest from './pages/AptitudeTest';
 import ResultPage from './pages/ResultPage';
 import ResumeUpload from './pages/ResumeUpload';
 import HumanLikeInterview from './pages/HumanLikeInterview';
+import RetellInterviewRoom from './pages/RetellInterviewRoom';
 import CodingRound from './pages/CodingRound';
 import CodingResultPage from './pages/CodingResultPage';
 import InterviewReport from './pages/InterviewReport';
@@ -26,6 +27,7 @@ import AdminCandidateReports from './pages/AdminCandidateReports';
 import AdminReview from './pages/AdminReview';
 import AdminPools from './pages/AdminPools';
 import AdminProctoringDashboard from './pages/AdminProctoringDashboard';
+import InterviewerManagement from './pages/InterviewerManagement';
 import AdminRoute from './components/AdminRoute';
 import RoleRoute from './components/RoleRoute';
 import FacultyDashboard from './pages/FacultyDashboard';
@@ -77,6 +79,14 @@ export default function App() {
           element={
             <AdminRoute>
               <AdminProctoringDashboard />
+            </AdminRoute>
+          } 
+        />
+        <Route 
+          path="/admin/interviewers" 
+          element={
+            <AdminRoute>
+              <InterviewerManagement />
             </AdminRoute>
           } 
         />
@@ -351,6 +361,14 @@ export default function App() {
           element={
             <RoleRoute allowedRoles={['student']}>
               <HumanLikeInterview />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/interview/retell"
+          element={
+            <RoleRoute allowedRoles={['student']}>
+              <RetellInterviewRoom />
             </RoleRoute>
           }
         />

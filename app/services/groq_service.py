@@ -16,7 +16,35 @@ from groq import Groq
 logger = logging.getLogger(__name__)
 
 # Current Groq production model (as of March 2026)
-GROQ_MODEL = "llama-3.3-70b-versatile"
+GROQ_MODEL = "gpt/oss-120b"
+
+# ── Interviewer voice-of-the-prompt defaults ───────────────────────────────
+# Used when a caller supplies no interviewer persona. These two strings are a
+# verbatim copy of the prompt this service hardcoded before interviewers became
+# selectable, so an un-updated caller gets the exact behaviour it always had.
+#
+# A caller that DOES pass a persona will produce a prompt that names the
+# interviewer — that is the intended difference, not a regression. Within a
+# session the spoken greeting already introduces that name, so the prompt has
+# to agree with it.
+#
+# Note what is absent: nothing here, and nothing a persona can pass in, states
+# what a good answer looks like or how strictly to judge one. Wording is
+# presentation; grading lives in the orchestrator's scoring weights and the
+# classifier prompt.
+DEFAULT_INTERVIEWER_IDENTITY = (
+    "You are a professional interviewer conducting a campus placement "
+    "interview for an engineering student."
+)
+
+DEFAULT_INTERVIEWER_STYLE = """- Warm but professional
+- Encouraging but honest
+- Direct without being harsh
+- You NEVER lecture or explain the answer
+- You NEVER repeat what the candidate just said back to them
+- You NEVER ask two questions in one response
+- Maximum 2 sentences in your response
+- Sound human, not like a bot reading a script"""
 
 
 class GroqService:
@@ -415,12 +443,26 @@ Return ONLY valid JSON, no markdown, no explanation:
         followup_type: Optional[str],
         next_question: Optional[str],
         conversation_history: List[Dict],
+        interviewer_identity: Optional[str] = None,
+        interviewer_style: Optional[str] = None,
+        interviewer_transition_hint: Optional[str] = None,
     ) -> str:
         """
         Generate what the interviewer says next.
 
         Conversational — temp=0.7.
         Returns: plain string, max 2 sentences.
+
+        The three ``interviewer_*`` arguments carry the persona. They are plain
+        strings rather than a profile object on purpose: this service must not
+        import from the interview module, so the caller renders the profile and
+        passes the text. Any of them may be None, in which case the module
+        defaults apply.
+
+        What the persona may change: who the interviewer says they are, and the
+        tone they say it in. What it cannot change: the decision (``action``),
+        which question comes next, or any score — those arrive already decided
+        and this method only puts words around them.
         """
         # Format conversation history (last 6 entries = last 3 turns)
         formatted_history = "\n".join([
@@ -429,19 +471,18 @@ Return ONLY valid JSON, no markdown, no explanation:
         ])
 
         # Build task string based on action + followup_type
-        task = self._build_brain_task(action, followup_type, missing_part, next_question)
+        task = self._build_brain_task(
+            action, followup_type, missing_part, next_question,
+            transition_hint=interviewer_transition_hint,
+        )
 
-        system_prompt = f"""You are a professional interviewer conducting a campus placement interview for an engineering student.
+        identity = interviewer_identity or DEFAULT_INTERVIEWER_IDENTITY
+        style = interviewer_style or DEFAULT_INTERVIEWER_STYLE
+
+        system_prompt = f"""{identity}
 
 Your personality:
-- Warm but professional
-- Encouraging but honest
-- Direct without being harsh
-- You NEVER lecture or explain the answer
-- You NEVER repeat what the candidate just said back to them
-- You NEVER ask two questions in one response
-- Maximum 2 sentences in your response
-- Sound human, not like a bot reading a script
+{style}
 
 Recent conversation history:
 {formatted_history}
@@ -477,8 +518,18 @@ No labels, no formatting, no quotes."""
             return self._brain_fallback(action, followup_type, missing_part, next_question)
 
     def _build_brain_task(self, action: str, followup_type: Optional[str],
-                          missing_part: Optional[str], next_question: Optional[str]) -> str:
-        """Build the task instruction string for the interviewer brain."""
+                          missing_part: Optional[str], next_question: Optional[str],
+                          transition_hint: Optional[str] = None) -> str:
+        """Build the task instruction string for the interviewer brain.
+
+        ``transition_hint`` is persona flavour and is appended only to the NEXT
+        branch, where the interviewer bridges between questions — the one place
+        in this prompt where tone is genuinely free. It is deliberately not
+        applied to the FOLLOWUP or COMPLETE branches: those instructions decide
+        whether the candidate is pushed for more detail and how the interview
+        signs off, and letting a persona edit them would let the choice of
+        interviewer change what is asked of the candidate.
+        """
         if action == "FOLLOWUP":
             if followup_type == "NEGATIVE":
                 return ("The candidate expressed disinterest or resistance. "
@@ -498,11 +549,14 @@ No labels, no formatting, no quotes."""
                         f"then guide them toward the missing part: {missing_part or 'key details'}. "
                         f"Do not give the answer.")
         elif action == "NEXT":
-            return (f"The candidate has answered sufficiently. Give a brief natural transition "
+            task = (f"The candidate has answered sufficiently. Give a brief natural transition "
                     f"in one sentence, then ask this next question: {next_question} "
                     f"The transition should feel like a real conversation, not robotic. "
                     f"Examples: 'That's clear, let's shift gears —' or 'Good, building on that —' "
                     f"or 'Alright,'")
+            if transition_hint:
+                task = f"{task} {transition_hint}"
+            return task
         elif action == "COMPLETE":
             return ("The interview is now complete. Give a warm, professional closing statement. "
                     "Thank the candidate for their time. Do not reveal scores. "

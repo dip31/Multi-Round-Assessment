@@ -249,6 +249,8 @@ def finish_round(db: Session = Depends(get_db), current_user=Depends(get_current
 
 	# Finalize and unlock interview round
 	score = finalize_coding_round(db, active_round.id)
+	from app.services.proctoring_service import stop_proctoring_session
+	stop_proctoring_session(db, active_round.session_id)
 	return {"status": "finalized", "round_score": score}
 
 
