@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Optional, List, Dict, Any
+from enum import Enum
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -324,3 +325,143 @@ class DynamicInterviewer(Base):
             persona=persona,
             greeting=self.greeting,
         )
+
+
+class InterviewMessageSpeaker(str, Enum):
+    """Speaker types for interview conversation messages."""
+    AI = "AI"
+    CANDIDATE = "CANDIDATE"
+    SYSTEM = "SYSTEM"
+
+
+class InterviewMessageType(str, Enum):
+    """Message types for interview conversation."""
+    QUESTION = "QUESTION"
+    FOLLOW_UP = "FOLLOW_UP"
+    ANSWER = "ANSWER"
+    SYSTEM = "SYSTEM"
+
+
+class InterviewConversation(Base):
+    """Structured conversation record for an interview session.
+    
+    Contains the complete ordered sequence of messages exchanged during
+    the interview, enabling question-wise analysis and replay.
+    """
+    
+    __tablename__ = "interview_conversations"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    interview_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("interview_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    
+    # Denormalized for easy querying
+    session_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("assessment_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    
+    # Metadata
+    total_messages: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    ai_message_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    candidate_message_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=False), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    
+    # Relationships
+    interview: Mapped["InterviewSession"] = relationship(
+        "InterviewSession",
+        backref="conversation",
+        lazy="select",
+    )
+    messages: Mapped[list["InterviewMessage"]] = relationship(
+        "InterviewMessage",
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        order_by="InterviewMessage.sequence_number",
+        lazy="select",
+    )
+    
+    def __repr__(self) -> str:
+        return f"<InterviewConversation id={self.id} interview_id={self.interview_id} messages={self.total_messages}>"
+
+
+class InterviewMessage(Base):
+    """Individual message in an interview conversation.
+    
+    Each message represents one utterance from either the AI interviewer
+    or the candidate, with metadata for analysis and replay.
+    """
+    
+    __tablename__ = "interview_messages"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    conversation_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("interview_conversations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    
+    # Sequence for ordering
+    sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    
+    # Speaker and content
+    speaker: Mapped[str] = mapped_column(String(20), nullable=False)  # InterviewMessageSpeaker
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    
+    # Message classification
+    message_type: Mapped[str] = mapped_column(String(20), nullable=False)  # InterviewMessageType
+    
+    # Linking to interview turns for question-answer association
+    turn_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("interview_turns.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    
+    # For follow-up questions, link to parent question message
+    parent_message_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("interview_messages.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    
+    # Retell-specific metadata
+    retell_utterance_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    is_final: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    
+    # Timestamps
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=False), server_default=func.now(), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), server_default=func.now(), nullable=False)
+    
+    # Relationships
+    conversation: Mapped["InterviewConversation"] = relationship(
+        "InterviewConversation",
+        back_populates="messages",
+        lazy="select",
+    )
+    turn: Mapped[Optional["InterviewTurn"]] = relationship(
+        "InterviewTurn",
+        lazy="select",
+    )
+    parent_message: Mapped[Optional["InterviewMessage"]] = relationship(
+        "InterviewMessage",
+        remote_side=[id],
+        backref="child_messages",
+        lazy="select",
+    )
+    
+    def __repr__(self) -> str:
+        return f"<InterviewMessage id={self.id} seq={self.sequence_number} speaker={self.speaker} type={self.message_type}>"

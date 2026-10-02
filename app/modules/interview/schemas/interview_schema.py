@@ -239,3 +239,5 @@ class InterviewReportResponse(BaseModel):
     voice_mode: Optional[str] = None
     retell_transcript: Optional[str] = None
     retell_analysis: Optional[Dict[str, Any]] = None
+    # Question-wise detailed analysis for post-interview review
+    question_wise_analysis: Optional[Dict[str, Any]] = None

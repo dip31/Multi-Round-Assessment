@@ -26,7 +26,7 @@ import json
 import logging
 import tempfile
 from datetime import datetime
-from typing import Literal, Optional
+from typing import Literal, Optional, List, Dict, Any
 
 import redis
 from fastapi import (
@@ -52,6 +52,10 @@ from app.models.interview import (
     ApprovedQuestionPool,
     InterviewTurn,
     DynamicInterviewer,
+    InterviewConversation,
+    InterviewMessage,
+    InterviewMessageSpeaker,
+    InterviewMessageType,
 )
 from app.models.assessment import AssessmentRound
 from app.models.assessment import AssessmentSession
@@ -89,6 +93,7 @@ from app.modules.interview.services.interview_orchestrator import (
 from app.modules.interview.services.interview_rl_engine import InterviewRLEngine
 from app.modules.interview.services.retell_adapter import get_retell_adapter, RetellCallConfig
 from app.modules.interview.services.retell_llm_websocket import retell_llm_websocket_endpoint
+from app.modules.interview.services.interview_analysis import InterviewAnalysisService, get_interview_analysis_service
 from app.services.phone_detection_service import detect_phones
 from app.services.proctoring_logger import log_violation
 from pydantic import BaseModel
@@ -1154,8 +1159,113 @@ async def save_retell_transcript(
     metadata["retell_live_transcript"] = request.transcript
     metadata["retell_transcript_source"] = "browser"
     interview.personalization_metadata = metadata
+    
+    # Also persist as structured messages if transcript is provided
+    if request.transcript:
+        try:
+            await _persist_browser_transcript(interview, request.transcript, db)
+        except Exception as e:
+            logger.warning(f"Failed to persist structured browser transcript: {e}")
+    
     db.commit()
     return {"status": "saved"}
+
+
+async def _persist_browser_transcript(
+    interview: InterviewSession,
+    transcript: str,
+    db: Session,
+) -> None:
+    """Persist browser-delivered transcript as structured messages.
+    
+    Expected format: "Interviewer: question\nCandidate: answer\n..."
+    """
+    try:
+        # Get or create conversation
+        conversation = db.query(InterviewConversation).filter(
+            InterviewConversation.interview_id == interview.id
+        ).first()
+        
+        if not conversation:
+            conversation = InterviewConversation(
+                interview_id=interview.id,
+                session_id=interview.session_id,
+                total_messages=0,
+                ai_message_count=0,
+                candidate_message_count=0,
+            )
+            db.add(conversation)
+            db.flush()
+        
+        # Parse transcript lines
+        lines = [line.strip() for line in transcript.split('\n') if line.strip()]
+        
+        # Track existing to avoid duplicates
+        existing_count = db.query(InterviewMessage).filter(
+            InterviewMessage.conversation_id == conversation.id
+        ).count()
+        
+        new_messages = []
+        ai_count = 0
+        candidate_count = 0
+        
+        for idx, line in enumerate(lines):
+            # Parse "Speaker: content" format
+            if ':' in line:
+                speaker_part, content = line.split(':', 1)
+                speaker_part = speaker_part.strip().lower()
+                content = content.strip()
+                
+                if not content:
+                    continue
+                
+                if speaker_part in ('interviewer', 'agent', 'ai'):
+                    speaker = InterviewMessageSpeaker.AI
+                    message_type = InterviewMessageType.QUESTION
+                    ai_count += 1
+                elif speaker_part in ('candidate', 'user', 'you'):
+                    speaker = InterviewMessageSpeaker.CANDIDATE
+                    message_type = InterviewMessageType.ANSWER
+                    candidate_count += 1
+                else:
+                    speaker = InterviewMessageSpeaker.SYSTEM
+                    message_type = InterviewMessageType.SYSTEM
+                
+                # Skip if we already have this many messages
+                if idx < existing_count:
+                    continue
+                
+                message = InterviewMessage(
+                    conversation_id=conversation.id,
+                    sequence_number=idx + 1,
+                    speaker=speaker.value,
+                    text=content,
+                    message_type=message_type.value,
+                    is_final=True,
+                )
+                db.add(message)
+        
+        # Update counts
+        total_messages = db.query(InterviewMessage).filter(
+            InterviewMessage.conversation_id == conversation.id
+        ).count()
+        
+        conversation.total_messages = total_messages
+        # Recalculate ai/candidate counts from DB
+        conversation.ai_message_count = db.query(InterviewMessage).filter(
+            InterviewMessage.conversation_id == conversation.id,
+            InterviewMessage.speaker == InterviewMessageSpeaker.AI.value
+        ).count()
+        conversation.candidate_message_count = db.query(InterviewMessage).filter(
+            InterviewMessage.conversation_id == conversation.id,
+            InterviewMessage.speaker == InterviewMessageSpeaker.CANDIDATE.value
+        ).count()
+        
+        db.commit()
+        
+    except Exception as e:
+        logger.warning(f"Failed to persist browser transcript: {e}")
+        db.rollback()
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1284,6 +1394,45 @@ async def get_report(
     completion_ratio = len(main_turns) / max(interview.total_turns, 1)
     completion_reason = interview.completion_reason
 
+    # Add question-wise analysis to report response for both modes
+    # This provides detailed per-question analysis for the new UI
+    question_wise_analysis = None
+    if not hosted_mode:
+        try:
+            analysis_service = get_interview_analysis_service()
+            analysis = analysis_service.analyze_interview(db, interview_id)
+            question_wise_analysis = {
+                "overall_score": analysis.overall_score,
+                "strong_areas": analysis.strong_areas,
+                "improvement_areas": analysis.improvement_areas,
+                "recurring_gaps": analysis.recurring_gaps,
+                "pattern_summary": analysis.pattern_summary,
+                "confidence": analysis.confidence,
+                "questions": [
+                    {
+                        "question_id": qa.question_id,
+                        "question_number": qa.question_number,
+                        "question_text": qa.question_text,
+                        "question_type": qa.question_type,
+                        "candidate_answer": qa.candidate_answer,
+                        "expected_concepts": qa.expected_concepts,
+                        "covered_concepts": qa.covered_concepts,
+                        "missing_concepts": qa.missing_concepts,
+                        "incorrect_concepts": qa.incorrect_concepts,
+                        "strengths": qa.strengths,
+                        "gaps": qa.gaps,
+                        "score": qa.score,
+                        "max_score": qa.max_score,
+                        "depth_level": qa.depth_level,
+                        "confidence": qa.confidence,
+                    }
+                    for qa in analysis.question_analyses
+                ],
+            }
+        except Exception as e:
+            logger.warning(f"Failed to generate question-wise analysis: {e}")
+            question_wise_analysis = None
+    
     return InterviewReportResponse(
         overall_score=None if hosted_mode else round(overall_score, 2),
         content_score=None if hosted_mode else round(avg_content, 2),
@@ -1305,6 +1454,8 @@ async def get_report(
         voice_mode=voice_mode,
         retell_transcript=metadata.get("retell_live_transcript"),
         retell_analysis=metadata.get("retell_analysis"),
+        # New field for question-wise analysis
+        question_wise_analysis=question_wise_analysis,
     )
 
 
@@ -1344,6 +1495,87 @@ async def realtime_feedback(
 
     # All good
     return RealtimeFeedbackResponse(tip="Great engagement! Keep it up.")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# ENDPOINT: GET /interview/session/{interview_id}/analysis
+# Detailed question-wise post-interview analysis
+# ══════════════════════════════════════════════════════════════════════
+class QuestionWiseAnalysisResponse(BaseModel):
+    """Detailed question-wise analysis response."""
+    interview_id: int
+    overall_score: float
+    strong_areas: List[str]
+    improvement_areas: List[str]
+    recurring_gaps: List[str]
+    pattern_summary: str
+    confidence: float
+    questions: List[Dict[str, Any]]
+
+
+@router.get("/session/{interview_id}/analysis", response_model=QuestionWiseAnalysisResponse)
+async def get_question_wise_analysis(
+    interview_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get detailed question-wise analysis for a completed interview.
+    
+    Provides per-question evaluation with expected concepts, covered concepts,
+    missing concepts, scores, and gap analysis.
+    """
+    interview = db.query(InterviewSession).filter(
+        InterviewSession.id == interview_id
+    ).first()
+    
+    if not interview:
+        raise HTTPException(status_code=404, detail="Interview not found")
+    
+    # Verify ownership
+    assessment = db.query(AssessmentSession).filter(
+        AssessmentSession.id == interview.session_id,
+        AssessmentSession.user_id == current_user.id,
+    ).first()
+    
+    if not assessment:
+        raise HTTPException(status_code=403, detail="Not authorized to access this interview")
+    
+    try:
+        analysis_service = get_interview_analysis_service()
+        analysis = analysis_service.analyze_interview(db, interview_id)
+        
+        return QuestionWiseAnalysisResponse(
+            interview_id=interview_id,
+            overall_score=analysis.overall_score,
+            strong_areas=analysis.strong_areas,
+            improvement_areas=analysis.improvement_areas,
+            recurring_gaps=analysis.recurring_gaps,
+            pattern_summary=analysis.pattern_summary,
+            confidence=analysis.confidence,
+            questions=[
+                {
+                    "question_id": qa.question_id,
+                    "question_number": qa.question_number,
+                    "question_text": qa.question_text,
+                    "question_type": qa.question_type,
+                    "candidate_answer": qa.candidate_answer,
+                    "expected_concepts": qa.expected_concepts,
+                    "covered_concepts": qa.covered_concepts,
+                    "missing_concepts": qa.missing_concepts,
+                    "incorrect_concepts": qa.incorrect_concepts,
+                    "strengths": qa.strengths,
+                    "gaps": qa.gaps,
+                    "score": qa.score,
+                    "max_score": qa.max_score,
+                    "depth_level": qa.depth_level,
+                    "confidence": qa.confidence,
+                }
+                for qa in analysis.question_analyses
+            ],
+        )
+    except Exception as e:
+        logger.error(f"Failed to generate question-wise analysis for interview {interview_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate analysis")
 
 
 # ── Include Retell Webhook Router ────────────────────────────────────────

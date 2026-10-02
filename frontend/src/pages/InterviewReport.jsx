@@ -4,6 +4,8 @@ import { getReport } from '../services/interviewService';
 import { Toast } from '../components/Toast';
 import Navbar from '../components/Navbar';
 import PageSkeleton from '../components/shared/PageSkeleton';
+import { QuestionWiseAnalysis } from '../components/QuestionWiseAnalysis';
+
 
 export default function InterviewReport() {
     const { interviewId } = useParams();
@@ -121,14 +123,14 @@ export default function InterviewReport() {
             <Navbar />
 
             <main className="mx-auto max-w-5xl px-6 py-12">
-                {/* Header */}
+                {}
                 <div className="mb-12">
                     <div className="flex items-center gap-4 mb-4">
                         <button
                             onClick={() => navigate('/dashboard')}
                             className="text-slate-600 hover:text-slate-900 text-sm font-medium flex items-center gap-1 transition-colors"
                         >
-                            <span>←</span> Back
+                            <span></span> Back
                         </button>
                     </div>
                     <h1 className="text-4xl font-bold text-slate-900 mb-2">Interview Assessment Report</h1>
@@ -151,8 +153,15 @@ export default function InterviewReport() {
                                 <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{report.retell_analysis.call_summary}</p>
                             </div>
                         )}
+                        {}
+                        {report.retell_transcript && (
+                            <div className="mt-6">
+                                <h3 className="text-sm font-bold text-slate-900 mb-3">Conversation Analysis</h3>
+                                <RetellTranscriptAnalysis transcript={report.retell_transcript} />
+                            </div>
+                        )}
                         <div className="mt-4">
-                            <h3 className="text-sm font-bold text-slate-900">Transcript</h3>
+                            <h3 className="text-sm font-bold text-slate-900">Full Transcript</h3>
                             <pre className="mt-2 max-h-[32rem] overflow-auto whitespace-pre-wrap rounded-xl bg-white p-4 text-sm text-slate-700">
                                 {report.retell_transcript || 'Retell has not sent a transcript for this call yet.'}
                             </pre>
@@ -160,32 +169,37 @@ export default function InterviewReport() {
                     </section>
                 )}
 
-                {/* Score Cards Grid */}
+                {}
+                {report.is_edi5_scored && report.question_wise_analysis && (
+                    <QuestionWiseAnalysis analysis={report.question_wise_analysis} />
+                )}
+
+                {}
                 {report.is_edi5_scored && <div className="grid grid-cols-4 gap-6 mb-12">
-                    {/* Overall */}
+                    {}
                     <div className={`rounded-2xl border-4 p-6 text-center ${getScoreColor(report.overall_score)}`}>
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Overall</p>
                         <div className="text-4xl font-bold mb-1">{Math.round(report.overall_score * 100)}%</div>
                         <div className="text-xs font-medium">
-                            {report.overall_score >= 0.7 ? '✓ Excellent' : report.overall_score >= 0.4 ? '◐ Moderate' : '✕ Needs Work'}
+                            {report.overall_score >= 0.7 ? ' Excellent' : report.overall_score >= 0.4 ? ' Moderate' : ' Needs Work'}
                         </div>
                     </div>
 
-                    {/* Content */}
+                    {}
                     <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm text-center">
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Content</p>
                         <div className="text-4xl font-bold text-blue-600 mb-1">{Math.round(report.content_score * 100)}%</div>
                         <p className="text-xs text-slate-500">Knowledge accuracy</p>
                     </div>
 
-                    {/* Behavior */}
+                    {}
                     <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm text-center">
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Behavior</p>
                         <div className="text-4xl font-bold text-purple-600 mb-1">{Math.round(report.behavior_score * 100)}%</div>
                         <p className="text-xs text-slate-500">Eye contact & stability</p>
                     </div>
 
-                    {/* Follow-up Rate */}
+                    {}
                     <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm text-center">
                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Follow-up Rate</p>
                         <div className={`text-4xl font-bold mb-1 ${getFollowupRateColor(report.followup_rate)}`}>
@@ -195,10 +209,10 @@ export default function InterviewReport() {
                     </div>
                 </div>}
 
-                {/* AI Feedback */}
+                {}
                 <div className="bg-white rounded-2xl border border-slate-200 p-8 shadow-sm mb-12">
                     <div className="flex items-start gap-4">
-                        <div className="text-3xl flex-shrink-0">✨</div>
+                        <div className="text-3xl flex-shrink-0"></div>
                         <div>
                             <h2 className="text-lg font-bold text-slate-900 mb-3">AI Feedback & Insights</h2>
                             <p className="text-slate-700 leading-relaxed text-base">{report.feedback_summary}</p>
@@ -206,7 +220,7 @@ export default function InterviewReport() {
                     </div>
                 </div>
 
-                {/* Turn Breakdown */}
+                {}
                 {report.is_edi5_scored && <div className="bg-white rounded-2xl border border-slate-200 shadow-sm mb-12 overflow-hidden">
                     <div className="px-8 py-6 border-b border-slate-200 bg-slate-50">
                         <h2 className="text-lg font-bold text-slate-900">Question-by-Question Breakdown</h2>
@@ -215,18 +229,18 @@ export default function InterviewReport() {
                     <div className="divide-y divide-slate-100">
                         {report.turn_reviews.map((turn) => (
                             <div key={turn.turn_number}>
-                                {/* Main turn row */}
+                                {}
                                 <div
                                     className={`px-8 py-5 hover:bg-slate-50 transition-colors ${turn.followups?.length > 0 ? 'cursor-pointer' : ''}`}
                                     onClick={() => turn.followups?.length > 0 && toggleExpand(turn.turn_number)}
                                 >
                                     <div className="flex items-center gap-4">
-                                        {/* Turn badge */}
+                                        {}
                                         <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
                                             <span className="text-sm font-bold text-blue-700">Q{turn.turn_number}</span>
                                         </div>
 
-                                        {/* Question text */}
+                                        {}
                                         <div className="flex-1 min-w-0">
                                             <p className="text-sm font-semibold text-slate-900 truncate">
                                                 {turn.question_text?.substring(0, 80)}{turn.question_text?.length > 80 ? '...' : ''}
@@ -253,7 +267,7 @@ export default function InterviewReport() {
                                             </div>
                                         </div>
 
-                                        {/* Score */}
+                                        {}
                                         <div className="flex items-center gap-3 flex-shrink-0">
                                             <div className="w-20 h-2 bg-slate-200 rounded-full overflow-hidden">
                                                 <div
@@ -268,17 +282,17 @@ export default function InterviewReport() {
                                                 {Math.round((turn.final_score || 0) * 100)}%
                                             </span>
 
-                                            {/* Expand indicator */}
+                                            {}
                                             {turn.followups?.length > 0 && (
                                                 <span className={`text-slate-400 text-xs transition-transform ${expandedTurns[turn.turn_number] ? 'rotate-90' : ''}`}>
-                                                    ▸
+                                                    
                                                 </span>
                                             )}
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Follow-up sub-rows (expandable) */}
+                                {}
                                 {expandedTurns[turn.turn_number] && turn.followups?.map((fu, idx) => (
                                     <div key={idx} className="pl-16 pr-8 py-3 bg-amber-50/50 border-l-2 border-amber-300 ml-8 mr-8 mb-1 rounded-r-lg">
                                         <div className="flex items-center gap-3">
@@ -304,7 +318,7 @@ export default function InterviewReport() {
                                         </div>
                                         {fu.candidate_response && (
                                             <p className="text-xs text-slate-500 mt-1 truncate pl-1">
-                                                📝 {fu.candidate_response.substring(0, 100)}
+                                                 {fu.candidate_response.substring(0, 100)}
                                             </p>
                                         )}
                                     </div>
@@ -314,7 +328,7 @@ export default function InterviewReport() {
                     </div>
                 </div>}
 
-                {/* Action Buttons */}
+                {}
                 <div className="flex items-center justify-center gap-4 print:hidden">
                     <button
                         onClick={() => navigate('/dashboard')}
@@ -326,7 +340,7 @@ export default function InterviewReport() {
                         onClick={handleDownloadReport}
                         className="px-8 py-3 bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-semibold rounded-xl transition-all flex items-center gap-2"
                     >
-                        <span>📥</span> Download Report
+                        <span></span> Download Report
                     </button>
                 </div>
             </main>

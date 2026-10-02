@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { retellClient } from '../services/interviewService';
 import { getInterviewStatus, saveRetellTranscript } from '../services/interviewService';
@@ -7,6 +7,49 @@ import ProctoringVideoDisplay from '../components/ProctoringVideoDisplay';
 import useAdvancedProctoring from '../hooks/useAdvancedProctoring';
 import { Toast } from '../components/Toast';
 import api from '../services/api';
+
+// AI Speaking Animation Component
+const AISpeakingIndicator = ({ isSpeaking, className = "" }) => (
+    <div className={`flex items-center gap-3 ${className}`}>
+        <div className="relative flex items-center justify-center">
+            {/* Pulsing rings */}
+            {isSpeaking && (
+                <>
+                    <div className="absolute inset-0 w-16 h-16 rounded-full border-2 border-purple-400/60 animate-ping opacity-75" />
+                    <div className="absolute inset-0 w-16 h-16 rounded-full border-2 border-blue-400/40 animate-ping opacity-50" style={{ animationDelay: '300ms' }} />
+                    <div className="absolute inset-0 w-16 h-16 rounded-full border-2 border-purple-300/30 animate-ping opacity-25" style={{ animationDelay: '600ms' }} />
+                </>
+            )}
+            {/* Central AI icon */}
+            <div className={`relative w-16 h-16 rounded-2xl flex items-center justify-center transition-all duration-300 ${
+                isSpeaking 
+                    ? 'bg-gradient-to-br from-purple-600 to-blue-600 shadow-[0_0_30px_rgba(147,51,234,0.6)] animate-pulse' 
+                    : 'bg-slate-800 border border-slate-700'
+            }`}>
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    {isSpeaking ? (
+                        // Sound waves when speaking
+                        <>
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12l4-4 4 4M15 12l4-4 4 4" />
+                        </>
+                    ) : (
+                        // Brain/chip icon when idle
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    )}
+                </svg>
+            </div>
+        </div>
+        <div className="flex flex-col">
+            <span className={`text-xs font-medium ${isSpeaking ? 'text-purple-400' : 'text-slate-500'}`}>
+                {isSpeaking ? 'AI Interviewer Speaking' : 'AI Interviewer Ready'}
+            </span>
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider">
+                {isSpeaking ? 'Listening to your response...' : 'Waiting for your answer'}
+            </span>
+        </div>
+    </div>
+);
 
 const STATES = {
     LOADING: 'loading',
@@ -33,6 +76,7 @@ export default function RetellInterviewRoom() {
     const [liveTip, setLiveTip] = useState('');
     const [liveTranscript, setLiveTranscript] = useState([]);
     const [connectionStatus, setConnectionStatus] = useState('connecting');
+    const [isAISpeaking, setIsAISpeaking] = useState(false);
     
     const navigate = useNavigate();
     
@@ -111,8 +155,12 @@ export default function RetellInterviewRoom() {
             retellClient.onTranscript((transcriptData) => {
                 liveTranscriptRef.current = transcriptData;
                 setLiveTranscript(transcriptData);
-                // Update current question display with latest transcript
+                
+                // Detect AI speaking state - check if latest message is from agent
                 if (transcriptData.length > 0) {
+                    const latestMessage = transcriptData[transcriptData.length - 1];
+                    setIsAISpeaking(latestMessage.role === 'agent');
+                    
                     const latestUser = [...transcriptData].reverse().find(u => u.role === 'user');
                     if (latestUser) {
                         setTranscript(latestUser.content);
@@ -471,6 +519,12 @@ export default function RetellInterviewRoom() {
                         
                         {(roomState === STATES.READY || roomState === STATES.LISTENING || roomState === STATES.PROCESSING) && (
                             <>
+                                {/* AI Speaking Indicator */}
+                                <AISpeakingIndicator 
+                                    isSpeaking={isAISpeaking} 
+                                    className="mb-4 p-4 bg-slate-800/50 rounded-xl border border-slate-700"
+                                />
+                                
                                 {voiceMode === 'edi5_core' ? (
                                     <>
                                         <div className="flex items-center gap-3 mb-4 pb-4 border-b border-slate-800">
@@ -491,22 +545,90 @@ export default function RetellInterviewRoom() {
                                         <p className="text-2xl font-semibold leading-relaxed text-slate-100 mb-8">{currentQuestion}</p>
                                     </>
                                 ) : (
-                                    <div className="mb-6 rounded-xl border border-slate-700 bg-slate-800/50 p-4 text-sm text-slate-300">
-                                        Retell is conducting this interview. Your live conversation transcript appears below.
-                                    </div>
+                                    // retell_hosted mode - show current question from transcript
+                                    <>
+                                        <div className="flex items-center gap-3 mb-4 pb-4 border-b border-slate-800">
+                                            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Question {turnNumber || 1}</span>
+                                            <span className="px-2 py-1 rounded-full text-xs font-medium text-white bg-purple-600 bg-opacity-20">
+                                                Retell Hosted
+                                            </span>
+                                        </div>
+                                        <div className="mb-6 rounded-xl border border-slate-700 bg-slate-800/50 p-4 text-sm text-slate-300">
+                                            Retell is conducting this interview. Your live conversation transcript appears below.
+                                        </div>
+                                        {/* Show current question from transcript if available */}
+                                        {(liveTranscript.length > 0) && (
+                                            <>
+                                                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Current Question</p>
+                                                <p className="text-lg font-medium leading-relaxed text-slate-100 mb-6">
+                                                    {(() => {
+                                                        const agentMsgs = liveTranscript.filter(u => u.role === 'agent');
+                                                        return agentMsgs.length > 0 ? agentMsgs[agentMsgs.length - 1].content : 'Listening...';
+                                                    })()}
+                                                </p>
+                                            </>
+                                        )}
+                                    </>
                                 )}
                                 
-                                {/* Live Transcript Display */}
+                                {/* Live Transcript Display - Enhanced with better formatting */}
                                 {liveTranscript.length > 0 && (
                                     <div className="mb-6 p-4 bg-slate-800/50 rounded-xl border border-slate-700">
-                                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Live Transcript</p>
-                                        <div className="space-y-1 max-h-40 overflow-y-auto">
-                                            {liveTranscript.map((utt, idx) => (
-                                                <div key={idx} className={`text-sm ${utt.role === 'user' ? 'text-blue-300' : 'text-purple-300'}`}>
-                                                    <span className="font-semibold">{utt.role === 'user' ? 'You' : 'Interviewer'}:</span>{' '}
-                                                    {utt.content}
-                                                </div>
-                                            ))}
+                                        <div className="flex items-center justify-between mb-3">
+                                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Live Conversation</p>
+                                            <span className="text-[10px] text-slate-400 bg-slate-700 px-2 py-0.5 rounded">
+                                                {liveTranscript.length} messages
+                                            </span>
+                                        </div>
+                                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                                            {liveTranscript.map((utt, idx) => {
+                                                const isUser = utt.role === 'user';
+                                                const isFinal = utt.is_final !== false;
+                                                return (
+                                                    <div 
+                                                        key={`${utt.utterance_id || idx}-${utt.role}`}
+                                                        className={`flex gap-3 animate-slide-in ${!isFinal ? 'opacity-70' : ''}`}
+                                                    >
+                                                        {/* Speaker Avatar */}
+                                                        <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                                                            isUser 
+                                                                ? 'bg-blue-600/20 border border-blue-500/30' 
+                                                                : 'bg-purple-600/20 border border-purple-500/30'
+                                                        }`}>
+                                                            {isUser ? (
+                                                                <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                                                </svg>
+                                                            ) : (
+                                                                <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 002 2v10a2 2 0 002 2z" />
+                                                                </svg>
+                                                            )}
+                                                        </div>
+                                                        
+                                                        {/* Message Content */}
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-baseline gap-2 mb-1">
+                                                                <span className={`text-xs font-semibold ${isUser ? 'text-blue-300' : 'text-purple-300'}`}>
+                                                                    {isUser ? 'You' : 'Interviewer'}
+                                                                </span>
+                                                                <span className="text-[10px] text-slate-500 uppercase tracking-wider">
+                                                                    {utt.message_type || (isUser ? 'ANSWER' : 'QUESTION')}
+                                                                </span>
+                                                                {!isFinal && (
+                                                                    <span className="text-[10px] text-amber-400 animate-pulse flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                                                                        Transcribing...
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <p className={`text-sm leading-relaxed ${isUser ? 'text-blue-200' : 'text-purple-200'} break-words`}>
+                                                                {utt.content}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 )}

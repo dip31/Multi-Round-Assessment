@@ -37,7 +37,15 @@ from sqlalchemy.orm import Session
 
 from app.database.db import get_db
 from app.config.settings import settings
-from app.models.interview import ApprovedQuestionPool, InterviewSession, InterviewTurn
+from app.models.interview import (
+    ApprovedQuestionPool,
+    InterviewSession,
+    InterviewTurn,
+    InterviewConversation,
+    InterviewMessage,
+    InterviewMessageSpeaker,
+    InterviewMessageType,
+)
 from app.modules.interview.services.retell_adapter import (
     RetellAdapter, InterviewAction, InterviewActionType, get_retell_adapter
 )
@@ -242,6 +250,113 @@ class RetellLLMWebSocketHandler:
                 break
         
         logger.debug(f"Transcript updated: {len(transcript)} utterances, turntaking={turntaking}")
+        
+        # Persist structured transcript for analysis
+        if self.context.interview_session and self.context.db_session:
+            await self._persist_structured_transcript(transcript)
+    
+    async def _persist_structured_transcript(self, transcript: List[Dict[str, Any]]) -> None:
+        """Persist structured transcript messages from custom LLM WebSocket.
+        
+        The transcript from Retell in edi5_core mode contains utterances with:
+        - role: "agent" or "user"
+        - content: text
+        - utterance_id: unique ID
+        - is_final: boolean
+        - confidence: float
+        """
+        try:
+            interview = self.context.interview_session
+            db = self.context.db_session
+            
+            if not interview or not db:
+                return
+            
+            # Get or create conversation record
+            conversation = db.query(InterviewConversation).filter(
+                InterviewConversation.interview_id == interview.id
+            ).first()
+            
+            if not conversation:
+                conversation = InterviewConversation(
+                    interview_id=interview.id,
+                    session_id=interview.session_id,
+                    total_messages=0,
+                    ai_message_count=0,
+                    candidate_message_count=0,
+                )
+                db.add(conversation)
+                db.flush()
+            
+            # Track existing utterance IDs
+            existing_utterance_ids = set()
+            existing_messages = db.query(InterviewMessage.retell_utterance_id).filter(
+                InterviewMessage.conversation_id == conversation.id,
+                InterviewMessage.retell_utterance_id.isnot(None)
+            ).all()
+            for (uid,) in existing_messages:
+                if uid:
+                    existing_utterance_ids.add(uid)
+            
+            new_messages = []
+            ai_count = 0
+            candidate_count = 0
+            
+            for idx, utterance in enumerate(transcript):
+                utterance_id = utterance.get("utterance_id")
+                role = utterance.get("role", "").lower()
+                content = utterance.get("content", "").strip()
+                is_final = utterance.get("is_final", True)
+                confidence = utterance.get("confidence")
+                
+                if not content:
+                    continue
+                
+                if utterance_id and utterance_id in existing_utterance_ids:
+                    continue
+                
+                if role == "agent":
+                    speaker = InterviewMessageSpeaker.AI
+                    ai_count += 1
+                elif role == "user":
+                    speaker = InterviewMessageSpeaker.CANDIDATE
+                    candidate_count += 1
+                else:
+                    speaker = InterviewMessageSpeaker.SYSTEM
+                
+                if speaker == InterviewMessageSpeaker.AI:
+                    message_type = InterviewMessageType.QUESTION
+                else:
+                    message_type = InterviewMessageType.ANSWER
+                
+                message = InterviewMessage(
+                    conversation_id=conversation.id,
+                    sequence_number=idx + 1,
+                    speaker=speaker.value,
+                    text=content,
+                    message_type=message_type.value,
+                    retell_utterance_id=utterance_id,
+                    is_final=is_final,
+                    confidence=confidence,
+                )
+                new_messages.append(message)
+                if utterance_id:
+                    existing_utterance_ids.add(utterance_id)
+            
+            if new_messages:
+                for msg in new_messages:
+                    db.add(msg)
+                
+                conversation.total_messages = len(existing_utterance_ids)
+                conversation.ai_message_count = ai_count
+                conversation.candidate_message_count = candidate_count
+                
+                db.commit()
+                logger.debug(f"Persisted {len(new_messages)} structured messages for interview {interview.id}")
+                
+        except Exception as e:
+            logger.error(f"Failed to persist structured transcript for interview {self.context.edi5_interview_id}: {e}")
+            db.rollback()
     
     async def _handle_response_required(self, data: Dict[str, Any]):
         """Handle response_required - Retell wants EDI5 to generate a response."""

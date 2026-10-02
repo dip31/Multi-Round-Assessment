@@ -9,7 +9,7 @@ async notifications for audit, analytics, and session lifecycle tracking.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from sqlalchemy.orm import Session
@@ -17,7 +17,13 @@ from sqlalchemy.orm import Session
 from app.config.settings import settings
 from app.core.auth import get_current_user
 from app.database.db import get_db
-from app.models.interview import InterviewSession
+from app.models.interview import (
+    InterviewSession,
+    InterviewConversation,
+    InterviewMessage,
+    InterviewMessageSpeaker,
+    InterviewMessageType,
+)
 from app.modules.interview.services.retell_adapter import RetellAdapter, get_retell_adapter
 from app.models.user import User
 
@@ -188,10 +194,10 @@ async def _handle_transcript_updated(
 ) -> None:
     """Handle transcript_updated webhook - live transcript updates.
     
-    Note: This fires frequently. We store the latest transcript for
-    real-time monitoring but don't create InterviewTurn records here -
-    those are created by the InterviewOrchestrator via the custom LLM WebSocket.
+    Parses Retell's transcript object and persists structured messages
+    to InterviewConversation/InterviewMessage for question-wise analysis.
     """
+    # Store the flat transcript string for backward compatibility
     transcript = call_data.get("transcript", "")
     interview.personalization_metadata = {
         **(interview.personalization_metadata or {}),
@@ -199,7 +205,136 @@ async def _handle_transcript_updated(
         "retell_transcript_object": call_data.get("transcript_object"),
         "retell_transcript_updated_at": call_data.get("start_timestamp"),
     }
+    
+    # Parse structured transcript object from Retell
+    transcript_obj = call_data.get("transcript_object")
+    if transcript_obj:
+        await _persist_structured_transcript(interview, transcript_obj, db)
+    
     db.commit()
+
+
+async def _persist_structured_transcript(
+    interview: InterviewSession,
+    transcript_obj: Dict[str, Any],
+    db: Session,
+) -> None:
+    """Parse Retell's transcript_object and persist as structured messages.
+    
+    Retell's transcript_object format:
+    {
+        "utterances": [
+            {
+                "role": "agent|user",
+                "content": "text",
+                "utterance_id": "uuid",
+                "is_final": true,
+                "confidence": 0.95,
+                "start_timestamp": 1234567890,
+                "end_timestamp": 1234567895
+            },
+            ...
+        ]
+    }
+    """
+    try:
+        utterances = transcript_obj.get("utterances", [])
+        if not utterances:
+            return
+        
+        # Get or create conversation record
+        conversation = db.query(InterviewConversation).filter(
+            InterviewConversation.interview_id == interview.id
+        ).first()
+        
+        if not conversation:
+            conversation = InterviewConversation(
+                interview_id=interview.id,
+                session_id=interview.session_id,
+                total_messages=0,
+                ai_message_count=0,
+                candidate_message_count=0,
+            )
+            db.add(conversation)
+            db.flush()  # Get ID without committing
+        
+        # Track existing message IDs to avoid duplicates
+        existing_utterance_ids = set()
+        existing_messages = db.query(InterviewMessage.retell_utterance_id).filter(
+            InterviewMessage.conversation_id == conversation.id,
+            InterviewMessage.retell_utterance_id.isnot(None)
+        ).all()
+        for (uid,) in existing_messages:
+            if uid:
+                existing_utterance_ids.add(uid)
+        
+        new_messages = []
+        ai_count = 0
+        candidate_count = 0
+        
+        for idx, utterance in enumerate(utterances):
+            utterance_id = utterance.get("utterance_id")
+            role = utterance.get("role", "").lower()
+            content = utterance.get("content", "").strip()
+            is_final = utterance.get("is_final", True)
+            confidence = utterance.get("confidence")
+            
+            if not content:
+                continue
+            
+            # Skip if already persisted (deduplication)
+            if utterance_id and utterance_id in existing_utterance_ids:
+                continue
+            
+            # Map Retell role to our speaker enum
+            if role == "agent":
+                speaker = InterviewMessageSpeaker.AI
+                ai_count += 1
+            elif role == "user":
+                speaker = InterviewMessageSpeaker.CANDIDATE
+                candidate_count += 1
+            else:
+                speaker = InterviewMessageSpeaker.SYSTEM
+            
+            # Determine message type based on role and content
+            # Heuristic: agent messages are questions/follow-ups, user messages are answers
+            if speaker == InterviewMessageSpeaker.AI:
+                # Check if this is a follow-up (shorter, after a previous agent message)
+                message_type = InterviewMessageType.QUESTION
+                # Could enhance with more logic here
+            else:
+                message_type = InterviewMessageType.ANSWER
+            
+            # Create message
+            message = InterviewMessage(
+                conversation_id=conversation.id,
+                sequence_number=idx + 1,  # Will be updated after sort
+                speaker=speaker.value,
+                text=content,
+                message_type=message_type.value,
+                retell_utterance_id=utterance_id,
+                is_final=is_final,
+                confidence=confidence,
+                # timestamp will use server_default
+            )
+            new_messages.append(message)
+            existing_utterance_ids.add(utterance_id or f"idx_{idx}")
+        
+        if new_messages:
+            # Add all new messages
+            for msg in new_messages:
+                db.add(msg)
+            
+            # Update conversation counts
+            conversation.total_messages = len(existing_utterance_ids)
+            conversation.ai_message_count = ai_count
+            conversation.candidate_message_count = candidate_count
+            
+            logger.info(f"Persisted {len(new_messages)} new transcript messages for interview {interview.id}")
+        
+    except Exception as e:
+        logger.error(f"Failed to persist structured transcript for interview {interview.id}: {e}")
+        # Don't raise - webhook should still succeed
 
 
 async def _handle_transfer_event(
