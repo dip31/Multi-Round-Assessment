@@ -12,6 +12,9 @@ from app.modules.report.routers.report_router import router as report_router
 from app.modules.report.routers.candidate_report_router import router as candidate_report_router
 from app.api.v1.profile import router as profile_router
 from app.api.v1.portfolio import router as portfolio_router
+from app.api.v1.mock_drive import router as mock_drive_router
+from app.api.v1.mock_drive import student_router as student_mock_drive_router
+from app.api.v1.company_data import router as company_data_router
 from app.modules.practice.routers.practice_router import router as practice_router
 
 api_router = APIRouter(prefix="/api/v1")
@@ -19,6 +22,9 @@ api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth_router)
 api_router.include_router(profile_router)
 api_router.include_router(portfolio_router)
+api_router.include_router(mock_drive_router)
+api_router.include_router(student_mock_drive_router)
+api_router.include_router(company_data_router)
 api_router.include_router(session_router)
 api_router.include_router(practice_router)
 api_router.include_router(aptitude_router)
@@ -29,4 +35,3 @@ api_router.include_router(advanced_proctoring_router)
 api_router.include_router(interview_router)
 api_router.include_router(report_router)
 api_router.include_router(candidate_report_router)
-

@@ -18,14 +18,19 @@ depends_on = None
 
 def upgrade() -> None:
     """Add is_followup and followup_number columns to interview_turns."""
-    op.add_column(
-        'interview_turns',
-        sa.Column('is_followup', sa.Boolean(), server_default=sa.text('false'), nullable=False)
-    )
-    op.add_column(
-        'interview_turns',
-        sa.Column('followup_number', sa.Integer(), server_default=sa.text('0'), nullable=False)
-    )
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    existing_cols = {col['name'] for col in inspector.get_columns('interview_turns')}
+    if 'is_followup' not in existing_cols:
+        op.add_column(
+            'interview_turns',
+            sa.Column('is_followup', sa.Boolean(), server_default=sa.text('false'), nullable=False)
+        )
+    if 'followup_number' not in existing_cols:
+        op.add_column(
+            'interview_turns',
+            sa.Column('followup_number', sa.Integer(), server_default=sa.text('0'), nullable=False)
+        )
 
 
 def downgrade() -> None:

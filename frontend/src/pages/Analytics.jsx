@@ -95,6 +95,7 @@ export default function Analytics() {
     const focusAreas = Array.isArray(data?.focus_areas) ? data.focus_areas : [];
     const recommendation = data?.recommendation;
     const consistency = data?.consistency || {};
+    const mockDriveHistory = data?.mock_drive_history || [];
 
     const hasAnyAttempts = (summary.questions_attempted || 0) > 0 || trend.length > 0;
 
@@ -242,7 +243,7 @@ export default function Analytics() {
                         </h2>
                         <p className="text-xs text-slate-500">Detailed review of your past attempts</p>
                     </div>
-                    
+
                     {trend.length > 0 ? (
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
@@ -266,7 +267,7 @@ export default function Analytics() {
                                             </td>
                                             <td className="p-4">
                                                 {item.session_id && (
-                                                    <Link 
+                                                    <Link
                                                         to={`/practice/result/${item.session_id}/${item.id}`}
                                                         className="text-indigo-600 hover:text-indigo-900 text-sm font-medium"
                                                     >
@@ -550,6 +551,76 @@ export default function Analytics() {
                         </div>
                     </div>
                 </div>
+                {/* Candidate Mock Drive Competency Results */}
+                {mockDriveHistory.length > 0 && (
+                    <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs mt-8">
+                        <h2 className="text-base font-bold text-slate-900 tracking-tight mb-4">
+                            Mock Drive Competency Results
+                        </h2>
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            {mockDriveHistory.map((dh, idx) => (
+                                <div key={idx} className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div>
+                                            <h4 className="font-bold text-slate-900">{dh.drive_name}</h4>
+                                            <p className="text-xs text-slate-500">Role: {dh.target_role}</p>
+                                        </div>
+                                        <span
+                                            className={(() => {
+                                                if (dh.status === 'final') return 'bg-emerald-100 text-emerald-600';
+                                                if (dh.status === 'provisional') return 'bg-amber-100 text-amber-800';
+                                                if (dh.status === 'unavailable') return 'bg-slate-200 text-slate-400';
+                                                return 'bg-red-100 text-red-600';
+                                            })()}
+                                        >
+                                            {dh.status}
+                                        </span>
+                                    </div>
+                                    <p className="text-sm text-slate-500 mb-3">
+                                        Completed: {dh.completed_at || 'In progress'}
+                                    </p>
+                                    {dh.competency_count > 0 && (
+                                        <div className="space-y-3">
+                                            {dh.competencies.map((comp, cidx) => (
+                                                <div
+                                                    key={cidx}
+                                                    className="p-3 rounded-2xl bg-slate-100 border border-slate-200 text-xs"
+                                                >
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <span className="font-medium text-slate-700">{comp.competency_name}</span>
+                                                        <span className={(() => {
+                                                            if (comp.avg_score === null || comp.avg_score === undefined) return 'text-slate-400 italic';
+                                                            if (comp.avg_score >= 75) return 'text-emerald-600 font-bold';
+                                                            if (comp.avg_score >= 50) return 'text-indigo-600 font-bold';
+                                                            return 'text-amber-600 font-bold';
+                                                        })()}
+                                                        >
+                                                            {comp.avg_score !== undefined ? `${comp.avg_score}%` : 'N/A'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex text-[10px] text-slate-500">
+                                                        <span>Evidence: {comp.evidence_count || 0}</span>
+                                                        <span>{comp.assessed_count || 0} assessed</span>
+                                                    </div>
+                                                    {comp.avg_score === null && (
+                                                        <p className="text-[10px] text-slate-400 italic">
+                                                            Scoring unavailable
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {dh.competency_count === 0 && (
+                                        <p className="text-xs text-slate-500">
+                                            No competency data available
+                                        </p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </section>
+                )}
             </main>
         </StudentModeLayout>
     );

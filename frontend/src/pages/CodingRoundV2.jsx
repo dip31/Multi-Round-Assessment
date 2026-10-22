@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { getProblems, startRound, runCode, submitCode, finishRound } from '../services/codingService';
+import { startRound, runCode, submitCode, finishRound } from '../services/codingService';
 import { getSessionStatus } from '../services/sessionService';
 import useAdvancedProctoring from '../hooks/useAdvancedProctoring';
 import { useTimer } from '../hooks/useTimer';
@@ -14,7 +14,7 @@ import { STARTER_TEMPLATES, DEFAULT_STARTER } from '../constants/starterTemplate
 export default function CodingRoundV2() {
   const navigate = useNavigate();
   const location = useLocation();
-  
+
   const [problems, setProblems] = useState([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   // Per-problem code buffers; the parent owns the editor state so a problem's
@@ -33,8 +33,8 @@ export default function CodingRoundV2() {
   const [testTerminated, setTestTerminated] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
 
-  const storedSessionId = location.state?.sessionId 
-    || parseInt(localStorage.getItem('coding_round_id') || '0', 10) 
+  const storedSessionId = location.state?.sessionId
+    || parseInt(localStorage.getItem('coding_round_id') || '0', 10)
     || null;
   // sessionId is resolved separately so we only pass a real id to proctoring.
   const [sessionId, setSessionId] = useState(null); // Don't use stale localStorage value
@@ -79,11 +79,21 @@ export default function CodingRoundV2() {
     } catch (e) {
       console.error('Auto-submit failed:', e);
     }
-    
-    // Check if it's a practice round or not
+
+    // Finalize and navigate
+    let finalSessionId = sessionId;
+    let finalRoundId = roundId;
+    try {
+      const res = await finishRound();
+      if (res?.session_id) finalSessionId = res.session_id;
+      if (res?.round_id)   finalRoundId   = res.round_id;
+    } catch (e) {
+      console.error('Auto-finish failed:', e);
+    }
+
     const practiceConfig = JSON.parse(localStorage.getItem('edi5_practice_config') || '{}');
-    if (practiceConfig && practiceConfig.practice_type && sessionId && roundId) {
-        navigate(`/result/${sessionId}/${roundId}`);
+    if (practiceConfig && practiceConfig.practice_type && finalSessionId && finalRoundId) {
+        navigate(`/result/${finalSessionId}/${finalRoundId}`);
     } else {
         navigate('/coding/result');
     }
@@ -130,20 +140,16 @@ export default function CodingRoundV2() {
           setSessionId(roundSessionId);
         }
       } else {
-        // Fallback: get problems assigned to the active round
-        const fallback = await getProblems();
-        setProblems(Array.isArray(fallback) ? fallback : []);
+        setError('The coding round started without any assigned problems. Please contact your administrator.');
+        setProblems([]);
       }
     } catch (e) {
       console.error('[CodingRoundV2] startRound error:', e);
-      try {
-        const fallback = await getProblems();
-        setProblems(Array.isArray(fallback) ? fallback : []);
-      } catch (err) {
-        console.error('[CodingRoundV2] getProblems also failed:', err);
-        setError('Unable to load coding problems. Please return to the dashboard and try again.');
-        setProblems([]);
-      }
+      setError(
+        e?.response?.data?.detail
+        || 'Unable to load coding problems. Please return to the dashboard and try again.'
+      );
+      setProblems([]);
     } finally {
       setLoading(false);
     }
@@ -154,14 +160,14 @@ export default function CodingRoundV2() {
   }, [loadProblems]);
 
   // After problems load (and session/round is active server-side), pull the real
-  // remaining time + session id from the existing session API. Timer stays null
-  // (loading) until then, so it can never fire prematurely.
-  useEffect(() => {
-    if (loading || problems.length === 0) return;
-    let cancelled = false;
-    getSessionStatus()
+  // remaining time + session id + roundId from the existing session API.
+  // Use the coding ROUND's expires_at for the timer (not the session's), so the
+  // frontend matches the backend's 30-min round enforcement exactly.
+  const syncSessionTime = useCallback(() => {
+    return getSessionStatus()
       .then((data) => {
-        if (cancelled) return;
+        console.log('[CodingRoundV2] Session status:', data);
+console.log('[CodingRoundV2] Rounds:', data?.rounds);
         if (data?.id && data.id !== sessionId) {
           setSessionId(data.id);
           localStorage.setItem('coding_round_id', data.id.toString());
@@ -169,9 +175,24 @@ export default function CodingRoundV2() {
         if (data?.rounds && data.rounds.length > 0) {
             const codingRounds = data.rounds.filter(r => r.round_type === 'coding');
             if (codingRounds.length > 0) {
-                setRoundId(codingRounds[codingRounds.length - 1].id);
+                const activeRound = codingRounds[codingRounds.length - 1];
+                setRoundId(activeRound.id);
+
+                // Prefer the round's own expires_at for the timer so it matches
+                // the backend's CODING_ROUND_TIME_LIMIT_MINUTES enforcement.
+                if (activeRound.expires_at) {
+                  // Server returns naive UTC datetimes without 'Z' suffix.
+                  // Append 'Z' so Date() parses as UTC instead of local time.
+                  const raw = String(activeRound.expires_at);
+                  const expiresAt = new Date(raw.endsWith('Z') ? raw : raw + 'Z');
+                  const nowMs = Date.now();
+                  const remainingSec = Math.max(0, Math.floor((expiresAt - nowMs) / 1000));
+                  setTimeRemaining(remainingSec);
+                  return; // don't fall through to session-level time
+                }
             }
         }
+        // Fallback to session-level time if round expiry not available
         const remaining = data?.time_remaining_seconds;
         if (typeof remaining === 'number' && Number.isFinite(remaining) && remaining >= 0) {
           setTimeRemaining(remaining);
@@ -180,11 +201,29 @@ export default function CodingRoundV2() {
       .catch((e) => {
         console.warn('[CodingRoundV2] Failed to load session time:', e);
       });
-    return () => {
-      cancelled = true;
+  }, [sessionId, setTimeRemaining]);
+
+  useEffect(() => {
+    if (loading || problems.length === 0) return;
+    syncSessionTime();
+  }, [loading, problems.length, syncSessionTime]);
+
+  // Resync the countdown from the authoritative server deadline whenever the
+  // tab becomes visible again, so a throttled/backgrounded interval (which can
+  // drift ahead) is corrected instead of over-reporting remaining time.
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        syncSessionTime();
+      }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, problems.length]);
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleVisibility);
+    };
+  }, [syncSessionTime]);
 
   useEffect(() => {
     if (selectedIndex >= problems.length) {
@@ -235,9 +274,9 @@ export default function CodingRoundV2() {
     setBusyAction('run');
     setResult({ heading: 'Running visible test cases...', raw: null });
     try {
-      const res = await runCode({ 
-        problem_id: current.id, 
-        code: currentCode, 
+      const res = await runCode({
+        problem_id: current.id,
+        code: currentCode,
         language,
       });
       setResult({ heading: 'Run complete', raw: res });
@@ -270,9 +309,22 @@ export default function CodingRoundV2() {
     setIsFinishing(true);
     try {
       const res = await finishRound();
+
+      // If this coding round was part of a Mock Drive, use the mock drive redirect
+      if (res?.mock_drive?.redirect_url) {
+        navigate(res.mock_drive.redirect_url);
+        return;
+      }
+
       const practiceConfig = JSON.parse(localStorage.getItem('edi5_practice_config') || '{}');
-      if (practiceConfig && practiceConfig.practice_type && sessionId && roundId) {
-          navigate(`/result/${sessionId}/${roundId}`);
+
+      // Prefer IDs from the API response, fall back to state (which may not have
+      // resolved yet if getSessionStatus() was still in-flight when Finish was clicked).
+      const resolvedSessionId = res?.session_id ?? sessionId;
+      const resolvedRoundId   = res?.round_id   ?? roundId;
+
+      if (practiceConfig && practiceConfig.practice_type && resolvedSessionId && resolvedRoundId) {
+          navigate(`/result/${resolvedSessionId}/${resolvedRoundId}`);
       } else {
           navigate('/coding/result');
       }

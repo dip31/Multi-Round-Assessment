@@ -19,75 +19,97 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # ── Create profile tables ─────────────────────────────────────────
-    op.create_table('student_profiles',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('user_id', sa.Integer(), nullable=False),
-        sa.Column('roll_number', sa.String(length=50), nullable=True),
-        sa.Column('department', sa.String(length=100), nullable=False, server_default='Computer Science'),
-        sa.Column('cgpa', sa.Float(), nullable=False, server_default='7.5'),
-        sa.Column('graduation_year', sa.Integer(), nullable=False, server_default='2026'),
-        sa.Column('backlogs_count', sa.Integer(), nullable=False, server_default='0'),
-        sa.Column('institution', sa.String(length=200), nullable=False, server_default='Engineering College'),
-        sa.Column('target_role', sa.String(length=100), nullable=True),
-        sa.Column('skills_json', postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default='[]'),
-        sa.Column('phone_number', sa.String(length=20), nullable=True),
-        sa.Column('mobile_no', sa.String(length=50), nullable=True),
-        sa.Column('full_name', sa.String(length=150), nullable=True),
-        sa.Column('college_email_id', sa.String(length=150), nullable=True),
-        sa.Column('gender', sa.String(length=50), nullable=True),
-        sa.Column('date_of_birth', sa.String(length=50), nullable=True),
-        sa.Column('nationality', sa.String(length=100), nullable=True, server_default='Indian'),
-        sa.Column('tenth_marks', sa.Float(), nullable=True),
-        sa.Column('twelfth_marks', sa.Float(), nullable=True),
-        sa.Column('bio', sa.Text(), nullable=True),
-        sa.Column('portfolio_data', postgresql.JSONB(astext_type=sa.Text()), server_default='{}', nullable=False),
-        sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
-        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
-        sa.PrimaryKeyConstraint('id'),
-    )
-    op.create_index('ix_student_profiles_id', 'student_profiles', ['id'], unique=False)
-    op.create_index('ix_student_profiles_user_id', 'student_profiles', ['user_id'], unique=True)
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    existing_tables = inspector.get_table_names()
 
-    op.create_table('faculty_profiles',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('user_id', sa.Integer(), nullable=False),
-        sa.Column('department', sa.String(length=100), nullable=False, server_default='Computer Science'),
-        sa.Column('designation', sa.String(length=100), nullable=False, server_default='Assistant Professor'),
-        sa.Column('institution', sa.String(length=200), nullable=False, server_default='Engineering College'),
-        sa.Column('employee_id', sa.String(length=50), nullable=True),
-        sa.Column('bio', sa.Text(), nullable=True),
-        sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
-        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
-        sa.PrimaryKeyConstraint('id'),
-    )
-    op.create_index('ix_faculty_profiles_id', 'faculty_profiles', ['id'], unique=False)
-    op.create_index('ix_faculty_profiles_user_id', 'faculty_profiles', ['user_id'], unique=True)
+    # ── Create profile tables (already in baseline — guard with inspector) ────
+    if 'student_profiles' not in existing_tables:
+        op.create_table('student_profiles',
+            sa.Column('id', sa.Integer(), nullable=False),
+            sa.Column('user_id', sa.Integer(), nullable=False),
+            sa.Column('roll_number', sa.String(length=50), nullable=True),
+            sa.Column('department', sa.String(length=100), nullable=False, server_default='Computer Science'),
+            sa.Column('cgpa', sa.Float(), nullable=False, server_default='7.5'),
+            sa.Column('graduation_year', sa.Integer(), nullable=False, server_default='2026'),
+            sa.Column('backlogs_count', sa.Integer(), nullable=False, server_default='0'),
+            sa.Column('institution', sa.String(length=200), nullable=False, server_default='Engineering College'),
+            sa.Column('target_role', sa.String(length=100), nullable=True),
+            sa.Column('skills_json', postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default='[]'),
+            sa.Column('phone_number', sa.String(length=20), nullable=True),
+            sa.Column('mobile_no', sa.String(length=50), nullable=True),
+            sa.Column('full_name', sa.String(length=150), nullable=True),
+            sa.Column('college_email_id', sa.String(length=150), nullable=True),
+            sa.Column('gender', sa.String(length=50), nullable=True),
+            sa.Column('date_of_birth', sa.String(length=50), nullable=True),
+            sa.Column('nationality', sa.String(length=100), nullable=True, server_default='Indian'),
+            sa.Column('tenth_marks', sa.Float(), nullable=True),
+            sa.Column('twelfth_marks', sa.Float(), nullable=True),
+            sa.Column('bio', sa.Text(), nullable=True),
+            sa.Column('portfolio_data', postgresql.JSONB(astext_type=sa.Text()), server_default='{}', nullable=False),
+            sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+            sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+            sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+            sa.PrimaryKeyConstraint('id'),
+        )
+    sp_indexes = {idx['name'] for idx in inspector.get_indexes('student_profiles')}
+    if 'ix_student_profiles_id' not in sp_indexes:
+        op.create_index('ix_student_profiles_id', 'student_profiles', ['id'], unique=False)
+    if 'ix_student_profiles_user_id' not in sp_indexes:
+        op.create_index('ix_student_profiles_user_id', 'student_profiles', ['user_id'], unique=True)
 
-    op.create_table('tpo_profiles',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('user_id', sa.Integer(), nullable=False),
-        sa.Column('institution', sa.String(length=200), nullable=False, server_default='Engineering College'),
-        sa.Column('designation', sa.String(length=100), nullable=False, server_default='Training & Placement Officer'),
-        sa.Column('contact_email', sa.String(length=150), nullable=True),
-        sa.Column('contact_phone', sa.String(length=20), nullable=True),
-        sa.Column('bio', sa.Text(), nullable=True),
-        sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
-        sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
-        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
-        sa.PrimaryKeyConstraint('id'),
-    )
-    op.create_index('ix_tpo_profiles_id', 'tpo_profiles', ['id'], unique=False)
-    op.create_index('ix_tpo_profiles_user_id', 'tpo_profiles', ['user_id'], unique=True)
+    if 'faculty_profiles' not in existing_tables:
+        op.create_table('faculty_profiles',
+            sa.Column('id', sa.Integer(), nullable=False),
+            sa.Column('user_id', sa.Integer(), nullable=False),
+            sa.Column('department', sa.String(length=100), nullable=False, server_default='Computer Science'),
+            sa.Column('designation', sa.String(length=100), nullable=False, server_default='Assistant Professor'),
+            sa.Column('institution', sa.String(length=200), nullable=False, server_default='Engineering College'),
+            sa.Column('employee_id', sa.String(length=50), nullable=True),
+            sa.Column('bio', sa.Text(), nullable=True),
+            sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+            sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+            sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+            sa.PrimaryKeyConstraint('id'),
+        )
+    fp_indexes = {idx['name'] for idx in inspector.get_indexes('faculty_profiles')}
+    if 'ix_faculty_profiles_id' not in fp_indexes:
+        op.create_index('ix_faculty_profiles_id', 'faculty_profiles', ['id'], unique=False)
+    if 'ix_faculty_profiles_user_id' not in fp_indexes:
+        op.create_index('ix_faculty_profiles_user_id', 'faculty_profiles', ['user_id'], unique=True)
 
-    # ── Add missing columns to user_resumes ───────────────────────────
-    op.add_column('user_resumes', sa.Column('cv_name', sa.String(length=200), nullable=False, server_default='My Resume'))
-    op.add_column('user_resumes', sa.Column('cv_type', sa.String(length=100), nullable=False, server_default='Software Developer'))
-    op.add_column('user_resumes', sa.Column('file_name', sa.String(length=255), nullable=False, server_default='resume.pdf'))
-    op.add_column('user_resumes', sa.Column('file_path', sa.String(length=500), nullable=False, server_default=''))
-    op.add_column('user_resumes', sa.Column('file_size', sa.Integer(), nullable=False, server_default='0'))
+    if 'tpo_profiles' not in existing_tables:
+        op.create_table('tpo_profiles',
+            sa.Column('id', sa.Integer(), nullable=False),
+            sa.Column('user_id', sa.Integer(), nullable=False),
+            sa.Column('institution', sa.String(length=200), nullable=False, server_default='Engineering College'),
+            sa.Column('designation', sa.String(length=100), nullable=False, server_default='Training & Placement Officer'),
+            sa.Column('contact_email', sa.String(length=150), nullable=True),
+            sa.Column('contact_phone', sa.String(length=20), nullable=True),
+            sa.Column('bio', sa.Text(), nullable=True),
+            sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+            sa.Column('updated_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
+            sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+            sa.PrimaryKeyConstraint('id'),
+        )
+    tp_indexes = {idx['name'] for idx in inspector.get_indexes('tpo_profiles')}
+    if 'ix_tpo_profiles_id' not in tp_indexes:
+        op.create_index('ix_tpo_profiles_id', 'tpo_profiles', ['id'], unique=False)
+    if 'ix_tpo_profiles_user_id' not in tp_indexes:
+        op.create_index('ix_tpo_profiles_user_id', 'tpo_profiles', ['user_id'], unique=True)
+
+    # ── Add missing columns to user_resumes (already in baseline — guard) ─────
+    resume_cols = {col['name'] for col in inspector.get_columns('user_resumes')}
+    if 'cv_name' not in resume_cols:
+        op.add_column('user_resumes', sa.Column('cv_name', sa.String(length=200), nullable=False, server_default='My Resume'))
+    if 'cv_type' not in resume_cols:
+        op.add_column('user_resumes', sa.Column('cv_type', sa.String(length=100), nullable=False, server_default='Software Developer'))
+    if 'file_name' not in resume_cols:
+        op.add_column('user_resumes', sa.Column('file_name', sa.String(length=255), nullable=False, server_default='resume.pdf'))
+    if 'file_path' not in resume_cols:
+        op.add_column('user_resumes', sa.Column('file_path', sa.String(length=500), nullable=False, server_default=''))
+    if 'file_size' not in resume_cols:
+        op.add_column('user_resumes', sa.Column('file_size', sa.Integer(), nullable=False, server_default='0'))
 
 
 def downgrade() -> None:

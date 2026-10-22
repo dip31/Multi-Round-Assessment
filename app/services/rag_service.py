@@ -11,7 +11,10 @@ import json
 import logging
 from typing import Any, Dict, List, Optional
 
-from llama_index.core import PromptTemplate
+# llama_index.core.PromptTemplate was previously imported here but is unused
+# in this module (all LLM calls go through self._complete() via the groq SDK
+# directly). The import has been removed to avoid a hard dependency on
+# llama_index just for a class that is never referenced.
 from groq import Groq
 
 import fitz  # PyMuPDF
@@ -21,11 +24,11 @@ logger = logging.getLogger(__name__)
 
 class RAGOrchestrator:
     """Orchestrates RAG pipeline for resume analysis and question generation."""
-    
+
     def __init__(self, groq_api_key: str, openai_api_key: Optional[str] = None):
         """
         Initialize RAG orchestrator with LLM and embeddings.
-        
+
         Args:
             groq_api_key: Groq API key for LLM
             openai_api_key: Optional OpenAI API key for embeddings (defaults to local)
@@ -33,7 +36,7 @@ class RAGOrchestrator:
         self.client = Groq(api_key=groq_api_key)
         self.model = "llama-3.3-70b-versatile"
         self.groq_llm = None
-        
+
         self.index = None
         self.query_engine = None
 
@@ -45,14 +48,14 @@ class RAGOrchestrator:
             max_tokens=max_tokens,
         )
         return completion.choices[0].message.content or ""
-    
+
     def parse_resume(self, file_bytes: bytes) -> Dict[str, Any]:
         """
         Parse PDF resume using LlamaIndex document parsing.
-        
+
         Args:
             file_bytes: PDF file content as bytes
-            
+
         Returns:
             Dictionary with extracted information:
             - skills: List of identified skills
@@ -69,7 +72,7 @@ class RAGOrchestrator:
                 page = doc[page_num]
                 full_text += str(page.get_text())
             doc.close()
-            
+
             # Use Groq to extract structured information
             extraction_prompt = """
             Analyze this resume and extract the following information in JSON format:
@@ -89,15 +92,15 @@ class RAGOrchestrator:
                 ],
                 "summary": "brief professional summary"
             }}
-            
+
             Resume Content:
             {resume_text}
-            
+
             Return ONLY valid JSON, no additional text.
             """.format(resume_text=full_text)
-            
+
             response_text = self._complete(extraction_prompt)
-            
+
             # Clean up response text in case groq adds markdown ticks
             cleaned_text = response_text.strip()
             if cleaned_text.startswith("```json"):
@@ -107,17 +110,17 @@ class RAGOrchestrator:
             if cleaned_text.endswith("```"):
                 cleaned_text = cleaned_text[:-3]
             cleaned_text = cleaned_text.strip()
-            
+
             # Parse JSON response
             try:
                 extracted_data = json.loads(cleaned_text)
             except json.JSONDecodeError:
                 # If JSON parsing fails, use fallback extraction
                 extracted_data = self._fallback_extraction(full_text)
-            
+
             extracted_data["full_content"] = full_text
             return extracted_data
-            
+
         except Exception as e:
             logger.error(f"Resume parsing failed: {str(e)}")
             return {
@@ -128,7 +131,7 @@ class RAGOrchestrator:
                 "summary": "",
                 "full_content": ""
             }
-    
+
     def _fallback_extraction(self, text: str) -> Dict[str, Any]:
         """Fallback extraction using simple keyword matching."""
         skill_keywords = {
@@ -138,9 +141,9 @@ class RAGOrchestrator:
             "Flask", "Kubernetes", "Redis", "REST API", "Data Structures",
             "Algorithms", "Computer Vision", "NLP", "Deep Learning"
         }
-        
+
         found_skills = [skill for skill in skill_keywords if skill.lower() in text.lower()]
-        
+
         return {
             "skills": found_skills,
             "projects": [],
@@ -148,18 +151,18 @@ class RAGOrchestrator:
             "education": [],
             "summary": text[:200] + "..." if len(text) > 200 else text,
         }
-    
+
     def build_resume_index(self, resume_text: str) -> None:
         """
         Build vector index for resume content for RAG queries.
-        
+
         Args:
             resume_text: Full resume text content
         """
         logger.info("Resume vector indexing is disabled; using LLM-only question generation")
         self.index = None
         self.query_engine = None
-    
+
     def generate_questions(
         self,
         resume_data: Dict,
@@ -168,42 +171,42 @@ class RAGOrchestrator:
     ) -> List[Dict]:
         """
         Generate interview questions based on resume content using RAG.
-        
+
         Args:
             resume_data: Extracted resume data from parse_resume()
             count: Number of questions to generate (default 12)
             difficulty: Question difficulty level (easy, medium, hard)
-            
+
         Returns:
             List of generated questions with metadata
         """
         try:
             # Build index from resume
             self.build_resume_index(resume_data.get("full_content", ""))
-            
+
             # Create prompt for question generation
             question_prompt = f"""
-            Based on the candidate's resume, generate {count} interview questions 
+            Based on the candidate's resume, generate {count} interview questions
             with difficulty level: {difficulty}.
-            
+
             Candidate Profile:
             - Skills: {', '.join(resume_data.get('skills', []))}
             - Projects: {json.dumps(resume_data.get('projects', []), indent=2)}
             - Experience: {json.dumps(resume_data.get('experience', []), indent=2)}
             - Summary: {resume_data.get('summary', '')}
-            
+
             Generate questions that:
             1. Are relevant to their specific skills and experience
             2. Assess technical knowledge and problem-solving
             3. Include behavioral and situational questions
             4. Match the specified difficulty level
-            
+
             Return as JSON array of objects with fields:
             {{"question": "text", "difficulty": "level", "topic": "category", "type": "technical|behavioral|situational"}}
             """
-            
+
             response_text = self._complete(question_prompt)
-            
+
             try:
                 questions = json.loads(response_text)
                 # Ensure questions have required fields
@@ -220,17 +223,17 @@ class RAGOrchestrator:
             except json.JSONDecodeError:
                 logger.warning("Failed to parse generated questions, returning defaults")
                 return self._generate_default_questions(resume_data, count)
-            
+
         except Exception as e:
             logger.error(f"Question generation failed: {str(e)}")
             return self._generate_default_questions(resume_data, count)
-    
+
     def _generate_default_questions(self, resume_data: Dict, count: int) -> List[Dict]:
         """Generate default questions as fallback."""
         skills = resume_data.get("skills", [])
-        
+
         default_questions = [
-            {"question": f"Tell me about your experience with {skills[0] if skills else 'your technical skills'}", 
+            {"question": f"Tell me about your experience with {skills[0] if skills else 'your technical skills'}",
              "difficulty": "easy", "topic": "Experience", "type": "behavioral"},
             {"question": "Describe a challenging project you've worked on and how you overcame obstacles",
              "difficulty": "medium", "topic": "Problem Solving", "type": "behavioral"},
@@ -239,22 +242,22 @@ class RAGOrchestrator:
             {"question": "Explain your understanding of software design principles",
              "difficulty": "hard", "topic": "Technical", "type": "technical"},
         ]
-        
+
         return default_questions[:count]
-    
+
     def query_resume(self, query: str) -> str:
         """
         Query the resume index for specific information.
-        
+
         Args:
             query: Natural language query about the resume
-            
+
         Returns:
             Response from the resume based on the query
         """
         if not self.query_engine:
             return "Resume index not initialized or query engine unavailable"
-        
+
         try:
             response = self.query_engine.query(query)
             return str(response)

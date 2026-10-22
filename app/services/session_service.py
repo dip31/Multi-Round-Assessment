@@ -6,12 +6,20 @@ M2-E: Context-aware session creation with policy-driven timing.
 from datetime import datetime, timedelta
 from typing import Optional
 
+from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config.settings import settings
 from app.models.assessment import AssessmentRound, AssessmentSession
 from app.models.assessment_context import AssessmentContext
+from app.models.interview import InterviewSession
+from app.models.mock_drive import MockDrive
+from app.services.mock_drive_service import (
+    _mock_round_key_for_round,
+    _enabled_rounds_in_order,
+    advance_mock_drive_round,
+)
 
 
 SESSION_TIMEOUT_MINUTES: int = getattr(settings, "SESSION_TIMEOUT_MINUTES", 180)
@@ -34,13 +42,13 @@ def _session_expiry(started_at: datetime, context: Optional[AssessmentContext] =
         duration_minutes = context.policy.session_duration_minutes
     else:
         duration_minutes = SESSION_TIMEOUT_MINUTES
-    
+
     expiry = started_at + timedelta(minutes=duration_minutes)
-    
+
     # Respect availability window if set
     if context and context.availability_end:
         expiry = min(expiry, context.availability_end)
-    
+
     return expiry
 
 
@@ -50,7 +58,7 @@ def _round_expiry(started_at: datetime, context: Optional[AssessmentContext] = N
         duration_minutes = context.policy.round_duration_minutes
     else:
         duration_minutes = ROUND_TIMEOUT_MINUTES
-    
+
     return started_at + timedelta(minutes=duration_minutes)
 
 
@@ -88,8 +96,85 @@ def _expire_stale_session(db: Session, user_id: int) -> None:
 
 
 def _expire_stale_rounds(db: Session, session_id: int) -> None:
-    """Expire overdue active rounds before returning them to callers."""
+    """Expire overdue active rounds before returning them to callers.
+
+    For mock drive sessions, also finalize expired rounds with TIME_EXPIRED
+    completion reason and advance the mock drive to the next round.
+    """
     now = _now()
+    expired_rounds = (
+        db.query(AssessmentRound)
+        .filter(
+            AssessmentRound.session_id == session_id,
+            AssessmentRound.status == "active",
+            AssessmentRound.expires_at.isnot(None),
+            AssessmentRound.expires_at <= now,
+        )
+        .all()
+    )
+
+    if not expired_rounds:
+        return
+
+    session = db.query(AssessmentSession).filter(AssessmentSession.id == session_id).first()
+    if session is None or session.context is None or session.context.mock_drive_id is None:
+        # Not a mock drive session - just mark as expired
+        db.query(AssessmentRound).filter(
+            AssessmentRound.session_id == session_id,
+            AssessmentRound.status == "active",
+            AssessmentRound.expires_at.isnot(None),
+            AssessmentRound.expires_at <= now,
+        ).update(
+            {"status": "expired", "completed_at": now},
+            synchronize_session="fetch",
+        )
+        db.commit()
+        return
+
+    # Mock drive session: delegate to advance_mock_drive_round which handles
+    # expiry detection, TIME_EXPIRED finalization, and round advancement
+    ctx = session.context
+    drive = db.query(MockDrive).filter(MockDrive.id == ctx.mock_drive_id).first()
+    if drive is None:
+        # Fallback: just mark expired
+        db.query(AssessmentRound).filter(
+            AssessmentRound.session_id == session_id,
+            AssessmentRound.status == "active",
+            AssessmentRound.expires_at.isnot(None),
+            AssessmentRound.expires_at <= now,
+        ).update(
+            {"status": "expired", "completed_at": now},
+            synchronize_session="fetch",
+        )
+        db.commit()
+        return
+
+    # For mock drive sessions, let advance_mock_drive_round handle
+    # expiry finalization and advancement. We just need to trigger it
+    # for the first expired round (it will handle all expired rounds).
+    first_expired = expired_rounds[0]
+    try:
+        advance_mock_drive_round(
+            db=db,
+            mock_drive_id=drive.id,
+            student_id=session.user_id,
+        )
+    except HTTPException:
+        # Advance failed (e.g., already completed) - that's fine
+        # Still need to mark all expired rounds as expired
+        db.query(AssessmentRound).filter(
+            AssessmentRound.session_id == session_id,
+            AssessmentRound.status == "active",
+            AssessmentRound.expires_at.isnot(None),
+            AssessmentRound.expires_at <= now,
+        ).update(
+            {"status": "expired", "completed_at": now},
+            synchronize_session="fetch",
+        )
+        db.commit()
+        return
+
+    # Ensure all expired rounds are marked as expired
     db.query(AssessmentRound).filter(
         AssessmentRound.session_id == session_id,
         AssessmentRound.status == "active",
@@ -154,9 +239,28 @@ def get_active_session(
     return query.order_by(AssessmentSession.id.desc()).first()
 
 
+def is_mock_drive_session(db: Session, session: AssessmentSession) -> bool:
+    """Return True when the session is backed by a Mock Drive context.
+
+    Mock Drive attempts are advanced and completed exclusively through the Mock
+    Drive lifecycle (which runs the competency-mapping finalizer). The generic
+    one-shot session endpoints must not be used for them, otherwise the mapping
+    step and per-candidate completion could be bypassed.
+    """
+    context_id = getattr(session, "context_id", None)
+    if context_id is None:
+        return False
+    context = (
+        db.query(AssessmentContext)
+        .filter(AssessmentContext.id == context_id)
+        .first()
+    )
+    return context is not None and context.mock_drive_id is not None
+
+
 def create_session(db: Session, user_id: int, context_id: Optional[int] = None) -> AssessmentSession:
     """Start or return the user's existing active session idempotently.
-    
+
     M2-E: Context-aware session creation.
     - If context_id provided, uses policy from context
     - Otherwise falls back to legacy behavior
@@ -166,12 +270,12 @@ def create_session(db: Session, user_id: int, context_id: Optional[int] = None) 
         return existing
 
     started_at = _now()
-    
+
     # Fetch context for policy-driven timing
     context = None
     if context_id:
         context = db.query(AssessmentContext).filter(AssessmentContext.id == context_id).first()
-    
+
     session = AssessmentSession(
         user_id=user_id,
         context_id=context_id,
@@ -284,9 +388,9 @@ def start_round(
     practice_type: Optional[str] = None,
 ) -> AssessmentRound:
     """Activate one round for an active session, idempotently.
-    
+
     M2-E: Context-aware round expiry from policy.
-    
+
     Args:
         practice_type: Optional practice variant (mcq/technical/combined/coding/interview)
                       Used for independent practice sessions to track the specific practice type
@@ -328,14 +432,14 @@ def start_round(
             .order_by(AssessmentRound.id.desc())
             .first()
         )
-    
+
     started_at = _now()
-    
+
     # Get context for policy-driven timing
     context = None
     if session.context_id:
         context = db.query(AssessmentContext).filter(AssessmentContext.id == session.context_id).first()
-    
+
     assessment_round = pending or AssessmentRound(
         session_id=session_id,
         round_type=round_type,
@@ -346,6 +450,33 @@ def start_round(
     assessment_round.status = "active"
     assessment_round.started_at = started_at
     assessment_round.expires_at = _round_expiry(started_at, context)
+    if context and context.blueprint_snapshot:
+        from app.services.assessment_blueprint_service import (
+            configured_question_count,
+            get_blueprint_round_config,
+            get_session_active_blueprint_round_config,
+        )
+
+        if practice_type:
+            # Mock Drive rounds carry a canonical round key (e.g.
+            # "technical_interview" / "hr_interview") that disambiguates rounds
+            # sharing the same AssessmentRound.round_type ("interview"). Resolve
+            # the configuration by that key so each round gets its own configured
+            # duration instead of the first same-type round's.
+            round_config = get_blueprint_round_config(
+                context.blueprint_snapshot, practice_type
+            )
+        else:
+            _, round_config, _ = get_session_active_blueprint_round_config(
+                db, session_id, round_type
+            )
+        if round_config:
+            configured_count = configured_question_count(round_config)
+            if configured_count is not None:
+                assessment_round.max_questions = configured_count
+            time_limit = round_config.get("time_limit_minutes")
+            if isinstance(time_limit, (int, float)) and not isinstance(time_limit, bool) and time_limit > 0:
+                assessment_round.expires_at = started_at + timedelta(minutes=int(time_limit))
     if practice_type and not pending:  # Set practice_type for new rounds
         assessment_round.practice_type = practice_type
     db.add(assessment_round)
@@ -361,9 +492,14 @@ def start_round(
     return assessment_round
 
 
-def create_round(db: Session, session_id: int, round_type: str) -> AssessmentRound:
+def create_round(
+    db: Session,
+    session_id: int,
+    round_type: str,
+    practice_type: Optional[str] = None,
+) -> AssessmentRound:
     """Compatibility wrapper for existing module services."""
-    return start_round(db, session_id, round_type)
+    return start_round(db, session_id, round_type, practice_type)
 
 
 def complete_round(

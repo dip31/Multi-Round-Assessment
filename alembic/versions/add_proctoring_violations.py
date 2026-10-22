@@ -19,19 +19,24 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # Create proctoring_violations table
-    op.create_table('proctoring_violations',
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('session_id', sa.Integer(), nullable=False),
-        sa.Column('event_type', sa.String(length=50), nullable=False),
-        sa.Column('confidence_score', sa.Float(), nullable=True),
-        sa.Column('face_count', sa.Integer(), nullable=True),
-        sa.Column('metadata', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
-        sa.Column('created_at', sa.DateTime(), server_default=sa.text('NOW()'), nullable=True),
-        sa.ForeignKeyConstraint(['session_id'], ['interview_sessions.id'], ondelete='CASCADE'),
-        sa.PrimaryKeyConstraint('id')
-    )
-    op.create_index('idx_violations_session', 'proctoring_violations', ['session_id', 'created_at'], unique=False)
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    existing_tables = inspector.get_table_names()
+    if 'proctoring_violations' not in existing_tables:
+        op.create_table('proctoring_violations',
+            sa.Column('id', sa.Integer(), nullable=False),
+            sa.Column('session_id', sa.Integer(), nullable=False),
+            sa.Column('event_type', sa.String(length=50), nullable=False),
+            sa.Column('confidence_score', sa.Float(), nullable=True),
+            sa.Column('face_count', sa.Integer(), nullable=True),
+            sa.Column('metadata', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+            sa.Column('created_at', sa.DateTime(), server_default=sa.text('NOW()'), nullable=True),
+            sa.ForeignKeyConstraint(['session_id'], ['interview_sessions.id'], ondelete='CASCADE'),
+            sa.PrimaryKeyConstraint('id')
+        )
+    indexes = {idx['name'] for idx in inspector.get_indexes('proctoring_violations')}
+    if 'idx_violations_session' not in indexes:
+        op.create_index('idx_violations_session', 'proctoring_violations', ['session_id', 'created_at'], unique=False)
 
 
 def downgrade() -> None:

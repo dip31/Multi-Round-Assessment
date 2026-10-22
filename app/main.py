@@ -91,6 +91,10 @@ add_cors_middleware(app)
 # ── Routers ───────────────────────────────────────────────────────────
 app.include_router(api_router)
 
+# Report admin routes (at /report/admin/... level, not under /api/v1/)
+from app.modules.report.routers.report_router import router as report_router
+app.include_router(report_router)
+
 
 # ── Health check ──────────────────────────────────────────────────────
 @app.get("/health", tags=["Health"])

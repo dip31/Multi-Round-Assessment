@@ -6,7 +6,7 @@ import api from './api';
 export const uploadResume = async (file) => {
     const formData = new FormData();
     formData.append('file', file);
-    
+
     const response = await api.post(
         `/interview/resume/upload`,
         formData,
@@ -42,6 +42,19 @@ export const startInterview = async (poolId) => {
 };
 
 /**
+ * Idempotently start or resume the interview for the caller's active round.
+ *
+ * Unlike startInterview(poolId), this needs no pool id and is safe to call on
+ * every mount/refresh (e.g. resuming a Mock Drive interview round). The backend
+ * resolves the active interview round and returns the existing session when one
+ * is already in progress.
+ */
+export const startActiveInterview = async () => {
+    const response = await api.post(`/interview/session/start-active`);
+    return response.data;
+};
+
+/**
  * Get the next interview question
  */
 export const getNextQuestion = async (interviewId) => {
@@ -67,7 +80,7 @@ export const submitResponse = async (interviewId, transcript, responseTimeSec, b
 export const transcribeAudio = async (audioBlob) => {
     const formData = new FormData();
     formData.append('audio', audioBlob, 'audio.webm');
-    
+
     const response = await api.post('/interview/stt', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
     });
@@ -76,10 +89,10 @@ export const transcribeAudio = async (audioBlob) => {
 
 /**
  * Synthesize speech from text using Sarvam Bulbul v3 API
- * 
+ *
  * Returns WAV audio bytes (ArrayBuffer). Must use responseType: 'arraybuffer'
  * to get binary data instead of coercing to string.
- * 
+ *
  * @param {string} text - Interview question or statement text
  * @returns {Promise<ArrayBuffer>} Raw WAV audio bytes
  * @throws Error if TTS service fails (non-blocking to interview flow)
@@ -90,7 +103,7 @@ export const synthesizeSpeech = async (text) => {
         response = await api.post(
             `/interview/tts?text=${encodeURIComponent(text)}`,
             null,
-            { 
+            {
                 responseType: 'arraybuffer',  // Critical: fetch as binary, not string
                 timeout: 30000,               // 30s timeout for TTS
             }

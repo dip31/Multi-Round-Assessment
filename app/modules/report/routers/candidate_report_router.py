@@ -62,14 +62,14 @@ def get_candidate_analytics(
     current_user: User = Depends(get_current_user),
 ) -> AnalyticsResponse:
     """Get comprehensive analytics for the current candidate."""
-    
+
     user_id = current_user.id
-    
+
     # Get all sessions for this user
     sessions = db.query(AssessmentSession).filter(
         AssessmentSession.user_id == user_id
     ).all()
-    
+
     if not sessions:
         return AnalyticsResponse(
             overall_score=0,
@@ -82,13 +82,13 @@ def get_candidate_analytics(
             optimization_areas=[],
             avg_response_time=0
         )
-    
+
     # Get all rounds for all sessions
     session_ids = [s.id for s in sessions]
     rounds = db.query(AssessmentRound).filter(
         AssessmentRound.session_id.in_(session_ids)
     ).all()
-    
+
     completed_rounds = []
     skill_breakdown = []
     session_history = []
@@ -96,7 +96,7 @@ def get_candidate_analytics(
     correct_answers = 0
     total_response_time = 0
     response_count = 0
-    
+
     TECHNICAL_TOPIC_NAMES = {
         "Operating Systems",
         "Computer Networks",
@@ -107,7 +107,7 @@ def get_candidate_analytics(
 
     # 1. Aptitude & Practice Round metrics
     completed_apt_rounds = [
-        r for r in rounds 
+        r for r in rounds
         if r.round_type in ("aptitude", "mcq", "technical", "combined") and r.status == "completed"
     ]
     if completed_apt_rounds:
@@ -116,17 +116,17 @@ def get_candidate_analytics(
         attempts = db.query(AptitudeAttempt).filter(
             AptitudeAttempt.round_id.in_(apt_round_ids)
         ).all()
-        
+
         apt_total = len(attempts)
         apt_correct = sum(1 for a in attempts if a.is_correct)
         total_questions += apt_total
         correct_answers += apt_correct
-        
+
         for a in attempts:
             if a.response_time:
                 total_response_time += a.response_time
                 response_count += 1
-        
+
         # Topic-level and Technical Subject-level breakdown
         topic_groups = {}
         for a in attempts:
@@ -150,18 +150,18 @@ def get_candidate_analytics(
                 name="Quantitative Aptitude",
                 score=round(apt_score * 100, 1)
             ))
-        
+
         for r in completed_apt_rounds:
             dur = f"{max(1, int((r.completed_at - r.started_at).total_seconds() // 60))}m" if r.completed_at and r.started_at else "30m"
             r_attempts = [a for a in attempts if a.round_id == r.id]
             r_topics = {a.question.topic.name for a in r_attempts if a.question and a.question.topic}
-            
+
             # Determine authoritative round label
-            if r.round_type == "technical":
+            if r.practice_type == "technical" or r.round_type == "technical":
                 round_label = "Technical Round"
-            elif r.round_type == "combined":
+            elif r.practice_type == "combined" or r.round_type == "combined":
                 round_label = "Combined Round"
-            elif r.round_type == "mcq":
+            elif r.practice_type == "mcq" or r.round_type == "mcq":
                 round_label = "MCQ Round"
             else:
                 has_tech = any(t in TECHNICAL_TOPIC_NAMES for t in r_topics)
@@ -180,30 +180,30 @@ def get_candidate_analytics(
                 score=round((r.score or 0.0) * 100, 1),
                 duration=dur
             ))
-    
+
     # 2. Coding metrics
     completed_cod_rounds = [r for r in rounds if r.round_type == "coding" and r.status == "completed"]
     if completed_cod_rounds:
         completed_rounds.append("coding")
         cod_round_ids = [r.id for r in completed_cod_rounds]
-        
+
         from app.models.coding import CodingSubmission
         cod_submissions = db.query(CodingSubmission).filter(
             CodingSubmission.round_id.in_(cod_round_ids)
         ).all()
-        
+
         cod_total = len(cod_submissions)
         cod_correct = sum(1 for s in cod_submissions if (s.score or 0) >= 0.7)
         total_questions += cod_total
         correct_answers += cod_correct
-        
+
         latest_cod = completed_cod_rounds[-1]
         coding_score = latest_cod.score if latest_cod.score is not None else 0.0
         skill_breakdown.append(SkillBreakdownItem(
             name="Coding Proficiency",
             score=round(coding_score * 100, 1)
         ))
-        
+
         for r in completed_cod_rounds:
             dur = f"{max(1, int((r.completed_at - r.started_at).total_seconds() // 60))}m" if r.completed_at and r.started_at else "30m"
             session_history.append(SessionHistoryItem(
@@ -213,49 +213,55 @@ def get_candidate_analytics(
                 score=round((r.score or 0.0) * 100, 1),
                 duration=dur
             ))
-    
+
     # 3. Interview metrics
     interview_sessions = db.query(InterviewSession).filter(
         InterviewSession.session_id.in_(session_ids)
     ).all()
     completed_int_rounds = [
-        r for r in rounds 
-        if r.round_type in ("interview", "technical_interview", "hr_interview", "communication_interview") 
+        r for r in rounds
+        if r.round_type in ("interview", "technical_interview", "hr_interview", "communication_interview")
         and r.status == "completed"
     ]
     completed_int_sessions = [s for s in interview_sessions if s.phase == "COMPLETE" or s.status == "COMPLETED"]
-    
+
     if completed_int_rounds or completed_int_sessions:
         if "interview" not in completed_rounds:
             completed_rounds.append("interview")
-        
+
         interview_session_ids = [s.id for s in interview_sessions]
         turns = db.query(InterviewTurn).filter(
             InterviewTurn.interview_id.in_(interview_session_ids),
             InterviewTurn.is_followup == False
         ).all()
-        
+
         int_total = len(turns)
         int_correct = sum(1 for t in turns if t.final_score and t.final_score >= 0.5)
         total_questions += int_total
         correct_answers += int_correct
-        
+
         for t in turns:
             if t.response_time_sec:
                 total_response_time += t.response_time_sec
                 response_count += 1
-        
+
         latest_int = completed_int_rounds[-1] if completed_int_rounds else None
         int_score = latest_int.score if latest_int and latest_int.score is not None else 0.0
         if not int_score and completed_int_sessions:
             int_score = 0.8
-        
+
         skill_breakdown.append(SkillBreakdownItem(
             name="Interview Simulation",
             score=round(int_score * 100, 1)
         ))
-        
+
         def resolve_interview_label(sess, rnd=None):
+            if rnd and rnd.practice_type in ("hr", "hr_interview"):
+                return "HR Interview"
+            if rnd and rnd.practice_type in ("communication", "communication_interview"):
+                return "Communication Interview"
+            if rnd and rnd.practice_type in ("technical", "technical_interview"):
+                return "Technical Interview"
             if rnd and rnd.round_type == "hr_interview":
                 return "HR Interview"
             if rnd and rnd.round_type == "communication_interview":
@@ -298,7 +304,7 @@ def get_candidate_analytics(
                     score=round(int_score * 100, 1),
                     duration="25m"
                 ))
-    
+
     # Calculate overall metrics
     scored_rounds = [r.score for r in rounds if r.status == "completed" and r.score is not None and r.score > 0]
     best_session = max(sessions, key=lambda s: s.total_score or 0) if sessions else None
@@ -310,10 +316,10 @@ def get_candidate_analytics(
         overall_score = round(sum(s.score for s in skill_breakdown) / len(skill_breakdown), 1)
     else:
         overall_score = 0.0
-    
+
     accuracy = round((correct_answers / total_questions * 100), 1) if total_questions > 0 else 0.0
     avg_response_time = round(total_response_time / response_count, 1) if response_count > 0 else 0.0
-    
+
     # Calculate percentile against student cohort with scores
     if total_questions == 0 and overall_score == 0:
         percentile = None
@@ -325,7 +331,7 @@ def get_candidate_analytics(
             AssessmentSession.total_score != None,
             AssessmentSession.total_score > 0
         ).all()
-        
+
         all_scores = [float(s[0]) for s in all_scores if s[0] is not None]
         if len(all_scores) > 1 and overall_score > 0:
             scores_below = sum(1 for s in all_scores if (s * 100) < overall_score)
@@ -334,7 +340,7 @@ def get_candidate_analytics(
             percentile = 100
         else:
             percentile = None
-    
+
     # Generate transparent rule-based optimization insights
     optimization_areas = []
     for skill in skill_breakdown:
@@ -350,14 +356,14 @@ def get_candidate_analytics(
                 description=f"Your {skill.name.lower()} score shows room for improvement. Consider additional practice rounds.",
                 severity="info"
             ))
-    
+
     if avg_response_time > 60:
         optimization_areas.append(OptimizationArea(
             title="Response Time Pacing",
             description=f"Your average response time ({avg_response_time}s) is above benchmark (60s). Practice under timed conditions.",
             severity="info"
         ))
-    
+
     return AnalyticsResponse(
         overall_score=overall_score,
         accuracy=accuracy,
@@ -776,6 +782,86 @@ def get_detailed_student_analytics(
         "recent_activity": latest_completed.strftime("%b %d, %Y") if latest_completed else "No activity yet",
     }
 
+    # Mock Drive History (Phase 4D) - student's authorized publishable drives
+    mock_drive_history = []
+    from app.models.assessment import AssessmentContext
+    from app.models.mock_drive import MockDrive
+    student_sessions = (
+        db.query(AssessmentSession)
+        .join(AssessmentContext, AssessmentSession.id == AssessmentContext.session_id)
+        .filter(AssessmentContext.purpose == "mock_drive", AssessmentSession.user_id == user_id)
+        .order_by(AssessmentSession.started_at.desc())
+        .all()
+    )
+    for sess in student_sessions:
+        ctx = db.query(AssessmentContext).filter(AssessmentContext.session_id == sess.id).first()
+        if not ctx:
+            continue
+        # Get rounds for this session
+        session_rounds = (
+            db.query(AssessmentRound)
+            .filter(AssessmentRound.session_id == sess.id, AssessmentRound.status == "completed", AssessmentRound.score.isnot(None))
+            .all()
+        )
+        # Get competency evidence mappings
+        from app.models.competency import CompetencyEvidenceMapping
+        mappings = db.query(CompetencyEvidenceMapping).filter(CompetencyEvidenceMapping.session_id == sess.id).all()
+        # Get blueprint snapshot for competency names
+        snapshot = ctx.blueprint_snapshot or {}
+        comp_names = {}
+        if isinstance(snapshot, dict):
+            for c in snapshot.get("competencies", []):
+                if isinstance(c, dict) and "id" in c and "name" in c:
+                    comp_names[c["id"]] = c["name"]
+
+        # Compute per-competency summary
+        comp_summary = []
+        by_competency = {}
+        for m in mappings:
+            cid = m.competency_id
+            by_competency.setdefault(cid, []).append({
+                "normalized_score": m.normalized_score,
+                "evidence_count": m.evidence_count,
+                "status": m.competency_status,
+            })
+        for cid, rows in sorted(by_competency.items()):
+            scores = [r["normalized_score"] for r in rows if r["normalized_score"] is not None]
+            ev_counts = [r["evidence_count"] for r in rows]
+            comp_summary.append({
+                "competency_id": str(cid),
+                "competency_name": comp_names.get(cid, f"Competency {cid}"),
+                "avg_score": round(sum(scores) / len(scores), 2) if scores else None,
+                "total_evidence": sum(ev_counts),
+                "max_evidence": max(ev_counts) if ev_counts else 0,
+                "assessed_count": sum(1 for s in [r["status"] for r in rows] if s == "assessed"),
+            })
+
+        # Determine overall drive status
+        if not session_rounds:
+            overall_status = "not_started"
+            overall_score = None
+        elif all(r.score is not None and r.score > 0 for r in session_rounds):
+            overall_score = round(sum(r.score for r in session_rounds) / len(session_rounds), 2)
+            overall_status = "final"
+        else:
+            overall_status = "provisional"
+            overall_score = round(sum(r.score for r in session_rounds) / len(session_rounds), 2)
+
+        # Get Mock Drive info
+        mock_drive = db.query(MockDrive).filter(MockDrive.id == ctx.mock_drive_id).first() if ctx.mock_drive_id else None
+
+        mock_drive_history.append({
+            "mock_drive_id": ctx.mock_drive_id,
+            "drive_name": mock_drive.company_name if mock_drive else f"Drive {ctx.mock_drive_id}",
+            "target_role": mock_drive.target_role if mock_drive else "",
+            "status": overall_status,
+            "overall_score": overall_score,
+            "round_count": len(session_rounds),
+            "competency_count": len(comp_summary),
+            "competencies": comp_summary,
+            "completed_at": sess.completed_at.strftime("%b %d, %Y") if sess.completed_at else "In progress",
+        })
+
     return {
         "overview": {
             "overall_readiness": overall_readiness,
@@ -797,4 +883,5 @@ def get_detailed_student_analytics(
         "focus_areas": focus_areas,
         "recommendation": recommendation,
         "consistency": consistency,
+        "mock_drive_history": mock_drive_history,
     }

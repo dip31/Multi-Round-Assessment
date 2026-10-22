@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 class AssessmentPolicy(Base):
     """Defines the rules and constraints for assessments.
-    
+
     Backend-authoritative policy enforcement for:
     - Session/round duration
     - Attempt limits
@@ -64,7 +64,7 @@ class AssessmentPolicy(Base):
 
 class AssessmentContext(Base):
     """Represents the purpose and configuration of an assessment.
-    
+
     Answers: Why does this assessment session exist?
     Links sessions to their mode (practice/portfolio/mock_drive) and policy.
     """
@@ -80,26 +80,47 @@ class AssessmentContext(Base):
     student_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=True, index=True
     )  # Student owner (for practice)
-    
+
     # Future fields - placeholders for Mock Drive/Portfolio
     company_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)  # Placeholder until Company model exists
     target_role: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     jd_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Placeholder until JD model exists
-    
+
+    # MockDrive link — populated when mode="mock_drive"
+    mock_drive_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("mock_drives.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    blueprint_snapshot: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+
+    # Competency evidence mapping lifecycle (Phase 4C reliability). NULL for
+    # contexts that never ran mapping (non-Mock-Drive / legacy). For Mock Drive
+    # contexts: "pending" until an attempt finishes, then "completed",
+    # "not_applicable" (no configured competencies), or "failed" (retryable).
+    competency_mapping_status: Mapped[Optional[str]] = mapped_column(
+        String(20), nullable=True
+    )
+    competency_mapping_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    competency_mapping_attempted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
+    competency_mapping_completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, nullable=True
+    )
+
     # Availability window
     availability_start: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     availability_end: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    
+
     # Policy
     policy_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("assessment_policies.id"), nullable=False
     )
-    
+
     # Status
     status: Mapped[str] = mapped_column(
         String(20), default="active", nullable=False
     )  # active | completed | cancelled
-    
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

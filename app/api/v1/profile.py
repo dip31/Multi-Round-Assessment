@@ -186,6 +186,9 @@ def get_cohort_students(
             "twelfth_marks": sp.twelfth_marks if sp else None,
             "overall_score": round(overall_score, 2),
             "session_status": session_status,
+            "session_time_remaining_seconds": (
+                latest_session.time_remaining_seconds if latest_session else None
+            ),
             "rounds": rounds_info,
         })
 

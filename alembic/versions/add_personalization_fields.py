@@ -19,53 +19,33 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+
     # ── interview_sessions: add 6 personalization metadata columns ────
-    op.add_column(
-        'interview_sessions',
-        sa.Column('extraction_confidence', sa.String(length=10), nullable=True)
-    )
-    op.add_column(
-        'interview_sessions',
-        sa.Column('retrieval_success_rate', sa.Float(), nullable=True)
-    )
-    op.add_column(
-        'interview_sessions',
-        sa.Column('question_personalization_rate', sa.Float(), nullable=True)
-    )
-    op.add_column(
-        'interview_sessions',
-        sa.Column('personalization_metadata', postgresql.JSONB(astext_type=sa.Text()), nullable=True)
-    )
-    op.add_column(
-        'interview_sessions',
-        sa.Column('follow_up_quality_score', sa.Float(), nullable=True)
-    )
-    op.add_column(
-        'interview_sessions',
-        sa.Column('personalization_warnings', postgresql.JSONB(astext_type=sa.Text()), nullable=True)
-    )
+    is_cols = {col['name'] for col in inspector.get_columns('interview_sessions')}
+    for col_name, col_def in [
+        ('extraction_confidence',        sa.Column('extraction_confidence', sa.String(length=10), nullable=True)),
+        ('retrieval_success_rate',       sa.Column('retrieval_success_rate', sa.Float(), nullable=True)),
+        ('question_personalization_rate',sa.Column('question_personalization_rate', sa.Float(), nullable=True)),
+        ('personalization_metadata',     sa.Column('personalization_metadata', postgresql.JSONB(astext_type=sa.Text()), nullable=True)),
+        ('follow_up_quality_score',      sa.Column('follow_up_quality_score', sa.Float(), nullable=True)),
+        ('personalization_warnings',     sa.Column('personalization_warnings', postgresql.JSONB(astext_type=sa.Text()), nullable=True)),
+    ]:
+        if col_name not in is_cols:
+            op.add_column('interview_sessions', col_def)
 
     # ── interview_turns: add 5 personalization metadata columns ───────
-    op.add_column(
-        'interview_turns',
-        sa.Column('personalization_source', sa.String(length=200), nullable=True)
-    )
-    op.add_column(
-        'interview_turns',
-        sa.Column('question_grounding_confidence', sa.Float(), nullable=True)
-    )
-    op.add_column(
-        'interview_turns',
-        sa.Column('answer_classification', postgresql.JSONB(astext_type=sa.Text()), nullable=True)
-    )
-    op.add_column(
-        'interview_turns',
-        sa.Column('followup_grounding_score', sa.Float(), nullable=True)
-    )
-    op.add_column(
-        'interview_turns',
-        sa.Column('followup_targeted_aspect', sa.String(length=200), nullable=True)
-    )
+    it_cols = {col['name'] for col in inspector.get_columns('interview_turns')}
+    for col_name, col_def in [
+        ('personalization_source',           sa.Column('personalization_source', sa.String(length=200), nullable=True)),
+        ('question_grounding_confidence',    sa.Column('question_grounding_confidence', sa.Float(), nullable=True)),
+        ('answer_classification',            sa.Column('answer_classification', postgresql.JSONB(astext_type=sa.Text()), nullable=True)),
+        ('followup_grounding_score',         sa.Column('followup_grounding_score', sa.Float(), nullable=True)),
+        ('followup_targeted_aspect',         sa.Column('followup_targeted_aspect', sa.String(length=200), nullable=True)),
+    ]:
+        if col_name not in it_cols:
+            op.add_column('interview_turns', col_def)
 
 
 def downgrade() -> None:

@@ -19,10 +19,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        'approved_question_pools',
-        sa.Column('detected_role', sa.String(length=50), nullable=True),
-    )
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    existing_cols = {col['name'] for col in inspector.get_columns('approved_question_pools')}
+    if 'detected_role' not in existing_cols:
+        op.add_column(
+            'approved_question_pools',
+            sa.Column('detected_role', sa.String(length=50), nullable=True),
+        )
 
 
 def downgrade() -> None:

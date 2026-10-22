@@ -1,20 +1,75 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Navbar from '../components/Navbar';
 import api from '../services/api';
 import { Toast } from '../components/Toast';
 import PageSkeleton from '../components/shared/PageSkeleton';
+import TPOLayout, { TPOMenuButton } from '../components/TPOLayout';
+import CompanyPatternModal from '../components/CompanyPatternModal';
+import { buildPlacementIntelligence, placementIntelligenceUnavailable } from '../utils/placementIntelligence';
+import { Users, X, UserPlus, Download, Building2, CalendarX, TriangleAlert, ArrowRight, TrendingUp } from 'lucide-react';
+import { CartesianGrid, XAxis, YAxis, Tooltip, Legend, BarChart, LineChart, Line, ResponsiveContainer } from 'recharts';
+
+function csvEscape(v) {
+    if (v === null || v === undefined) return '';
+    const s = String(v);
+    const guarded = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s;
+    if (/[",\n\r]/.test(guarded)) {
+        return `"${guarded.replace(/"/g, '""')}"`;
+    }
+    return guarded;
+}
+
+function toCsv(headers, rows) {
+    const lines = [headers.map(csvEscape).join(',')];
+    for (const r of rows) lines.push(r.map(csvEscape).join(','));
+    return lines.join('\r\n');
+}
+
+function downloadBlob(content, filename, mime) {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+function fmtRound(r) {
+    return String(r).split('_').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+function driveRounds(d) {
+    if (Array.isArray(d.rounds) && d.rounds.length) return d.rounds;
+    const sr = d.selected_rounds || {};
+    return Object.keys(sr).filter((k) => sr[k]);
+}
+
+const STATUS_BADGE = {
+    active: { label: 'Active', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+    published: { label: 'Published', cls: 'bg-sky-50 text-sky-700 border-sky-200' },
+    draft: { label: 'Draft', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+    completed: { label: 'Completed', cls: 'bg-slate-100 text-slate-600 border-slate-200' },
+};
 
 export default function TPODashboard() {
     const [tpoUser, setTpoUser] = useState(null);
     const [students, setStudents] = useState([]);
     const [cohortStats, setCohortStats] = useState(null);
+    const [drives, setDrives] = useState([]);
+    const [rosters, setRosters] = useState({});
+    const [attentionAvailability, setAttentionAvailability] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [deptFilter, setDeptFilter] = useState('all');
-    const [eligibilityFilter, setEligibilityFilter] = useState('all');
-    const [selectedStudent, setSelectedStudent] = useState(null);
     const [toast, setToast] = useState(null);
+    const [exporting, setExporting] = useState(false);
+    const [studentModalOpen, setStudentModalOpen] = useState(false);
+    const [studentForm, setStudentForm] = useState({ name: '', email: '', password: '' });
+    const [studentSubmitting, setStudentSubmitting] = useState(false);
+    const [studentError, setStudentError] = useState(null);
+    const [companyModalOpen, setCompanyModalOpen] = useState(false);
+    const addStudentBtnRef = useRef(null);
 
     const navigate = useNavigate();
 
@@ -22,62 +77,217 @@ export default function TPODashboard() {
         loadTPOData();
     }, []);
 
-    const loadTPOData = async () => {
-        setLoading(true);
+    useEffect(() => {
+        if (!studentModalOpen) return;
+        const onKeyDown = (e) => {
+            if (e.key === 'Escape' && !studentSubmitting) closeStudentModal();
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [studentModalOpen, studentSubmitting]);
+
+    const loadTPOData = async (opts = {}) => {
+        const silent = opts.silent === true;
+        if (!silent) setLoading(true);
         try {
-            const [profRes, studentsRes, statsRes] = await Promise.all([
+            const [profRes, studentsRes, statsRes, drivesRes] = await Promise.all([
                 api.get('/profile/me'),
-                api.get('/profile/cohort/students').catch(() => ({ data: { students: [] } })),
+                api.get('/profile/cohort/students').catch(() => ({ data: null, attentionUnavailable: true })),
                 api.get('/report/admin/cohort-stats').catch(() => ({ data: null })),
+                api.get('/tpo/mock-drives').catch(() => ({ data: null, attentionUnavailable: true })),
             ]);
 
             setTpoUser(profRes.data);
-            setStudents(studentsRes.data?.students || []);
+            const studentList = Array.isArray(studentsRes.data?.students) ? studentsRes.data.students : [];
+            const studentsAvailable = !studentsRes.attentionUnavailable && Array.isArray(studentsRes.data?.students);
+            setStudents(studentList);
             setCohortStats(statsRes.data);
+            const drivesAvailable = !drivesRes.attentionUnavailable && Array.isArray(drivesRes.data);
+            const driveList = drivesAvailable ? drivesRes.data : [];
+            setDrives(driveList);
+
+            const rosterTargets = driveList
+                .filter((d) => d.status !== 'draft')
+                .sort((a, b) => (b.id || 0) - (a.id || 0))
+                .slice(0, 6);
+            const rosterPairs = await Promise.all(
+                rosterTargets.map((d) =>
+                    api.get(`/tpo/mock-drives/${d.id}/roster`)
+                        .then((r) => [d.id, r.data])
+                        .catch(() => [d.id, null])
+                )
+            );
+            const rostersAvailable = drivesAvailable && rosterPairs.every(([, data]) => data !== null);
+            setRosters(rosterPairs.reduce((acc, [id, data]) => {
+                if (data) acc[id] = data;
+                return acc;
+            }, {}));
+            setAttentionAvailability({ students: studentsAvailable, drives: drivesAvailable, rosters: rostersAvailable });
         } catch (err) {
+            setAttentionAvailability({ students: false, drives: false, rosters: false });
             setToast({ type: 'error', message: 'Failed to load TPO dashboard data' });
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     };
 
-    // Placement eligibility calculation: CGPA >= 7.0 and 0 backlogs
+    const openStudentModal = () => {
+        setStudentForm({ name: '', email: '', password: '' });
+        setStudentError(null);
+        setStudentModalOpen(true);
+    };
+
+    const closeStudentModal = () => {
+        if (studentSubmitting) return;
+        setStudentModalOpen(false);
+        setStudentError(null);
+        if (addStudentBtnRef.current) addStudentBtnRef.current.focus();
+    };
+
+    const submitStudent = async (e) => {
+        e.preventDefault();
+        const name = studentForm.name.trim();
+        const email = studentForm.email.trim();
+        if (!name) {
+            setStudentError('Full name is required.');
+            return;
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            setStudentError('Enter a valid email address.');
+            return;
+        }
+        if (studentForm.password.length < 8) {
+            setStudentError('Password must be at least 8 characters.');
+            return;
+        }
+        setStudentSubmitting(true);
+        setStudentError(null);
+        try {
+            await api.post('/auth/register', {
+                name,
+                email,
+                password: studentForm.password,
+                role: 'student',
+            });
+            setStudentModalOpen(false);
+            setStudentForm({ name: '', email: '', password: '' });
+            setToast({ type: 'success', message: `Student account created for ${email}.` });
+            loadTPOData({ silent: true });
+        } catch (err) {
+            const status = err?.response?.status;
+            const detail = err?.response?.data?.detail;
+            if (status === 409) {
+                setStudentError('Email already registered. Use a different email address.');
+            } else if (typeof detail === 'string' && detail.trim()) {
+                setStudentError(detail);
+            } else if (Array.isArray(detail) && detail.length) {
+                setStudentError(detail.map((d) => d.msg).join('; '));
+            } else {
+                setStudentError('Could not create the student account. Check the connection and try again.');
+            }
+        } finally {
+            setStudentSubmitting(false);
+        }
+    };
+
+    const handleExport = async () => {
+        if (exporting) return;
+        setExporting(true);
+        try {
+            const res = await api.get('/profile/cohort/students');
+            const list = Array.isArray(res.data?.students) ? res.data.students : [];
+            if (!list.length) {
+                setToast({ type: 'info', message: 'No candidate records to export.' });
+                return;
+            }
+            const headers = ['Name', 'Email', 'Roll Number', 'Department', 'CGPA', 'Backlogs', 'Graduation Year', 'Target Role', 'Session Status', 'Aptitude', 'Coding', 'Interview', 'Overall Score'];
+            const rows = list.map((s) => [
+                s.name,
+                s.email,
+                s.roll_number,
+                s.department,
+                s.cgpa,
+                s.backlogs_count,
+                s.graduation_year,
+                s.target_role,
+                s.session_status,
+                s.rounds?.aptitude?.status ?? '',
+                s.rounds?.coding?.status ?? '',
+                s.rounds?.interview?.status ?? '',
+                s.overall_score,
+            ]);
+            const ts = new Date().toISOString();
+            const metaCsv = `generated_at,${csvEscape(ts)}\r\nsource,${csvEscape('/profile/cohort/students')}\r\nscope,${csvEscape('complete authorized cohort — endpoint returns all students visible to this role; no server-side pagination')}\r\nrecord_count,${csvEscape(list.length)}\r\n`;
+            downloadBlob('\uFEFF' + metaCsv + toCsv(headers, rows), `tpo-cohort-${ts.slice(0, 10)}.csv`, 'text/csv;charset=utf-8;');
+            setToast({ type: 'success', message: `Exported ${list.length} candidate records.` });
+        } catch (err) {
+            setToast({ type: 'error', message: 'Export failed — could not fetch authorized candidate records.' });
+        } finally {
+            setExporting(false);
+        }
+    };
+
+    const notifyUnavailable = (feature, reason) => {
+        setToast({ type: 'info', message: `${feature} is unavailable — ${reason}` });
+    };
+
     const eligiblePool = students.filter((s) => (s.cgpa || 0) >= 7.0 && (s.backlogs_count || 0) === 0);
-
-    const filteredStudents = students.filter((s) => {
-        const matchesSearch =
-            (s.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (s.roll_number || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (s.department || '').toLowerCase().includes(searchTerm.toLowerCase());
-
-        if (!matchesSearch) return false;
-
-        if (deptFilter !== 'all') {
-            if ((s.department || '').toLowerCase() !== deptFilter.toLowerCase()) return false;
-        }
-
-        if (eligibilityFilter === 'eligible') {
-            return (s.cgpa || 0) >= 7.0 && (s.backlogs_count || 0) === 0;
-        }
-        if (eligibilityFilter === 'with_backlogs') {
-            return (s.backlogs_count || 0) > 0;
-        }
-
-        return true;
+    const placementInsights = buildPlacementIntelligence({
+        drives,
+        rosters,
+        drivesAvailable: attentionAvailability?.drives === true,
+        rostersAvailable: attentionAvailability?.rosters === true,
     });
+    const placementIntelligenceUnavailableReasons = placementIntelligenceUnavailable({
+        drives: attentionAvailability?.drives === true,
+        rosters: attentionAvailability?.rosters === true,
+    });
+    const placementIntelligenceChecksComplete = (
+        attentionAvailability?.drives === true && attentionAvailability?.rosters === true
+    );
+    const completedDriveCount = drives.filter((drive) => drive.status === 'completed').length;
+    const benchmarkLabel = typeof cohortStats?.avg_overall_score === 'number'
+        ? `${cohortStats.avg_overall_score.toFixed(1)}%`
+        : '—';
+
+    const isEligibleForDrive = (s, d) => {
+        if ((s.cgpa || 0) < (d.minimum_cgpa || 0)) return false;
+        if ((s.backlogs_count || 0) > (d.maximum_backlogs || 0)) return false;
+        const branches = Array.isArray(d.eligible_branches) ? d.eligible_branches.filter(Boolean) : [];
+        if (!branches.length) return true;
+        const dept = (s.department || '').toLowerCase();
+        return branches.some((b) => String(b).toLowerCase() === dept);
+    };
+
+    const pipelineDrives = drives
+        .filter((d) => d.status !== 'completed')
+        .sort((a, b) => {
+            const order = { active: 0, published: 1, draft: 2 };
+            return (order[a.status] ?? 9) - (order[b.status] ?? 9) || (b.id || 0) - (a.id || 0);
+        })
+        .slice(0, 3);
+
+    const activityRows = drives
+        .map((d) => ({ drive: d, roster: rosters[d.id] }))
+        .filter((x) => x.roster && (x.roster.total_participants || 0) > 0)
+        .sort((a, b) => (b.roster.total_participants - a.roster.total_participants)
+            || ((b.roster.completed_count || 0) - (a.roster.completed_count || 0)))
+        .slice(0, 5);
 
     if (loading) {
         return <PageSkeleton variant="light" cardCount={4} />;
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 text-slate-900 font-['Inter'] antialiased">
-            <Navbar position="sticky" onLogout={() => navigate('/login')} />
+        <TPOLayout>
             {toast && <Toast {...toast} onClose={() => setToast(null)} />}
 
-            <main className="max-w-7xl mx-auto px-6 py-10">
+            {/* Main content */}
+                <main
+                    className="pt-8 pb-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full"
+                >
                 {/* Header Banner */}
-                <div className="bg-white border border-slate-200 rounded-3xl p-8 mb-8 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                <div className="glass-card rounded-3xl p-8 mb-8 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
                     <div>
                         <div className="flex items-center gap-3 mb-2">
                             <span className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-sky-50 text-sky-700 border border-sky-200">
@@ -90,6 +300,7 @@ export default function TPODashboard() {
                         <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
                             Corporate Recruitment & Placement Portal
                         </h1>
+                        <br></br>
                         <p className="text-sm text-slate-500 mt-1">
                             Drive placement simulations, verify student eligibility criteria, and track multi-round hiring qualifications.
                         </p>
@@ -102,6 +313,7 @@ export default function TPODashboard() {
                         >
                             TPO Profile
                         </button>
+                        <TPOMenuButton />
                         <button
                             onClick={loadTPOData}
                             className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold shadow-sm transition-all"
@@ -111,374 +323,408 @@ export default function TPODashboard() {
                     </div>
                 </div>
 
-                {/* KPI Overview */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+                {/* KPIs */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8" data-testid="kpi-grid">
+                    <div className="glass-card rounded-2xl p-6" data-testid="kpi-eligible-pool">
                         <div className="flex items-center justify-between mb-3">
                             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Eligible Candidate Pool</span>
                             <span className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-sm">✓</span>
                         </div>
                         <div className="text-3xl font-black text-emerald-600">{eligiblePool.length}</div>
+                        <br></br>
                         <div className="text-xs text-slate-500 mt-1 font-medium">CGPA ≥ 7.0 & 0 backlogs</div>
                     </div>
 
-                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+                    <div className="glass-card rounded-2xl p-6" data-testid="kpi-registered-pool">
                         <div className="flex items-center justify-between mb-3">
                             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Registered Pool</span>
                             <span className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-sm">🎓</span>
                         </div>
                         <div className="text-3xl font-black text-slate-900">{students.length}</div>
+                        <br></br>
                         <div className="text-xs text-slate-500 mt-1 font-medium">Candidates across all branches</div>
                     </div>
 
-                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+                    <div className="glass-card rounded-2xl p-6" data-testid="kpi-hiring-partners">
                         <div className="flex items-center justify-between mb-3">
-                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Hiring Partners Active</span>
+                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Placement Drives Completed</span>
                             <span className="w-8 h-8 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center font-bold text-sm">🏢</span>
                         </div>
-                        <div className="text-3xl font-black text-sky-600">4</div>
-                        <div className="text-xs text-slate-500 mt-1 font-medium">Tier-1 & Core corporate drives</div>
+                        <div className="text-3xl font-black text-sky-600">{completedDriveCount}</div>
+                        <br></br>
+                        <div className="text-xs text-slate-500 mt-1 font-medium">All-time drives marked completed</div>
                     </div>
 
-                    <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+                    <div className="glass-card rounded-2xl p-6" data-testid="kpi-benchmark">
                         <div className="flex items-center justify-between mb-3">
+
                             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Cohort Benchmark</span>
                             <span className="w-8 h-8 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center font-bold text-sm">📊</span>
                         </div>
-                        <div className="text-3xl font-black text-violet-600">
-                            {cohortStats?.avg_overall_score ? `${cohortStats.avg_overall_score}%` : '78.5%'}
+                        <div className="text-3xl font-black text-violet-600">{benchmarkLabel}</div>
+                        <div className="text-xs text-slate-500 mt-1 font-medium">
+                            <br></br>
+                            <br></br>
+                            {cohortStats ? 'Average assessment readiness' : 'Cohort statistics unavailable'}
                         </div>
-                        <div className="text-xs text-slate-500 mt-1 font-medium">Average assessment readiness</div>
                     </div>
                 </div>
 
                 {/* Recruitment Drives Pipeline */}
-                <div className="mb-8">
-                    <h2 className="text-lg font-bold text-slate-900 mb-4">Active Placement Drives Pipeline</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="text-base font-bold text-slate-900">Google SDE Recruitment</div>
-                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                    Active Simulation
-                                </span>
-                            </div>
-                            <div className="space-y-2 text-xs text-slate-600 mb-4">
-                                <div className="flex justify-between">
-                                    <span>Eligibility:</span>
-                                    <span className="font-semibold text-slate-900">CGPA ≥ 8.0, 0 Backlogs</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>Eligible Candidates:</span>
-                                    <span className="font-bold text-indigo-600">
-                                        {students.filter((s) => (s.cgpa || 0) >= 8.0 && (s.backlogs_count || 0) === 0).length}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>Stages:</span>
-                                    <span className="font-medium text-slate-700">Aptitude → Coding → Tech Interview</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="text-base font-bold text-slate-900">Amazon Software Engineer</div>
-                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                    Active Simulation
-                                </span>
-                            </div>
-                            <div className="space-y-2 text-xs text-slate-600 mb-4">
-                                <div className="flex justify-between">
-                                    <span>Eligibility:</span>
-                                    <span className="font-semibold text-slate-900">CGPA ≥ 7.5, 0 Backlogs</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>Eligible Candidates:</span>
-                                    <span className="font-bold text-indigo-600">
-                                        {students.filter((s) => (s.cgpa || 0) >= 7.5 && (s.backlogs_count || 0) === 0).length}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>Stages:</span>
-                                    <span className="font-medium text-slate-700">Coding (LeetCode Med) → System Design</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="text-base font-bold text-slate-900">TCS Digital / Prime</div>
-                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-sky-50 text-sky-700 border border-sky-200">
-                                    Open Pool
-                                </span>
-                            </div>
-                            <div className="space-y-2 text-xs text-slate-600 mb-4">
-                                <div className="flex justify-between">
-                                    <span>Eligibility:</span>
-                                    <span className="font-semibold text-slate-900">CGPA ≥ 6.5, Max 1 Backlog</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>Eligible Candidates:</span>
-                                    <span className="font-bold text-indigo-600">
-                                        {students.filter((s) => (s.cgpa || 0) >= 6.5 && (s.backlogs_count || 0) <= 1).length}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span>Stages:</span>
-                                    <span className="font-medium text-slate-700">National Qualifier → HR Round</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Filter Toolbar */}
-                <div className="bg-white border border-slate-200 rounded-2xl p-4 mb-6 shadow-sm flex flex-col md:flex-row items-center justify-between gap-4">
-                    <div className="w-full md:w-72">
-                        <input
-                            type="text"
-                            placeholder="Search candidate or roll number..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full px-4 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-500"
-                        />
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-                        <select
-                            value={deptFilter}
-                            onChange={(e) => setDeptFilter(e.target.value)}
-                            className="px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:outline-none"
+                <div className="mb-8" data-testid="pipeline">
+                    <div className="flex items-center justify-between mb-4 gap-3">
+                        <h2 className="text-lg font-bold text-slate-900">Active Placement Drives Pipeline</h2>
+                        <a
+                            href="/tpo/mock-drives"
+                            className="text-xs font-semibold text-sky-600 hover:text-sky-700 inline-flex items-center gap-1 shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded px-1"
                         >
-                            <option value="all">All Departments</option>
-                            <option value="Computer Science">Computer Science</option>
-                            <option value="Information Technology">Information Technology</option>
-                            <option value="Electronics & Communication">Electronics</option>
-                            <option value="Mechanical Engineering">Mechanical</option>
-                        </select>
-
-                        <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
-                            <button
-                                onClick={() => setEligibilityFilter('all')}
-                                className={`px-3 py-1.5 rounded-lg font-semibold transition-all ${
-                                    eligibilityFilter === 'all' ? 'bg-white text-sky-700 shadow-sm' : 'text-slate-600'
-                                }`}
-                            >
-                                All Pool
-                            </button>
-                            <button
-                                onClick={() => setEligibilityFilter('eligible')}
-                                className={`px-3 py-1.5 rounded-lg font-semibold transition-all ${
-                                    eligibilityFilter === 'eligible' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-600'
-                                }`}
-                            >
-                                Placement Eligible
-                            </button>
-                            <button
-                                onClick={() => setEligibilityFilter('with_backlogs')}
-                                className={`px-3 py-1.5 rounded-lg font-semibold transition-all ${
-                                    eligibilityFilter === 'with_backlogs' ? 'bg-white text-red-700 shadow-sm' : 'text-slate-600'
-                                }`}
-                            >
-                                Has Backlogs
-                            </button>
-                        </div>
+                            View all drives <ArrowRight size={14} />
+                        </a>
                     </div>
-                </div>
-
-                {/* Candidate Placement Roster Table */}
-                <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm">
-                    <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-                        <h2 className="text-base font-bold text-slate-900">
-                            Placement Verification Roster ({filteredStudents.length})
-                        </h2>
-                        <span className="text-xs text-slate-500 font-medium">
-                            Eligibility automatically mapped against corporate criteria
-                        </span>
-                    </div>
-
-                    {filteredStudents.length === 0 ? (
-                        <div className="text-center py-16 px-4">
-                            <div className="text-4xl mb-3">📋</div>
-                            <h3 className="text-base font-bold text-slate-800 mb-1">No candidate records match</h3>
-                            <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                                Adjust your department or eligibility filters to inspect other student cohorts.
-                            </p>
+                    {pipelineDrives.length === 0 ? (
+                        <div className="glass-card rounded-2xl p-8 text-center">
+                            <p className="text-sm font-bold text-slate-900">No active drives yet</p>
+                            <p className="text-xs text-slate-500 mt-1">Create and publish a drive to start a placement pipeline.</p>
+                            <a
+                                href="/tpo/mock-drives"
+                                className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-sky-600 hover:text-sky-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded px-1"
+                            >
+                                Open drive management <ArrowRight size={13} />
+                            </a>
                         </div>
                     ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse text-xs">
-                                <thead>
-                                    <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                                        <th className="px-6 py-3.5">Student</th>
-                                        <th className="px-6 py-3.5">Department</th>
-                                        <th className="px-6 py-3.5">CGPA</th>
-                                        <th className="px-6 py-3.5">Backlogs</th>
-                                        <th className="px-6 py-3.5">Target Role</th>
-                                        <th className="px-6 py-3.5">Eligibility Status</th>
-                                        <th className="px-6 py-3.5 text-right">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                    {filteredStudents.map((student) => {
-                                        const isEligible = (student.cgpa || 0) >= 7.0 && (student.backlogs_count || 0) === 0;
-
-                                        return (
-                                            <tr key={student.user_id} className="hover:bg-slate-50/70 transition-colors">
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded-full bg-sky-100 text-sky-700 flex items-center justify-center font-bold text-xs">
-                                                            {student.name?.charAt(0).toUpperCase() || 'S'}
-                                                        </div>
-                                                        <div>
-                                                            <div className="font-bold text-slate-900">{student.name}</div>
-                                                            <div className="text-[11px] text-slate-400 font-mono">
-                                                                {student.roll_number || student.email}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </td>
-
-                                                <td className="px-6 py-4 font-medium text-slate-700">
-                                                    {student.department}
-                                                </td>
-
-                                                <td className="px-6 py-4">
-                                                    <span className={`font-bold ${student.cgpa >= 7.5 ? 'text-indigo-600' : 'text-slate-800'}`}>
-                                                        {student.cgpa || '7.50'}
-                                                    </span>
-                                                </td>
-
-                                                <td className="px-6 py-4">
-                                                    <span className={`font-bold ${student.backlogs_count > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                                                        {student.backlogs_count || 0}
-                                                    </span>
-                                                </td>
-
-                                                <td className="px-6 py-4">
-                                                    <span className="px-2 py-1 rounded bg-slate-100 font-medium text-slate-700 text-[11px]">
-                                                        {student.target_role || 'Software Engineer'}
-                                                    </span>
-                                                </td>
-
-                                                <td className="px-6 py-4">
-                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
-                                                        isEligible
-                                                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                                            : 'bg-amber-50 text-amber-700 border border-amber-200'
-                                                    }`}>
-                                                        {isEligible ? '✓ Eligible Tier-1' : '⚠️ Conditional'}
-                                                    </span>
-                                                </td>
-
-                                                <td className="px-6 py-4 text-right">
-                                                    <button
-                                                        onClick={() => setSelectedStudent(student)}
-                                                        className="px-3 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold text-xs transition-colors border border-sky-200"
-                                                    >
-                                                        Review Student
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+                            {pipelineDrives.map((d) => {
+                                const badge = STATUS_BADGE[d.status] || { label: d.status, cls: 'bg-slate-100 text-slate-600 border-slate-200' };
+                                const branches = Array.isArray(d.eligible_branches) ? d.eligible_branches.filter(Boolean) : [];
+                                const rounds = driveRounds(d);
+                                return (
+                                    <div key={d.id} className="glass-card rounded-2xl p-6 min-w-0">
+                                        <div className="flex items-start justify-between gap-3 mb-4">
+                                            <div className="min-w-0">
+                                                <div className="text-base font-bold text-slate-900 truncate">{d.company_name}</div>
+                                                <div className="text-xs text-slate-500 truncate">{d.target_role}</div>
+                                            </div>
+                                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border shrink-0 ${badge.cls}`}>
+                                                {badge.label}
+                                            </span>
+                                        </div>
+                                        <div className="space-y-2 text-xs text-slate-600 mb-4">
+                                            <div className="flex justify-between gap-3">
+                                                <span>Eligibility:</span>
+                                                <span className="font-semibold text-slate-900 text-right">
+                                                    CGPA ≥ {d.minimum_cgpa}, {d.maximum_backlogs === 0 ? '0 backlogs' : `≤ ${d.maximum_backlogs} backlogs`}
+                                                </span>
+                                            </div>
+                                            {branches.length > 0 && (
+                                                <div className="flex justify-between gap-3">
+                                                    <span>Branches:</span>
+                                                    <span className="min-w-0 font-medium text-slate-700 text-right break-words">{branches.join(', ')}</span>
+                                                </div>
+                                            )}
+                                            <div className="flex justify-between gap-3">
+                                                <span>Eligible Candidates:</span>
+                                                <span
+                                                    className="font-bold text-indigo-600"
+                                                    title="Computed by applying this drive's CGPA, backlog, and branch criteria to the current cohort"
+                                                >
+                                                    {students.filter((s) => isEligibleForDrive(s, d)).length}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between gap-3">
+                                                <span>Stages:</span>
+                                                <span className="font-medium text-slate-700 text-right">
+                                                    {rounds.length ? rounds.map(fmtRound).join(' → ') : '—'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <a
+                                            href="/tpo/mock-drives"
+                                            className="inline-flex items-center gap-1 text-xs font-semibold text-sky-600 hover:text-sky-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded px-1"
+                                        >
+                                            Open roster <ArrowRight size={13} />
+                                        </a>
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
                 </div>
 
-                {/* Candidate Review Modal */}
-                {selectedStudent && (
-                    <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-                        <div className="bg-white border border-slate-200 rounded-3xl p-8 max-w-lg w-full shadow-2xl">
-                            <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-6">
-                                <div>
-                                    <h3 className="text-xl font-bold text-slate-900">{selectedStudent.name}</h3>
-                                    <p className="text-xs text-slate-500">{selectedStudent.email} | {selectedStudent.department}</p>
-                                </div>
-                                <button
-                                    onClick={() => setSelectedStudent(null)}
-                                    className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm"
-                                >
-                                    ✕
-                                </button>
-                            </div>
-
-                            <div className="space-y-4 text-xs">
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-200">
-                                    <div>
-                                        <div className="text-slate-400 font-medium">CGPA</div>
-                                        <div className="font-bold text-indigo-600">{selectedStudent.cgpa} / 10.0</div>
-                                    </div>
-                                    <div>
-                                        <div className="text-slate-400 font-medium">10th Marks</div>
-                                        <div className="font-bold text-slate-900">{selectedStudent.tenth_marks ? `${selectedStudent.tenth_marks}%` : 'Not Set'}</div>
-                                    </div>
-                                    <div>
-                                        <div className="text-slate-400 font-medium">12th Marks</div>
-                                        <div className="font-bold text-slate-900">{selectedStudent.twelfth_marks ? `${selectedStudent.twelfth_marks}%` : 'Not Set'}</div>
-                                    </div>
-                                    <div>
-                                        <div className="text-slate-400 font-medium">Active Backlogs</div>
-                                        <div className={`font-bold ${selectedStudent.backlogs_count > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                                            {selectedStudent.backlogs_count}
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <div className="text-slate-400 font-medium">Gender & Nationality</div>
-                                        <div className="font-bold text-slate-900">{selectedStudent.gender || 'Male'} | {selectedStudent.nationality || 'Indian'}</div>
-                                    </div>
-                                    <div>
-                                        <div className="text-slate-400 font-medium">Date of Birth</div>
-                                        <div className="font-bold text-slate-900">{selectedStudent.date_of_birth || 'Not Set'}</div>
-                                    </div>
-                                    <div>
-                                        <div className="text-slate-400 font-medium">Graduation Year</div>
-                                        <div className="font-bold text-slate-900">{selectedStudent.graduation_year}</div>
-                                    </div>
-                                    <div>
-                                        <div className="text-slate-400 font-medium">Mobile No.</div>
-                                        <div className="font-mono text-slate-800">{selectedStudent.mobile_no || 'Not Set'}</div>
-                                    </div>
-                                    <div className="sm:col-span-3">
-                                        <div className="text-slate-400 font-medium">College Email ID</div>
-                                        <div className="font-mono text-slate-800">{selectedStudent.college_email_id || selectedStudent.email}</div>
-                                    </div>
-                                </div>
-
-                                <div className="p-4 bg-sky-50/60 rounded-2xl border border-sky-100">
-                                    <h4 className="font-bold text-slate-800 mb-2">Drive Eligibility Check</h4>
-                                    <div className="space-y-1.5 text-slate-700">
-                                        <div className="flex items-center justify-between">
-                                            <span>Google SDE (CGPA ≥ 8.0, 0 Backlogs):</span>
-                                            <span className="font-bold">{selectedStudent.cgpa >= 8.0 && selectedStudent.backlogs_count === 0 ? '✓ Yes' : '✕ No'}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between">
-                                            <span>Amazon SDE (CGPA ≥ 7.5, 0 Backlogs):</span>
-                                            <span className="font-bold">{selectedStudent.cgpa >= 7.5 && selectedStudent.backlogs_count === 0 ? '✓ Yes' : '✕ No'}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between">
-                                            <span>TCS Prime (CGPA ≥ 6.5, ≤1 Backlog):</span>
-                                            <span className="font-bold">{selectedStudent.cgpa >= 6.5 && selectedStudent.backlogs_count <= 1 ? '✓ Yes' : '✕ No'}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="mt-6 pt-4 border-t border-slate-100 flex justify-end">
-                                <button
-                                    onClick={() => setSelectedStudent(null)}
-                                    className="px-5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all"
-                                >
-                                    Done
-                                </button>
-                            </div>
-                        </div>
+                {/* Quick Actions */}
+                <div className="glass-card rounded-2xl p-6 mb-8" data-testid="quick-actions">
+                    <div className="flex items-center justify-between mb-4 gap-3">
+                        <h2 className="text-base font-bold text-slate-900">Quick Actions</h2>
+                        <span className="text-[11px] text-slate-500">Workflows backed by existing endpoints only</span>
                     </div>
-                )}
+                    <div className="flex flex-wrap gap-3">
+                        <button
+                            ref={addStudentBtnRef}
+                            onClick={openStudentModal}
+                            data-testid="qa-add-student"
+                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold shadow-sm transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                        >
+                            <UserPlus size={15} /> Add Student
+                        </button>
+                        <button
+                            onClick={() => setCompanyModalOpen(true)}
+                            data-testid="qa-add-company"
+                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-sm transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                        >
+                            <Building2 size={15} /> Add Company
+                        </button>
+                        <button
+                            onClick={handleExport}
+                            disabled={exporting}
+                            data-testid="qa-export"
+                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold border border-slate-300 transition-all disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                        >
+                            <Download size={15} /> {exporting ? 'Exporting…' : 'Export Data'}
+                        </button>
+                        {/* <button
+                            type="button"
+                            aria-disabled="true"
+                            data-testid="qa-invite-members"
+                            onClick={() => notifyUnavailable('Invite Members', 'the backend has no invitation or members workflow endpoint')}
+                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-50 text-slate-400 text-xs font-semibold border border-dashed border-slate-300 cursor-not-allowed transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                        >
+                            <UserPlus size={15} /> Invite Members
+                            <span className="text-[9px] uppercase tracking-wide bg-slate-200 text-slate-500 rounded-full px-1.5 py-0.5">Unavailable</span>
+                        </button> */}
+
+                    </div>
+                  <br></br>
+                </div>
+
+                {/* Upcoming Deadlines + Most Active Drives */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                    <div className="glass-card rounded-2xl p-6" data-testid="deadlines">
+                        <div className="flex items-center gap-2 mb-3">
+                            <CalendarX size={18} className="text-slate-400" aria-hidden="true" />
+                            <h2 className="text-base font-bold text-slate-900">Upcoming Deadlines</h2>
+                        </div>
+                        <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-4">
+                            <p className="text-sm font-semibold text-slate-700">No upcoming deadlines to show.</p>
+
+                        </div>
+                        <br></br>
+                        <a
+                            href="/tpo/mock-drives"
+                            className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-sky-600 hover:text-sky-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded px-1"
+                        >
+                            Open drive management <ArrowRight size={13} />
+                        </a>
+                    </div>
+
+                    <div className="glass-card rounded-2xl p-6 min-w-0" data-testid="most-active">
+                        <div className="flex items-center gap-2 mb-3">
+                            <span className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0" aria-hidden="true">
+                                <TrendingUp size={15} />
+                            </span>
+                            <h2 className="text-base font-bold text-slate-900">Most Active Recruitment Drives</h2>
+                        </div>
+                        {activityRows.length === 0 ? (
+                            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-4">
+                                <p className="text-sm font-semibold text-slate-700">No candidate activity recorded yet.</p>
+                                <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                                    Drives will appear here once candidates are enrolled or start assessments. Ranking uses recorded
+                                    drive activity, not placement outcomes.
+                                </p>
+                            </div>
+                        ) : (
+                            <ol className="space-y-0" style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+                                {activityRows.map((row, i) => (
+                                    <li
+                                        key={row.drive.id}
+                                        className="flex items-center gap-3 py-2.5 border-b border-slate-200/70 last:border-0"
+                                    >
+                                        <span className="w-6 h-6 rounded-lg bg-slate-100 text-slate-500 text-[10px] font-black flex items-center justify-center shrink-0">
+                                            {i + 1}
+                                        </span>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="text-sm font-bold text-slate-900 truncate">{row.drive.company_name}</div>
+                                            <div className="text-[11px] text-slate-500 truncate">{row.drive.target_role}</div>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                            <div className="text-sm font-black text-indigo-600">{row.roster.total_participants}</div>
+                                            <div className="text-[10px] text-slate-500">enrolled</div>
+                                        </div>
+                                        <div className="text-right shrink-0 w-16">
+                                            <div className="text-sm font-black text-emerald-600">{row.roster.completed_count}</div>
+                                            <div className="text-[10px] text-slate-500">completed</div>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ol>
+                        )}
+                        <p className="text-[13px] text-slate-400 mt-3 leading-relaxed">
+                            Ranked by enrolled candidates in recorded drive activity across the most recent  drives —
+                            registration and assessment-completion counts.
+                        </p>
+                    </div>
+                </div>
+
+                {/* Placement Intelligence */}
+                <section className="mb-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" data-testid="placement-intelligence">
+                    <header className="border-b border-slate-200 bg-slate-50 px-5 py-4 sm:px-6">
+                        <h2 className="text-lg font-bold text-slate-900">Placement Intelligence</h2>
+                        <p className="mt-1 text-xs text-slate-500">
+                            Key patterns, emerging risks, and recommended actions across placement activities.
+                        </p>
+                    </header>
+                    {placementIntelligenceUnavailableReasons.length > 0 && (
+                        <div role="status" className="mx-5 mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 sm:mx-6">
+                            <p className="font-semibold">Some placement intelligence checks are unavailable.</p>
+                            <p className="mt-1">{placementIntelligenceUnavailableReasons.join(' ')}</p>
+                        </div>
+                    )}
+                    {placementInsights.length === 0 && placementIntelligenceChecksComplete ? (
+                        <p className="px-5 py-5 text-sm text-slate-500 sm:px-6" data-testid="placement-intelligence-empty">
+                            No significant placement patterns or actionable risks identified in the available data.
+                        </p>
+                    ) : placementInsights.length > 0 ? (
+                        <ul className="divide-y divide-slate-200 px-5 sm:px-6" data-testid="placement-intelligence-list">
+                            {placementInsights.map((item) => {
+                                const isRisk = item.category === 'Current operational risk';
+                                return (
+                                    <li key={item.id} className="grid grid-cols-[2rem_minmax(0,1fr)] gap-3 py-4 first:pt-5 last:pb-5 sm:gap-4">
+                                        <span className={`mt-0.5 flex h-8 w-8 items-center justify-center rounded-full ${isRisk ? 'bg-rose-50 text-rose-700' : 'bg-sky-50 text-sky-700'}`} aria-hidden="true">
+                                            {isRisk ? <TriangleAlert size={16} /> : <TrendingUp size={16} />}
+                                        </span>
+                                        <div className="min-w-0">
+                                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{item.category}</p>
+                                            <h3 className="mt-0.5 text-sm font-semibold text-slate-900">{item.title}</h3>
+                                            <p className="mt-1 text-base font-semibold leading-relaxed text-slate-800">{item.result}</p>
+                                            <p className="mt-1 text-xs leading-relaxed text-slate-600">{item.summary}</p>
+                                            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                                <p className="text-[11px] leading-relaxed text-slate-500">{item.evidence}</p>
+                                                <a
+                                                    href={item.href}
+                                                    className="shrink-0 text-xs font-semibold text-sky-700 hover:text-sky-800 inline-flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded"
+                                                >
+                                                    {item.action} <ArrowRight size={13} />
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </li>
+                                );
+                            })}
+                        </ul>
+                    ) : null}
+                </section>
+
             </main>
-        </div>
+
+            {/* Add Student dialog */}
+            {studentModalOpen && (
+                <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+                    <div
+                        className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+                        onClick={() => !studentSubmitting && closeStudentModal()}
+                        aria-hidden="true"
+                    />
+                    <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="add-student-title"
+                        data-testid="add-student-dialog"
+                        className="relative w-full max-w-md rounded-2xl bg-white border border-slate-200 shadow-xl p-6"
+                    >
+                        <div className="flex items-center justify-between mb-2">
+                            <h3 id="add-student-title" className="text-base font-bold text-slate-900">Add Student</h3>
+                            <button
+                                onClick={closeStudentModal}
+                                aria-label="Close add student dialog"
+                                className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+                        <p className="text-xs text-slate-500 mb-4 leading-relaxed">
+                            Creates a student account through the existing <span className="font-mono font-semibold">POST /auth/register</span>{' '}
+                            workflow. The account then appears in the candidate pool on refresh.
+                        </p>
+                        <form onSubmit={submitStudent} className="space-y-3">
+                            <div>
+                                <label htmlFor="ns-name" className="block text-xs font-semibold text-slate-600 mb-1">Full name</label>
+                                <input
+                                    id="ns-name"
+                                    type="text"
+                                    value={studentForm.name}
+                                    onChange={(e) => setStudentForm((f) => ({ ...f, name: e.target.value }))}
+                                    required
+                                    autoFocus
+                                    autoComplete="name"
+                                    maxLength={100}
+                                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                                    placeholder="e.g. Priya Sharma"
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="ns-email" className="block text-xs font-semibold text-slate-600 mb-1">Email</label>
+                                <input
+                                    id="ns-email"
+                                    type="email"
+                                    value={studentForm.email}
+                                    onChange={(e) => setStudentForm((f) => ({ ...f, email: e.target.value }))}
+                                    required
+                                    autoComplete="email"
+                                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                                    placeholder="student@example.com"
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="ns-password" className="block text-xs font-semibold text-slate-600 mb-1">Initial password</label>
+                                <input
+                                    id="ns-password"
+                                    type="password"
+                                    value={studentForm.password}
+                                    onChange={(e) => setStudentForm((f) => ({ ...f, password: e.target.value }))}
+                                    required
+                                    autoComplete="new-password"
+                                    minLength={8}
+                                    maxLength={128}
+                                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                                    placeholder="Minimum 8 characters"
+                                />
+                            </div>
+                            {studentError && (
+                                <div role="alert" data-testid="add-student-error" className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">
+                                    {studentError}
+                                </div>
+                            )}
+                            <div className="flex justify-end gap-2 pt-1">
+                                <button
+                                    type="button"
+                                    onClick={closeStudentModal}
+                                    disabled={studentSubmitting}
+                                    className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 border border-slate-300 transition-all disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={studentSubmitting}
+                                    data-testid="add-student-submit"
+                                    className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:opacity-60 text-white text-xs font-semibold shadow-sm transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:ring-offset-2"
+                                >
+                                    {studentSubmitting ? 'Creating…' : 'Create student'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Existing company management workflow */}
+            <CompanyPatternModal
+                isOpen={companyModalOpen}
+                onClose={() => setCompanyModalOpen(false)}
+                initialCompany=""
+                initialRole=""
+                existingDrives={drives}
+                onToast={setToast}
+            />
+        </TPOLayout>
     );
 }

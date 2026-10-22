@@ -19,12 +19,19 @@ class FakeDB:
         pass
 
     def query(self, *args, **kwargs):
-        # Return an object with filter(...).first() -> InterviewSession-like
+        # Return an object with filter(...).first() -> model-like namespace.
+        # Endpoints resolve ownership by looking up the AssessmentSession that
+        # owns the interview, so model that lookup too.
+        model = args[0] if args else None
+        model_name = getattr(model, "__name__", "")
+
         class Q:
             def filter(self, *a, **k):
                 return self
 
             def first(self):
+                if model_name == "AssessmentSession":
+                    return SimpleNamespace(id=1, user_id=1)
                 return SimpleNamespace(id=123, session_id=1)
 
         return Q()

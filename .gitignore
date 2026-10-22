@@ -41,6 +41,11 @@ logs/
 *.log
 *.dump
 
+# Local databases (never commit data files; schema lives in database/*.sql)
+database.db
+*.sqlite
+*.sqlite3
+
 # Uploads
 uploads/
 

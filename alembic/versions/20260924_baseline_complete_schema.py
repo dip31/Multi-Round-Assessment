@@ -1,7 +1,7 @@
 """Baseline complete schema - creates all tables from scratch
 
 Revision ID: 20260924_baseline
-Revises: 
+Revises:
 Create Date: 2026-09-24
 
 This is a consolidated baseline migration that creates the complete database schema
@@ -518,7 +518,6 @@ def upgrade() -> None:
     op.create_index('idx_adv_proctoring_severity', 'advanced_proctoring_events', ['severity'], unique=False)
     op.create_index('idx_adv_proctoring_round', 'advanced_proctoring_events', ['round_type'], unique=False)
     op.create_index('idx_adv_proctoring_created_at', 'advanced_proctoring_events', ['created_at'], unique=False)
-    op.create_index('idx_adv_proctoring_metadata', 'advanced_proctoring_events', ['event_metadata'], unique=False, postgresql_using='gin')
     op.create_index('idx_adv_proctoring_dedup', 'advanced_proctoring_events', ['session_id', 'event_type', sa.text("date_trunc('second', created_at)")], unique=True)
 
     # ============================================
@@ -590,93 +589,92 @@ def downgrade() -> None:
     # Drop in reverse order of creation (respecting foreign keys)
     op.drop_index('ix_proctoring_violations_session_id', table_name='proctoring_violations')
     op.drop_table('proctoring_violations')
-    
+
     op.drop_index('ix_interview_turns_interview_id', table_name='interview_turns')
     op.drop_table('interview_turns')
-    
+
     op.drop_index('ix_interview_sessions_session_id', table_name='interview_sessions')
     op.drop_table('interview_sessions')
-    
+
     op.drop_index('idx_adv_proctoring_dedup', table_name='advanced_proctoring_events')
-    op.drop_index('idx_adv_proctoring_metadata', table_name='advanced_proctoring_events')
     op.drop_index('idx_adv_proctoring_created_at', table_name='advanced_proctoring_events')
     op.drop_index('idx_adv_proctoring_round', table_name='advanced_proctoring_events')
     op.drop_index('idx_adv_proctoring_severity', table_name='advanced_proctoring_events')
     op.drop_index('idx_adv_proctoring_event_type', table_name='advanced_proctoring_events')
     op.drop_index('idx_adv_proctoring_session', table_name='advanced_proctoring_events')
     op.drop_table('advanced_proctoring_events')
-    
+
     op.drop_index('idx_proctoring_created_at', table_name='proctoring_events')
     op.drop_index('idx_proctoring_event_type', table_name='proctoring_events')
     op.drop_index('idx_proctoring_session', table_name='proctoring_events')
     op.drop_table('proctoring_events')
-    
+
     op.drop_index('ix_approved_question_pools_admin_approved', table_name='approved_question_pools')
     op.drop_index('ix_approved_question_pools_session_id', table_name='approved_question_pools')
     op.drop_table('approved_question_pools')
-    
+
     op.drop_index('idx_judge0_token', table_name='coding_submissions')
     op.drop_index('idx_coding_submission_problem', table_name='coding_submissions')
     op.drop_index('idx_coding_submission_round', table_name='coding_submissions')
     op.drop_table('coding_submissions')
-    
+
     op.drop_index('idx_session_problems_problem', table_name='session_problems')
     op.drop_index('idx_session_problems_round', table_name='session_problems')
     op.drop_table('session_problems')
-    
+
     op.drop_index('idx_coding_test_cases_problem', table_name='coding_test_cases')
     op.drop_table('coding_test_cases')
-    
+
     op.drop_index('idx_coding_problems_created_by', table_name='coding_problems')
     op.drop_index('idx_coding_problems_difficulty', table_name='coding_problems')
     op.drop_table('coding_problems')
-    
+
     op.drop_index('idx_rl_attempt_log_session', table_name='rl_attempt_log')
     op.drop_index('idx_rl_attempt_log_user', table_name='rl_attempt_log')
     op.drop_table('rl_attempt_log')
-    
+
     op.drop_index('idx_rl_q_table_user', table_name='rl_q_table')
     op.drop_table('rl_q_table')
-    
+
     op.drop_index('idx_rl_sessions_round', table_name='rl_sessions')
     op.drop_table('rl_sessions')
-    
+
     op.drop_index('idx_aptitude_attempts_question', table_name='aptitude_attempts')
     op.drop_index('idx_aptitude_attempts_round', table_name='aptitude_attempts')
     op.drop_table('aptitude_attempts')
-    
+
     op.drop_index('idx_admin_qf_admin_id', table_name='admin_question_feedback')
     op.drop_index('idx_admin_qf_question_id', table_name='admin_question_feedback')
     op.drop_table('admin_question_feedback')
-    
+
     op.drop_index('idx_aptitude_topic', table_name='aptitude_questions')
     op.drop_index('idx_aptitude_difficulty', table_name='aptitude_questions')
     op.drop_table('aptitude_questions')
-    
+
     op.drop_table('aptitude_topics')
-    
+
     op.drop_index('idx_round_session', table_name='assessment_rounds')
     op.drop_table('assessment_rounds')
-    
+
     op.drop_index('idx_assessment_sessions_context_id', table_name='assessment_sessions')
     op.drop_index('one_active_session_per_user', table_name='assessment_sessions')
     op.drop_table('assessment_sessions')
-    
+
     op.drop_index('idx_assessment_contexts_policy_id', table_name='assessment_contexts')
     op.drop_index('idx_assessment_contexts_student_id', table_name='assessment_contexts')
     op.drop_table('assessment_contexts')
-    
+
     op.drop_table('assessment_policies')
-    
+
     op.drop_index('idx_user_resumes_user_id', table_name='user_resumes')
     op.drop_table('user_resumes')
-    
+
     op.drop_index('idx_refresh_token_hash', table_name='refresh_tokens')
     op.drop_table('refresh_tokens')
-    
+
     op.drop_table('tpo_profiles')
     op.drop_table('faculty_profiles')
     op.drop_table('student_profiles')
-    
+
     op.drop_index('idx_users_email', table_name='users')
     op.drop_table('users')

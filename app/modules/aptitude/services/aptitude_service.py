@@ -357,12 +357,12 @@ def get_latest_completed_aptitude_result(db: Session, user_id: int) -> Optional[
 
 def get_current_difficulty(db: Session, round_id: int, user_id: int) -> str:
     """Get the current difficulty level from RL session.
-    
+
     Args:
         db: Active database session.
         round_id: The aptitude round ID.
         user_id: The user ID.
-        
+
     Returns:
         Current difficulty as string (easy/medium/hard).
     """
@@ -373,11 +373,11 @@ def get_current_difficulty(db: Session, round_id: int, user_id: int) -> str:
         .order_by(RLSession.step_number.desc())
         .first()
     )
-    
+
     if latest_rl:
         # The action_taken represents the next difficulty that was selected
         return latest_rl.action_taken
-    
+
     # Default to medium for first question
     return "medium"
 
@@ -390,6 +390,7 @@ def get_next_question(
     topic: Optional[str] = None,
     exclude_ids: Optional[list[int]] = None,
     is_combined_technical_turn: Optional[bool] = None,
+    strict_blueprint: bool = False,
 ) -> Optional[dict]:
     """Fetch the next aptitude question at the given difficulty and filters.
 
@@ -413,6 +414,7 @@ def get_next_question(
         topic=topic,
         exclude_ids=exclude_ids,
         is_combined_technical_turn=is_combined_technical_turn,
+        strict_blueprint=strict_blueprint,
     )
 
     if not question:
@@ -735,7 +737,7 @@ def calculate_round_result(db: Session, round_id: int) -> dict:
     current_streak = 0
     difficulty_progression = []
     answer_review = []
-    
+
     for a in attempts:
         difficulty_progression.append(a.difficulty)
         q = a.question

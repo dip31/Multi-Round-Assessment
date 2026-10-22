@@ -30,6 +30,10 @@ import AdminRoute from './components/AdminRoute';
 import RoleRoute from './components/RoleRoute';
 import FacultyDashboard from './pages/FacultyDashboard';
 import TPODashboard from './pages/TPODashboard';
+import TPOStudentsPage from './pages/TPOStudentsPage';
+import TPOMockDrivesPage from './pages/TPOMockDrivesPage';
+import TPOAnalyticsPage from './pages/TPOAnalyticsPage';
+import TPOReadinessPage from './pages/TPOReadinessPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 export default function App() {
@@ -40,31 +44,31 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/admin/login" element={<AdminLogin />} />
-        <Route 
-          path="/admin/dashboard" 
+        <Route
+          path="/admin/dashboard"
           element={
             <AdminRoute>
               <AdminAnalyticsDashboard />
             </AdminRoute>
-          } 
+          }
         />
-        <Route 
-          path="/admin/analytics" 
+        <Route
+          path="/admin/analytics"
           element={
             <AdminRoute>
               <AdminCandidateReports />
             </AdminRoute>
-          } 
+          }
         />
-        <Route 
-          path="/admin/review" 
+        <Route
+          path="/admin/review"
           element={
             <AdminRoute>
               <AdminReview />
             </AdminRoute>
-          } 
+          }
         />
-        <Route 
+        <Route
           path="/admin/pools"
           element={
             <AdminRoute>
@@ -72,18 +76,18 @@ export default function App() {
             </AdminRoute>
           }
         />
-        <Route 
-          path="/admin/proctoring" 
+        <Route
+          path="/admin/proctoring"
           element={
             <AdminRoute>
               <AdminProctoringDashboard />
             </AdminRoute>
-          } 
+          }
         />
         {/* Role-Based Dashboards */}
         {/* Redirect old /dashboard to /home */}
         <Route path="/dashboard" element={<Navigate to="/home" replace />} />
-        
+
         {/* New Home Page */}
         <Route
           path="/home"
@@ -229,6 +233,42 @@ export default function App() {
         />
 
         <Route
+          path="/tpo/students"
+          element={
+            <RoleRoute allowedRoles={['tpo', 'admin']}>
+              <TPOStudentsPage />
+            </RoleRoute>
+          }
+        />
+
+        <Route
+          path="/tpo/mock-drives"
+          element={
+            <RoleRoute allowedRoles={['tpo', 'admin']}>
+              <TPOMockDrivesPage />
+            </RoleRoute>
+          }
+        />
+
+        <Route
+          path="/tpo/readiness"
+          element={
+            <RoleRoute allowedRoles={['tpo', 'admin']}>
+              <TPOReadinessPage />
+            </RoleRoute>
+          }
+        />
+
+        <Route
+          path="/tpo/analytics"
+          element={
+            <RoleRoute allowedRoles={['tpo', 'admin']}>
+              <TPOAnalyticsPage />
+            </RoleRoute>
+          }
+        />
+
+        <Route
           path="/profile"
           element={
             <PrivateRoute>
@@ -236,7 +276,7 @@ export default function App() {
             </PrivateRoute>
           }
         />
-        
+
         {/* Portfolio Routes - kept for backwards compatibility, will be under /portfolio/* in future */}
         <Route
           path="/portfolio"
@@ -286,7 +326,7 @@ export default function App() {
             </RoleRoute>
           }
         />
-        
+
         {/* Analytics - removed from primary nav, kept as route */}
         <Route
           path="/analytics"

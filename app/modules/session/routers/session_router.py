@@ -20,6 +20,7 @@ from app.services.session_service import (
     get_active_round,
     get_active_session,
     get_user_active_round,
+    is_mock_drive_session,
 )
 
 router = APIRouter(prefix="/session", tags=["Assessment Sessions"])
@@ -108,12 +109,23 @@ def start_fresh_session(
     current_user: User = Depends(get_current_user),
 ) -> SessionResponse:
     """Complete any existing active session and create a brand new assessment session.
-    
+
     NOTE: `/session/fresh` is a legacy session-start endpoint that uses
     sequential progression (always creates an aptitude round first).
     Independent Practice uses `/practice/start`.
     """
     active = get_active_session(db, user_id=current_user.id)
+    if active and is_mock_drive_session(db, active):
+        # Mock Drive attempts are advanced/completed only through the Mock Drive
+        # lifecycle, which runs competency-evidence mapping and per-candidate
+        # completion. Refuse to bypass it via the legacy session endpoints.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "An active Mock Drive attempt is in progress. Complete it through "
+                "the Mock Drive flow."
+            ),
+        )
     if active:
         active_round = get_active_round(db, active.id)
         if active_round is not None:
@@ -138,6 +150,17 @@ def complete_current_session(
 ) -> SessionResponse:
     """Mark the current active session and round as completed."""
     session = get_active_session(db, user_id=current_user.id)
+    if session is not None and is_mock_drive_session(db, session):
+        # Mock Drive attempts must be completed through the Mock Drive lifecycle
+        # (competency-evidence mapping + per-candidate completion). Refuse to
+        # bypass it via the legacy session endpoint.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Active Mock Drive sessions must be completed through the Mock "
+                "Drive flow."
+            ),
+        )
     if session is None:
         latest = (
             db.query(AssessmentSession)

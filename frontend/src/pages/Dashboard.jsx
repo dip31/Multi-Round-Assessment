@@ -138,6 +138,47 @@ export default function Dashboard() {
 
     const [selectedTechSubject, setSelectedTechSubject] = useState('all');
 
+    // ── Available Mock Drives (Phase 3B) ──────────────────────────────
+    const [availableDrives,       setAvailableDrives]       = useState([]);
+    const [drivesLoading,         setDrivesLoading]         = useState(false);
+    const [startingDriveId,       setStartingDriveId]       = useState(null);
+
+    useEffect(() => {
+        // Only students see published drives. Depend on profileData (not derived
+        // user?.role) so the fetch fires as soon as the profile is loaded.
+        if (!profileData || profileData.role !== 'student') return;
+        setDrivesLoading(true);
+        api.get('/mock-drives/available')
+            .then(res => setAvailableDrives(res.data || []))
+            .catch(() => setAvailableDrives([]))
+            .finally(() => setDrivesLoading(false));
+    }, [profileData]);
+
+    const handleStartMockDrive = async (driveId) => {
+        setStartingDriveId(driveId);
+        try {
+            const res = await api.post(`/mock-drives/${driveId}/start`);
+            setToast({ type: 'success', message: `Mock drive session started! Session #${res.data.session_id}` });
+            // Refresh session data so the dashboard reflects the new session
+            loadDashboardData();
+        } catch (err) {
+            const detail = err.response?.data?.detail;
+            setToast({
+                type: 'error',
+                message: typeof detail === 'string' ? detail : 'Failed to start mock drive.',
+            });
+        } finally {
+            setStartingDriveId(null);
+        }
+    };
+
+    const ROUND_LABELS = {
+        aptitude: 'Aptitude',
+        coding: 'Coding',
+        technical_interview: 'Tech Interview',
+        hr_interview: 'HR Interview',
+    };
+
     // Round action handlers
     const handleStartPractice = async (practiceType, subject = null) => {
         setStartingRound(practiceType);
@@ -280,7 +321,7 @@ export default function Dashboard() {
 
             <main className="max-w-7xl mx-auto px-6 py-8">
                 {/* ── 1. Student Identity & Authoritative Eligibility Header ── */}
-                <div className="bg-white border border-slate-200/90 rounded-3xl p-6 md:p-8 mb-8 shadow-sm">
+                <div className="glass-card rounded-3xl p-6 md:p-8 mb-8">
                     <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
                         {/* Candidate Identity */}
                         <div className="flex items-start gap-4 md:gap-5">
@@ -371,7 +412,7 @@ export default function Dashboard() {
                 {/* ── 2. Executive KPI Strip (Real Data) ── */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                     {/* KPI 1: Overall Readiness Score */}
-                    <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs">
+                    <div className="glass-card rounded-2xl p-5">
                         <div className="flex items-center justify-between mb-2">
                             <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Overall Readiness</span>
                             <span className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-sm">
@@ -393,7 +434,7 @@ export default function Dashboard() {
 
 
                     {/* KPI 3: Percentile Rank */}
-                    <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs">
+                    <div className="glass-card rounded-2xl p-5">
                         <div className="flex items-center justify-between mb-2">
                             <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Cohort Percentile</span>
                             <span className="w-8 h-8 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center font-bold text-sm">
@@ -418,7 +459,7 @@ export default function Dashboard() {
                     </div>
 
                     {/* KPI 4: Active CVs & Skills */}
-                    <div className="bg-white border border-slate-200/90 rounded-2xl p-5 shadow-xs">
+                    <div className="glass-card rounded-2xl p-5">
                         <div className="flex items-center justify-between mb-2">
                             <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Portfolio Assets</span>
                             <span className="w-8 h-8 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center font-bold text-sm">
@@ -777,7 +818,7 @@ export default function Dashboard() {
                 {/* ── 3B. Mock Drive Simulation ── */}
                 <div className="mb-8">
                         <div className="space-y-6">
-                            <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-8 shadow-sm">
+                            <div className="glass-card rounded-3xl p-6 md:p-8">
                                 <div className="mb-6">
                                     <h2 className="text-xl font-black text-slate-900 tracking-tight">Recruitment Drive Simulation</h2>
                                     <p className="text-xs text-slate-500 font-medium">
@@ -952,8 +993,99 @@ export default function Dashboard() {
                         </div>
                 </div>
 
+                {/* ── 3C. Available Mock Drives (Phase 3B — real backend data) ── */}
+                {user?.role === 'student' && (
+                    <div className="mb-8">
+                        <div className="glass-card rounded-3xl p-6 md:p-8">
+                            <div className="flex items-center justify-between mb-6">
+                                <div>
+                                    <h2 className="text-xl font-black text-slate-900 tracking-tight">Available Mock Drives</h2>
+                                    <p className="text-xs text-slate-500 font-medium">
+                                        Drives you are eligible for, configured by your TPO.
+                                    </p>
+                                </div>
+                                {!drivesLoading && (
+                                    <span className="text-xs font-semibold text-violet-700 bg-violet-50 px-3 py-1 rounded-xl border border-violet-200">
+                                        {availableDrives.length} Available
+                                    </span>
+                                )}
+                            </div>
+
+                            {drivesLoading ? (
+                                <div className="text-xs text-slate-400 py-6 text-center">Loading available drives…</div>
+                            ) : availableDrives.length === 0 ? (
+                                <div className="text-center py-10 px-4">
+                                    <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center mx-auto mb-3 text-xl">🎯</div>
+                                    <p className="text-xs font-semibold text-slate-600 mb-1">No mock drives available right now</p>
+                                    <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                                        New drives will appear here when your TPO publishes them and you meet the eligibility criteria.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {availableDrives.map(drive => {
+                                        const enabledRounds = Object.entries(drive.selected_rounds || {})
+                                            .filter(([, v]) => v)
+                                            .map(([k]) => ROUND_LABELS[k] || k);
+                                        return (
+                                            <div key={drive.id} className="bg-white border border-violet-100 rounded-2xl p-5 shadow-xs flex flex-col justify-between">
+                                                <div>
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <span className="text-[10px] font-bold uppercase tracking-wider text-violet-600 bg-violet-50 px-2 py-0.5 rounded-md border border-violet-200">
+                                                            Mock Drive
+                                                        </span>
+                                                    </div>
+                                                    <h3 className="text-base font-bold text-slate-900 mb-0.5">{drive.company_name}</h3>
+                                                    <p className="text-xs text-slate-500 mb-3">{drive.target_role}</p>
+
+                                                    <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5 mb-4 text-[11px]">
+                                                        <div className="flex justify-between">
+                                                            <span className="text-slate-500">Min CGPA:</span>
+                                                            <span className="font-bold text-slate-800">{drive.minimum_cgpa}</span>
+                                                        </div>
+                                                        <div className="flex justify-between">
+                                                            <span className="text-slate-500">Max Backlogs:</span>
+                                                            <span className="font-bold text-slate-800">{drive.maximum_backlogs}</span>
+                                                        </div>
+                                                        {drive.eligible_branches?.length > 0 && (
+                                                            <div className="flex justify-between">
+                                                                <span className="text-slate-500">Branches:</span>
+                                                                <span className="font-semibold text-slate-700 text-right max-w-[150px] truncate">
+                                                                    {drive.eligible_branches.join(', ')}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {enabledRounds.length > 0 && (
+                                                        <div className="flex flex-wrap gap-1 mb-4">
+                                                            {enabledRounds.map(r => (
+                                                                <span key={r} className="text-[10px] font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md border border-slate-200">
+                                                                    {r}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                <button
+                                                    onClick={() => handleStartMockDrive(drive.id)}
+                                                    disabled={startingDriveId === drive.id}
+                                                    className="w-full py-2.5 px-4 rounded-xl text-xs font-bold bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white shadow-sm transition-all active:scale-95"
+                                                >
+                                                    {startingDriveId === drive.id ? 'Starting…' : 'Start Mock Drive →'}
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
                 {/* ── 4. Technical Subject & Competency Breakdown (Real Backend Data) ── */}
-                <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-8 shadow-sm mb-8">
+                <div className="glass-card rounded-3xl p-6 md:p-8 mb-8">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h2 className="text-xl font-black text-slate-900 tracking-tight">Technical Subject & Competency Breakdown</h2>
@@ -1022,7 +1154,7 @@ export default function Dashboard() {
                 </div>
 
                 {/* ── 5. Real Session History Table (Distinguishing all 7 Round Types) ── */}
-                <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-8 shadow-sm mb-8">
+                <div className="glass-card rounded-3xl p-6 md:p-8 mb-8">
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h2 className="text-xl font-black text-slate-900 tracking-tight">Assessment Session History</h2>
@@ -1112,7 +1244,7 @@ export default function Dashboard() {
 
                 {/* ── 5. Metric-Driven Optimization Insights ── */}
                 {analytics?.optimization_areas && analytics.optimization_areas.length > 0 && (
-                    <div className="bg-white border border-slate-200 rounded-3xl p-6 md:p-8 shadow-sm mb-8">
+                    <div className="glass-card rounded-3xl p-6 md:p-8 mb-8">
                         <div className="flex items-center gap-3 mb-4">
                             <span className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center text-sm font-bold">
                                 💡

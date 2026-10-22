@@ -2,6 +2,7 @@
 Pydantic schemas for interview round request / response payloads.
 """
 
+from datetime import datetime
 from typing import Dict, List, Optional
 
 from pydantic import BaseModel
@@ -51,6 +52,11 @@ class StartInterviewResponse(BaseModel):
     interview_id: int
     phase: str  # HR or TECHNICAL
     total_turns: int
+    # Server-authoritative overall round deadlines (naive UTC), so the UI can
+    # display the remaining round time from the persisted AssessmentRound /
+    # AssessmentSession deadline instead of inventing a client-side countdown.
+    round_expires_at: Optional[datetime] = None
+    session_expires_at: Optional[datetime] = None
 
 
 # ── Next Question ──────────────────────────────────────────────────────

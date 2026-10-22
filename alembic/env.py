@@ -31,6 +31,7 @@ import app.models.session_problem  # noqa: F401
 import app.models.advanced_proctoring  # noqa: F401
 import app.models.admin_question_feedback  # noqa: F401
 import app.models.profile  # noqa: F401
+import app.models.competency  # noqa: F401
 
 # ── Alembic Config ────────────────────────────────────────────────────
 config = context.config
@@ -74,7 +75,7 @@ def run_migrations_online() -> None:
     """
     # Use settings.DATABASE_URL directly to avoid ConfigParser interpolation
     from sqlalchemy import create_engine
-    
+
     connectable = create_engine(settings.DATABASE_URL, poolclass=pool.NullPool)
 
     with connectable.connect() as connection:

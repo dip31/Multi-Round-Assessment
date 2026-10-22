@@ -20,6 +20,15 @@ VALID_CODING_STATUSES = {
     "internal_error",
 }
 
+
+class CodeExecutionUnavailable(RuntimeError):
+    """Raised when Judge0 cannot execute code (not configured/unreachable/auth).
+
+    This is an infrastructure failure, never a property of the candidate's
+    submission. Callers on the scored assessment path must surface it instead
+    of persisting a substituted/mock result as if the code had executed.
+    """
+
 JUDGE0_URL = settings.JUDGE0_URL
 JUDGE0_API_KEY = settings.JUDGE0_API_KEY
 JUDGE0_HTTP_TIMEOUT = settings.JUDGE0_HTTP_TIMEOUT
@@ -31,66 +40,113 @@ JUDGE0_LANGUAGE_MAP = settings.JUDGE0_LANGUAGE_MAP
 JUDGE0_AUTH_MODE = settings.JUDGE0_AUTH_MODE
 
 
-def _mock_evaluate(code: str, language: str, test_cases: List[CodingTestCase], visible_only: bool = True) -> Dict[str, Any]:
-    def normalize_text(s: str) -> str:
-        if s is None:
-            return ""
-        # Normalize CRLF -> LF
-        s = s.replace("\r\n", "\n").replace("\r", "\n")
-        # Strip leading/trailing whitespace and collapse multiple spaces
-        s = " ".join(s.strip().split())
-        return s
+# Reasons a submission could not be executed remotely. Each maps to a stable,
+# secret-free operator message so the failure is diagnosable instead of
+# appearing as a generic "unavailable".
+_UNAVAILABLE_MESSAGES = {
+    "not_configured": (
+        "Code execution is unavailable: Judge0 is not configured. "
+        "Set JUDGE0_URL (and JUDGE0_API_KEY if the instance requires auth) in .env."
+    ),
+    "authentication_failed": (
+        "Code execution is unavailable: Judge0 rejected the request (HTTP 401/403). "
+        "JUDGE0_API_KEY is missing or invalid for this instance — set the instance's "
+        "auth token in .env (JUDGE0_AUTH_MODE=self-hosted uses X-Auth-Token)."
+    ),
+    "unreachable": (
+        "Code execution is unavailable: the configured Judge0 instance is unreachable. "
+        "Verify JUDGE0_URL/network access from the backend host."
+    ),
+}
 
-    def numeric_compare(a: str, b: str, tol: float = 1e-6) -> bool:
-        try:
-            fa = float(a)
-            fb = float(b)
-            return abs(fa - fb) <= tol
-        except Exception:
-            return False
+# Placeholder shown per test case while execution is unavailable.
+_UNAVAILABLE_ACTUAL = "[code execution unavailable]"
 
+
+def _mock_evaluate(
+    code: str,
+    language: str,
+    test_cases: List[CodingTestCase],
+    visible_only: bool = True,
+    reason: str = "not_configured",
+) -> Dict[str, Any]:
+    """
+    Mock evaluator used when Judge0 is unavailable.
+
+    Does NOT execute code — returns a clear 'internal_error' status with a
+    message explaining that code execution requires a running Judge0 instance.
+    Per-case results show the expected output so the student can see what is
+    expected; actual_output is marked as not available.
+    """
     total = len(test_cases)
-    passed = 0
-    total_time = 0.0
-    max_mem = 0
-    
-    # Track per-case results for run (visible_only=True)
     test_case_results = []
-    
-    for tc in test_cases:
-        expected = normalize_text(tc.expected_output)
-        # For mock, we'll assume the code echoes input for simplicity
-        actual = normalize_text(tc.input_data)
-        passed_bool = (expected == actual or numeric_compare(expected, actual))
-        if passed_bool:
-            passed += 1
-        
-        # Collect per-case detail only when visible_only=True (run)
-        if visible_only:
+
+    if visible_only:
+        for tc in test_cases:
             test_case_results.append({
                 "input_data": tc.input_data,
                 "expected_output": tc.expected_output,
-                "actual_output": actual,
-                "passed": passed_bool,
+                "actual_output": _UNAVAILABLE_ACTUAL,
+                "passed": False,
             })
 
-    score = (passed / total) if total else 0.0
-    status = "accepted" if passed == total and total > 0 else "wrong_answer"
-    result = {
-        "status": status,
+    return {
+        "status": "internal_error",
         "judge0_token": None,
-        "score": score,
-        "test_cases_passed": passed,
+        "score": 0.0,
+        "test_cases_passed": 0,
         "total_test_cases": total,
-        "execution_time": total_time,
-        "memory_used": max_mem,
+        "execution_time": 0.0,
+        "memory_used": 0,
+        "message": _UNAVAILABLE_MESSAGES.get(reason, _UNAVAILABLE_MESSAGES["not_configured"]),
+        **({"test_case_results": test_case_results} if visible_only else {}),
     }
-    
-    # Only include test_case_results for /run (visible_only=True)
-    if visible_only:
-        result["test_case_results"] = test_case_results
-    
-    return result
+
+
+def judge0_health() -> Dict[str, Any]:
+    """Secret-free Judge0 configuration/connectivity diagnostic.
+
+    Hits ``GET /about`` and reports whether the instance is configured,
+    reachable, and successfully authenticated. The API key value is never
+    included — only whether one is configured.
+    """
+    info: Dict[str, Any] = {
+        "configured": bool(JUDGE0_URL),
+        "url": JUDGE0_URL or None,
+        "auth_mode": JUDGE0_AUTH_MODE,
+        "api_key_configured": bool(JUDGE0_API_KEY),
+        "reachable": False,
+        "authenticated": False,
+        "status_code": None,
+        "error": None,
+    }
+    if not JUDGE0_URL:
+        info["error"] = "JUDGE0_URL is not configured"
+        return info
+
+    try:
+        resp = requests.get(
+            f"{JUDGE0_URL}/about", headers=_build_headers(), timeout=JUDGE0_HTTP_TIMEOUT
+        )
+    except requests.ConnectionError:
+        info["error"] = "connection error (service unreachable)"
+        return info
+    except requests.Timeout:
+        info["error"] = "request timed out"
+        return info
+    except Exception as exc:  # pragma: no cover - defensive
+        info["error"] = type(exc).__name__
+        return info
+
+    info["status_code"] = resp.status_code
+    info["reachable"] = True
+    if resp.status_code in (401, 403):
+        info["error"] = "authentication failed — JUDGE0_API_KEY missing or invalid"
+    elif resp.status_code >= 400:
+        info["error"] = f"unexpected HTTP {resp.status_code}"
+    else:
+        info["error"] = None
+    return info
 
 
 @lru_cache(maxsize=1)
@@ -244,17 +300,22 @@ def _evaluate_batch(code: str, language: str, test_cases: List[CodingTestCase], 
             "error_message": "Judge0 batch submission timed out",
         }
     except requests.ConnectionError:
-        return {
-            "status": "internal_error",
-            "judge0_token": None,
-            "score": 0.0,
-            "test_cases_passed": 0,
-            "total_test_cases": len(test_cases),
-            "execution_time": 0.0,
-            "memory_used": 0,
-            "error_message": "Cannot connect to Judge0 server",
-        }
+        import logging as _log
+        _log.getLogger(__name__).warning(
+            "Judge0 unreachable at %s — falling back to mock evaluator", JUDGE0_URL
+        )
+        return _mock_evaluate(code, language, test_cases, visible_only, reason="unreachable")
     except requests.HTTPError as e:
+        sc = e.response.status_code if e.response is not None else 0
+        if sc in (401, 403):
+            import logging as _log
+            _log.getLogger(__name__).warning(
+                "Judge0 authentication failed (%s) — JUDGE0_API_KEY may be missing. "
+                "Falling back to mock evaluator.", sc
+            )
+            return _mock_evaluate(
+                code, language, test_cases, visible_only, reason="authentication_failed"
+            )
         return {
             "status": "internal_error",
             "judge0_token": None,
@@ -263,7 +324,7 @@ def _evaluate_batch(code: str, language: str, test_cases: List[CodingTestCase], 
             "total_test_cases": len(test_cases),
             "execution_time": 0.0,
             "memory_used": 0,
-            "error_message": f"Judge0 HTTP error: {e.response.status_code}",
+            "error_message": f"Judge0 HTTP error: {sc}",
         }
     except Exception as e:
         return {
@@ -411,4 +472,3 @@ def evaluate_submission(code: str, language: str, test_cases: List[CodingTestCas
         return _mock_evaluate(code, language, test_cases, visible_only)
 
     return _evaluate_batch(code, language, test_cases, visible_only)
-

@@ -18,6 +18,10 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    existing_cols = {col['name'] for col in inspector.get_columns('interview_turns')}
+
     # Step 1 — Ensure rl_state column is JSONB (no-op if already JSONB)
     op.execute(
         "ALTER TABLE interview_sessions "
@@ -25,23 +29,26 @@ def upgrade() -> None:
     )
 
     # Step 2 — Add missing columns to interview_turns
-    op.add_column(
-        'interview_turns',
-        sa.Column('final_score', sa.Float(), nullable=True)
-    )
-    op.add_column(
-        'interview_turns',
-        sa.Column('intent', sa.String(10), nullable=True)
-    )
-    op.add_column(
-        'interview_turns',
-        sa.Column(
-            'parent_turn_id',
-            sa.Integer(),
-            sa.ForeignKey('interview_turns.id'),
-            nullable=True,
+    if 'final_score' not in existing_cols:
+        op.add_column(
+            'interview_turns',
+            sa.Column('final_score', sa.Float(), nullable=True)
         )
-    )
+    if 'intent' not in existing_cols:
+        op.add_column(
+            'interview_turns',
+            sa.Column('intent', sa.String(10), nullable=True)
+        )
+    if 'parent_turn_id' not in existing_cols:
+        op.add_column(
+            'interview_turns',
+            sa.Column(
+                'parent_turn_id',
+                sa.Integer(),
+                sa.ForeignKey('interview_turns.id'),
+                nullable=True,
+            )
+        )
 
     # Step 3 — Seed new rl_state fields for existing sessions
     op.execute("""

@@ -19,6 +19,7 @@ import hashlib
 import json
 import logging
 import tempfile
+from copy import deepcopy
 from datetime import datetime
 from typing import Optional
 
@@ -47,6 +48,10 @@ from app.models.interview import (
 from app.models.assessment import AssessmentSession
 from app.services.resume_service import parse_resume
 from app.services.groq_service import GroqService
+from app.services.assessment_blueprint_service import (
+    configured_question_count,
+    get_session_active_blueprint_round_config,
+)
 from app.modules.interview.schemas.interview_schema import (
     ResumeUploadResponse,
     QuestionPoolResponse,
@@ -79,6 +84,154 @@ router = APIRouter(
     tags=["Interview Round"],
 )
 
+# Lazy import to avoid circular deps — only used in completion hooks
+def _try_advance_mock_drive(db, session_id):
+    try:
+        from app.services.mock_drive_service import try_advance_mock_drive
+        return try_advance_mock_drive(db, session_id)
+    except Exception:
+        return None
+
+
+# ── Candidate isolation helpers ───────────────────────────────────────
+# Staff roles allowed to READ candidate interview data, matching the existing
+# /interview/report frontend route (student/faculty/tpo/admin) and the report
+# module's role policy. Write actions remain owner-only.
+_STAFF_ROLES = ("admin", "faculty", "tpo")
+
+
+def _assessment_session_owner_id(db: Session, assessment_session_id: Optional[int]) -> Optional[int]:
+    """Return the user id owning an AssessmentSession, or None if not found."""
+    if assessment_session_id is None:
+        return None
+    assessment_session = (
+        db.query(AssessmentSession)
+        .filter(AssessmentSession.id == assessment_session_id)
+        .first()
+    )
+    return assessment_session.user_id if assessment_session else None
+
+
+def _get_interview_for_user(
+    db: Session,
+    interview_id: int,
+    current_user: User,
+    *,
+    allow_staff: bool = True,
+) -> InterviewSession:
+    """Return the interview session, enforcing candidate isolation.
+
+    The owning candidate always has access; staff roles may read when
+    ``allow_staff`` is set. Any other caller receives the same 404 as a
+    missing interview so another student's data (or even its existence) is
+    never exposed.
+    """
+    interview = (
+        db.query(InterviewSession)
+        .filter(InterviewSession.id == interview_id)
+        .first()
+    )
+    if interview is None:
+        raise HTTPException(status_code=404, detail="Interview not found")
+
+    owner_id = _assessment_session_owner_id(db, interview.session_id)
+    if owner_id == current_user.id:
+        return interview
+    if allow_staff and current_user.role in _STAFF_ROLES:
+        return interview
+    raise HTTPException(status_code=404, detail="Interview not found")
+
+
+def _require_session_owner(db: Session, assessment_session_id: int, current_user: User) -> None:
+    """Ensure the caller owns the given AssessmentSession (404 otherwise)."""
+    owner_id = _assessment_session_owner_id(db, assessment_session_id)
+    if owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Assessment session not found")
+
+
+def _require_interview_not_expired(db: Session, interview: InterviewSession) -> None:
+    """Server-authoritative deadline enforcement for interview work (Phase 4C Part 3).
+
+    Only the persisted deadlines are consulted (``AssessmentSession.expires_at``
+    and the active interview ``AssessmentRound.expires_at``); client-supplied
+    timing is never used. When either deadline has passed the records are
+    persisted as ``expired`` with TIME_EXPIRED completion reason, the mock
+    drive is advanced (if applicable), and the caller receives HTTP 410.
+    Sessions without a persisted deadline (legacy / blueprintless) are left
+    untouched so their behavior stays backward compatible.
+    """
+    from app.models.assessment import AssessmentRound, AssessmentSession
+    from app.services.mock_drive_service import try_advance_mock_drive
+
+    now = datetime.utcnow()
+    assessment_session = (
+        db.query(AssessmentSession)
+        .filter(AssessmentSession.id == interview.session_id)
+        .first()
+    )
+    interview_round = (
+        db.query(AssessmentRound)
+        .filter(
+            AssessmentRound.session_id == interview.session_id,
+            AssessmentRound.round_type == "interview",
+            AssessmentRound.status == "active",
+        )
+        .order_by(AssessmentRound.id.desc())
+        .first()
+    )
+
+    session_expired = (
+        assessment_session is not None
+        and assessment_session.expires_at is not None
+        and assessment_session.expires_at <= now
+    )
+    round_expired = (
+        interview_round is not None
+        and interview_round.expires_at is not None
+        and interview_round.expires_at <= now
+    )
+    if not session_expired and not round_expired:
+        return
+
+    if round_expired:
+        interview_round.status = "expired"
+        interview_round.completed_at = now
+        # Set TIME_EXPIRED completion reason on the interview session
+        if interview.completion_reason is None:
+            interview.completion_reason = "TIME_EXPIRED"
+            interview.completed_at = now
+            interview.status = "COMPLETED"
+    if session_expired and assessment_session.status == "in_progress":
+        assessment_session.status = "expired"
+        assessment_session.completed_at = now
+        # Session authority: like _expire_stale_session, close every active
+        # round for this session so no work remains active after the session
+        # deadline (the round deadline may still be in the future).
+        db.query(AssessmentRound).filter(
+            AssessmentRound.session_id == assessment_session.id,
+            AssessmentRound.status == "active",
+        ).update(
+            {"status": "expired", "completed_at": now},
+            synchronize_session="fetch",
+        )
+        if interview.completion_reason is None:
+            interview.completion_reason = "TIME_EXPIRED"
+            interview.completed_at = now
+            interview.status = "COMPLETED"
+    db.commit()
+
+    # Advance mock drive if this interview was part of a mock drive
+    if assessment_session is not None:
+        try:
+            try_advance_mock_drive(db, interview.session_id)
+        except HTTPException:
+            pass
+
+    raise HTTPException(
+        status_code=410,
+        detail="This interview has expired and has been finalized. The mock drive has advanced to the next round or completed.",
+    )
+
 
 class LogEventRequest(BaseModel):
     session_id: int
@@ -90,6 +243,15 @@ class LogEventRequest(BaseModel):
 # Global instances (will be set by app lifespan)
 ml_models = {}  # To be populated by app/main.py
 groq_service = GroqService(settings.GROQ_API_KEY)
+
+# Warn at startup if GROQ_API_KEY is missing or looks like a placeholder
+_groq_key = settings.GROQ_API_KEY or ""
+if not _groq_key or len(_groq_key) < 30 or not _groq_key.startswith("gsk_"):
+    logger.warning(
+        "GROQ_API_KEY appears to be missing or invalid (expected format: gsk_..., length ~56). "
+        "Interview question generation will use fallback questions. "
+        "Set a real GROQ_API_KEY in .env to enable AI-generated questions."
+    )
 
 redis_client: Optional[redis.Redis] = None
 
@@ -105,7 +267,6 @@ def _get_redis_client() -> Optional[redis.Redis]:
     if not redis_url:
         logger.info("Redis cache disabled: REDIS_URL not configured")
         return None
-
     try:
         client = redis.from_url(redis_url, decode_responses=False)
         client.ping()
@@ -116,6 +277,70 @@ def _get_redis_client() -> Optional[redis.Redis]:
         logger.info(f"Redis cache unavailable; continuing without cache: {str(e)}")
         redis_client = None
         return None
+
+
+def _generate_question_pool_for_session(
+    db: Session,
+    session_id: int,
+    skills: list[str],
+    projects: dict,
+    interview_type: str,
+) -> tuple[list[dict], int, bool]:
+    fallback_round = (
+        "hr_interview"
+        if (interview_type or "").lower().strip() == "hr"
+        else "technical_interview"
+    )
+    snapshot, round_config, round_key = get_session_active_blueprint_round_config(
+        db, session_id, fallback_round
+    )
+    if snapshot is not None and round_config is not None:
+        # Blueprint-backed interview: require the pre-generated, validated pool.
+        # NO LLM call and NO generic fallback at candidate time.
+        from app.services.question_pool_generation_service import (
+            question_pool_generation_service,
+        )
+
+        count = configured_question_count(round_config) or 12
+        generated_pool = question_pool_generation_service.complete_pool_for_round(
+            db,
+            snapshot.get("blueprint_id"),
+            snapshot.get("blueprint_version"),
+            round_key,
+        )
+        if generated_pool is not None and generated_pool.content:
+            return deepcopy(generated_pool.content)[:count], count, True
+
+        # Pool is missing, incomplete, or invalid — fail closed per G1.
+        # No candidate-time LLM generation or generic fallback.
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"A validated {round_key} question pool must be generated for this "
+                "blueprint before starting an interview. Please generate and approve "
+                "the pool in the TPO portal, then retry."
+            ),
+        )
+
+    # Legacy / blueprintless interview: retain existing LLM-generation behavior.
+    if snapshot is None or round_config is None:
+        return (
+            groq_service.generate_question_pool(
+                skills,
+                projects,
+                count=12,
+                interview_type=interview_type or "technical",
+            ),
+            12,
+            False,
+        )
+
+    # Unreachable — blueprint-backed path returns or raises above.
+    # Kept for type checkers.
+    raise HTTPException(
+        status_code=422,
+        detail="Interview pool unavailable for this blueprint and round.",
+    )
 
 
 # ── ENDPOINT 1: POST /interview/resume/upload ──────────────────────────
@@ -145,14 +370,18 @@ async def upload_resume(
             )
         session_id = active_session.id
 
+    # Never attach a generated pool to a session the caller does not own.
+    _require_session_owner(db, session_id, current_user)
+
     content = None
     try:
         content = await file.read()
         extracted = parse_resume(content)
-        pool = groq_service.generate_question_pool(
-            extracted["skills"],
-            extracted["projects"],
-            count=12,
+        pool, _, _ = _generate_question_pool_for_session(
+            db=db,
+            session_id=session_id,
+            skills=extracted["skills"],
+            projects=extracted["projects"],
             interview_type=interview_type or "technical",
         )
 
@@ -180,6 +409,18 @@ async def upload_resume(
             question_count=len(pool),
             detected_role=detected_role,
             pending_approval=True,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error(f"Resume upload processing failed: {exc}", exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Resume processing failed. "
+                "Ensure the AI services are configured correctly (GROQ_API_KEY) "
+                "and all required dependencies are installed."
+            ),
         )
     finally:
         if content:
@@ -225,15 +466,29 @@ async def use_profile_resume(
             )
         session_id = active_session.id
 
+    # Never attach a generated pool to a session the caller does not own.
+    _require_session_owner(db, session_id, current_user)
+
     skills = resume.parsed_skills if isinstance(resume.parsed_skills, list) else []
     projects = resume.parsed_projects if isinstance(resume.parsed_projects, list) else []
 
-    pool = groq_service.generate_question_pool(
-        skills,
-        projects,
-        count=12,
-        interview_type=interview_type or "technical",
-    )
+    try:
+        pool, _, _ = _generate_question_pool_for_session(
+            db=db,
+            session_id=session_id,
+            skills=skills,
+            projects=projects,
+            interview_type=interview_type or "technical",
+        )
+    except Exception as exc:
+        logger.error(f"Question pool generation failed for resume {resume_id}: {exc}", exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Question pool generation failed. "
+                "Ensure GROQ_API_KEY is configured correctly."
+            ),
+        )
 
     detected_role = resume.cv_type or "Software Developer"
     if pool and len(pool) > 0 and pool[0].get("role"):
@@ -318,6 +573,10 @@ async def get_pool(
     if not pool:
         raise HTTPException(status_code=404, detail="Question pool not found")
 
+    owner_id = _assessment_session_owner_id(db, pool.session_id)
+    if owner_id != current_user.id and current_user.role not in _STAFF_ROLES:
+        raise HTTPException(status_code=404, detail="Question pool not found")
+
     return QuestionPoolResponse(
         pool_id=pool.id,
         questions=pool.question_pool,
@@ -338,8 +597,9 @@ async def analyze_frame(
     interview = db.query(InterviewSession).filter(InterviewSession.id == session_id).first()
     if not interview:
         raise HTTPException(status_code=400, detail="Invalid session_id")
-    # Ensure current_user owns the session or is admin
-    if interview.session_id != current_user.id and current_user.role != "admin":
+    # Ensure current_user owns the interview's assessment session or is admin
+    owner_id = _assessment_session_owner_id(db, interview.session_id)
+    if owner_id != current_user.id and current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Not authorized for this session")
 
     content = await frame.read()
@@ -363,7 +623,8 @@ async def log_event(
     interview = db.query(InterviewSession).filter(InterviewSession.id == req.session_id).first()
     if not interview:
         raise HTTPException(status_code=400, detail="Invalid session_id")
-    if interview.session_id != current_user.id and current_user.role != "admin":
+    owner_id = _assessment_session_owner_id(db, interview.session_id)
+    if owner_id != current_user.id and current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Not authorized for this session")
 
     success = await log_violation(db, req.session_id, req.event_type, req.confidence_score, req.face_count, req.metadata)
@@ -380,6 +641,9 @@ async def approve_pool(
     current_user: User = Depends(get_current_user),
 ):
     """Approve or reject a question pool."""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
     pool = db.query(ApprovedQuestionPool).filter(
         ApprovedQuestionPool.id == pool_id
     ).first()
@@ -397,6 +661,115 @@ async def approve_pool(
     return ApprovePoolResponse(
         status="approved" if req.approved else "rejected"
     )
+
+
+# ── Active-round interview bootstrap helpers ──────────────────────────
+# A Mock Drive can contain more than one interview round (technical + HR),
+# both persisted as AssessmentRound(round_type="interview") and sharing one
+# AssessmentSession. These helpers resolve which round is active and select the
+# matching approved pool so the two rounds never bleed into each other.
+_INTERVIEW_ROUND_KEYS = ("technical_interview", "hr_interview")
+
+
+def _active_interview_round(db: Session, session_id: int):
+    """Return the session's currently active interview round, if any."""
+    from app.models.assessment import AssessmentRound
+
+    return (
+        db.query(AssessmentRound)
+        .filter(
+            AssessmentRound.session_id == session_id,
+            AssessmentRound.round_type == "interview",
+            AssessmentRound.status == "active",
+        )
+        .order_by(AssessmentRound.id.desc())
+        .first()
+    )
+
+
+def _canonical_interview_round_key(db: Session, session_id: int, assessment_round) -> str:
+    """Resolve the canonical round key ("technical_interview"/"hr_interview").
+
+    Prefers the persisted canonical key (``practice_type``) so a technical and
+    an HR interview — which share ``round_type="interview"`` — stay distinct,
+    then falls back to the blueprint's active-round resolution, and finally to
+    ``technical_interview``.
+    """
+    stored = getattr(assessment_round, "practice_type", None)
+    if stored in _INTERVIEW_ROUND_KEYS:
+        return stored
+    _, _, round_key = get_session_active_blueprint_round_config(
+        db, session_id, "technical_interview"
+    )
+    if round_key in _INTERVIEW_ROUND_KEYS:
+        return round_key
+    return "technical_interview"
+
+
+def _phase_for_interview_round_key(round_key: str) -> str:
+    return "HR" if round_key == "hr_interview" else "TECHNICAL"
+
+
+def _approved_pool_for_phase(
+    db: Session, session_id: int, phase: str
+) -> Optional[ApprovedQuestionPool]:
+    """Return the approved pool that contains questions for ``phase``.
+
+    Selects the pool whose content actually holds questions for this phase so
+    two interview rounds on one session never share the wrong questions; falls
+    back to the earliest pool for legacy single-pool data.
+    """
+    pools = (
+        db.query(ApprovedQuestionPool)
+        .filter(
+            ApprovedQuestionPool.session_id == session_id,
+            ApprovedQuestionPool.admin_approved == True,
+        )
+        .order_by(ApprovedQuestionPool.id.asc())
+        .all()
+    )
+    for pool in pools:
+        if any((q or {}).get("phase") == phase for q in (pool.question_pool or [])):
+            return pool
+    return pools[0] if pools else None
+
+
+def _approved_pool_for_interview(
+    db: Session, interview: InterviewSession
+) -> Optional[ApprovedQuestionPool]:
+    return _approved_pool_for_phase(db, interview.session_id, interview.phase)
+
+
+def _ensure_interview_pool(
+    db: Session, session_id: int, round_key: str, phase: str
+) -> ApprovedQuestionPool:
+    """Return an approved pool for the round, creating one if needed.
+
+    For blueprint-backed sessions this clones the pre-generated, validated pool
+    (no candidate-time LLM call). ``round_key`` is the canonical Mock Drive key
+    so the correct technical/HR pool is cloned.
+    """
+    approved_pool = _approved_pool_for_phase(db, session_id, phase)
+    if approved_pool is not None:
+        return approved_pool
+
+    questions, _, _ = _generate_question_pool_for_session(
+        db, session_id, [], {}, round_key
+    )
+    approved_pool = ApprovedQuestionPool(
+        session_id=session_id,
+        extracted_skills=[],
+        extracted_projects={},
+        question_pool=questions,
+        admin_approved=True,
+        approved_by=None,
+        approved_at=datetime.now(),
+        detected_role=None,
+    )
+    db.add(approved_pool)
+    db.commit()
+    db.refresh(approved_pool)
+    return approved_pool
 
 
 # ── ENDPOINT 4: POST /interview/session/start ──────────────────────────
@@ -420,9 +793,31 @@ async def start_interview(
         )
 
     session_id = approved_pool.session_id
+    if _assessment_session_owner_id(db, session_id) != current_user.id:
+        raise HTTPException(
+            status_code=404,
+            detail="Question pool not found or not approved.",
+        )
 
     first_q = approved_pool.question_pool[0] if (approved_pool.question_pool and len(approved_pool.question_pool) > 0) else {}
     interview_phase = first_q.get("phase", "HR").upper()
+    fallback_round = "hr_interview" if interview_phase == "HR" else "technical_interview"
+    snapshot, round_config, _ = get_session_active_blueprint_round_config(
+        db, session_id, fallback_round
+    )
+    total_turns = 10
+    if snapshot and round_config:
+        configured_count = configured_question_count(round_config)
+        if configured_count is not None:
+            if len(approved_pool.question_pool) < configured_count:
+                raise HTTPException(
+                    status_code=409,
+                    detail=(
+                        f"This interview pool has {len(approved_pool.question_pool)} questions, "
+                        f"but the approved blueprint requires {configured_count}. Regenerate the pool."
+                    ),
+                )
+            total_turns = configured_count
 
     rl_engine = InterviewRLEngine()
     initial_state = rl_engine.to_dict()
@@ -432,7 +827,124 @@ async def start_interview(
         session_id=session_id,
         phase=interview_phase,
         current_turn=0,
-        total_turns=10,
+        total_turns=total_turns,
+        rl_state=initial_state,
+    )
+    db.add(interview)
+    db.commit()
+    db.refresh(interview)
+
+    assessment_session = (
+        db.query(AssessmentSession)
+        .filter(AssessmentSession.id == session_id)
+        .first()
+    )
+    active_round = _active_interview_round(db, session_id)
+
+    return StartInterviewResponse(
+        interview_id=interview.id,
+        phase=interview_phase,
+        total_turns=total_turns,
+        round_expires_at=active_round.expires_at if active_round else None,
+        session_expires_at=(
+            assessment_session.expires_at if assessment_session else None
+        ),
+    )
+
+
+# ── ENDPOINT 4b: POST /interview/session/start-active ──────────────────
+@router.post("/session/start-active", response_model=StartInterviewResponse)
+async def start_active_interview(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Idempotently start or resume the interview for the caller's active round.
+
+    ``POST /session/start`` requires a ``pool_id`` and always creates a new
+    interview session. Navigating to the interview screen — e.g. resuming a
+    Mock Drive or refreshing the page — has no pool id and must be safe to
+    repeat, so this endpoint resolves the caller's active interview round,
+    guarantees an approved question pool exists for it (cloning the
+    pre-generated blueprint pool when available — no candidate-time LLM call),
+    and returns the existing active interview session instead of creating a
+    second one.
+    """
+    session = (
+        db.query(AssessmentSession)
+        .filter(
+            AssessmentSession.user_id == current_user.id,
+            AssessmentSession.status == "in_progress",
+        )
+        .order_by(AssessmentSession.id.desc())
+        .first()
+    )
+    if session is None:
+        raise HTTPException(status_code=404, detail="No active assessment session")
+
+    # Scoped to Mock Drive: the standalone/practice interview is bootstrapped by
+    # the resume-upload flow (which sets localStorage.interview_id). Only the
+    # Mock Drive interview round navigates straight to /interview without it.
+    from app.models.assessment_context import AssessmentContext
+
+    context = (
+        db.query(AssessmentContext)
+        .filter(AssessmentContext.id == session.context_id)
+        .first()
+    )
+    if context is None or context.mode != "mock_drive":
+        raise HTTPException(
+            status_code=404, detail="No active mock drive interview round"
+        )
+
+    assessment_round = _active_interview_round(db, session.id)
+    if assessment_round is None:
+        raise HTTPException(
+            status_code=404, detail="No active interview round for this session"
+        )
+
+    round_key = _canonical_interview_round_key(db, session.id, assessment_round)
+    phase = _phase_for_interview_round_key(round_key)
+
+    # Resume an existing active interview for this exact round before creating
+    # one (matched by phase so a finished/abandoned technical interview is never
+    # resumed as the HR interview, since both share one session).
+    existing = (
+        db.query(InterviewSession)
+        .filter(
+            InterviewSession.session_id == session.id,
+            InterviewSession.phase == phase,
+            InterviewSession.status == "ACTIVE",
+        )
+        .order_by(InterviewSession.id.desc())
+        .first()
+    )
+    if existing is not None:
+        return StartInterviewResponse(
+            interview_id=existing.id,
+            phase=existing.phase,
+            total_turns=existing.total_turns,
+            round_expires_at=assessment_round.expires_at,
+            session_expires_at=session.expires_at,
+        )
+
+    approved_pool = _ensure_interview_pool(db, session.id, round_key, phase)
+
+    _, round_config, _ = get_session_active_blueprint_round_config(
+        db, session.id, round_key
+    )
+    total_turns = configured_question_count(round_config)
+    if not total_turns:
+        total_turns = len(approved_pool.question_pool or []) or 10
+
+    rl_engine = InterviewRLEngine()
+    initial_state = rl_engine.to_dict()
+    initial_state["interview_type"] = phase.lower()
+
+    interview = InterviewSession(
+        session_id=session.id,
+        phase=phase,
+        current_turn=0,
+        total_turns=total_turns,
         rl_state=initial_state,
     )
     db.add(interview)
@@ -441,8 +953,10 @@ async def start_interview(
 
     return StartInterviewResponse(
         interview_id=interview.id,
-        phase=interview_phase,
-        total_turns=10,
+        phase=phase,
+        total_turns=total_turns,
+        round_expires_at=assessment_round.expires_at,
+        session_expires_at=session.expires_at,
     )
 
 
@@ -460,22 +974,25 @@ async def get_next_question(
     returns next question data in its response.
     """
 
-    # Fetch interview session
-    interview = db.query(InterviewSession).filter(
-        InterviewSession.id == interview_id
-    ).first()
+    # Fetch interview session (owner only — this call mutates interview state)
+    interview = _get_interview_for_user(
+        db, interview_id, current_user, allow_staff=False
+    )
 
-    if not interview:
-        raise HTTPException(status_code=404, detail="Interview not found")
-
-    if interview.phase == "COMPLETE":
+    # A completed interview is a terminal state, so short-circuit BEFORE the
+    # expiry check (mirroring /complete's idempotent return). `status` is the
+    # authoritative signal: early user-submitted completion sets
+    # status="COMPLETED" without advancing `phase`, so checking phase alone lets
+    # a finished attempt slip past this guard and surface as a misleading 410
+    # once its deadlines have also elapsed.
+    if interview.status == "COMPLETED" or interview.phase == "COMPLETE":
         raise HTTPException(status_code=400, detail="Interview already completed")
 
-    # Fetch approved question pool
-    approved_pool = db.query(ApprovedQuestionPool).filter(
-        ApprovedQuestionPool.session_id == interview.session_id,
-        ApprovedQuestionPool.admin_approved == True,
-    ).first()
+    _require_interview_not_expired(db, interview)
+
+    # Fetch the approved pool for this interview's phase (a session can hold
+    # both a technical and an HR interview round, each with its own pool)
+    approved_pool = _approved_pool_for_interview(db, interview)
 
     if not approved_pool:
         raise HTTPException(status_code=404, detail="No approved question pool")
@@ -557,27 +1074,32 @@ async def get_next_question(
     db.commit()
 
     # Rephrase using Groq (with Redis cache)
+    # Blueprint-pool questions are already role-specific and pre-validated, so
+    # they are served verbatim: no LLM round-trip at candidate time.
     cache_key = f"question:{hashlib.md5(question_text.encode()).hexdigest()}:{difficulty}"
     rephrased = None
 
-    redis_cache = _get_redis_client()
-    if redis_cache:
-        try:
-            cached = redis_cache.get(cache_key)
-            if isinstance(cached, (bytes, bytearray)):
-                rephrased = cached.decode()
-            elif isinstance(cached, str):
-                rephrased = cached
-        except Exception as e:
-            logger.warning(f"Redis get failed: {str(e)}")
-
-    if not rephrased:
-        rephrased = groq_service.rephrase_question(question_text, difficulty)
+    if not selected.get("blueprint_pool"):
+        redis_cache = _get_redis_client()
         if redis_cache:
             try:
-                redis_cache.setex(cache_key, 86400, rephrased)
+                cached = redis_cache.get(cache_key)
+                if isinstance(cached, (bytes, bytearray)):
+                    rephrased = cached.decode()
+                elif isinstance(cached, str):
+                    rephrased = cached
             except Exception as e:
-                logger.warning(f"Redis set failed: {str(e)}")
+                logger.warning(f"Redis get failed: {str(e)}")
+
+        if not rephrased:
+            rephrased = groq_service.rephrase_question(question_text, difficulty)
+            if redis_cache:
+                try:
+                    redis_cache.setex(cache_key, 86400, rephrased)
+                except Exception as e:
+                    logger.warning(f"Redis set failed: {str(e)}")
+    if not rephrased:
+        rephrased = question_text
 
     return NextQuestionResponse(
         turn_number=interview.current_turn + 1,
@@ -608,12 +1130,13 @@ async def submit_response(
     """
 
     # ── STEP 0: Load state ──────────────────────────────────────────────
-    interview = db.query(InterviewSession).filter(
-        InterviewSession.id == interview_id
-    ).first()
+    # Owner only — submitting answers must never be possible for another
+    # candidate's interview.
+    interview = _get_interview_for_user(
+        db, interview_id, current_user, allow_staff=False
+    )
 
-    if not interview:
-        raise HTTPException(status_code=404, detail="Interview not found")
+    _require_interview_not_expired(db, interview)
 
     rl_state = dict(interview.rl_state or {})
 
@@ -765,10 +1288,8 @@ async def submit_response(
     next_question_obj = None
 
     if action == "NEXT":
-        approved_pool = db.query(ApprovedQuestionPool).filter(
-            ApprovedQuestionPool.session_id == interview.session_id,
-            ApprovedQuestionPool.admin_approved == True,
-        ).first()
+        # Phase-aware pool selection (technical vs HR may share a session)
+        approved_pool = _approved_pool_for_interview(db, interview)
 
         if approved_pool:
             pool = approved_pool.question_pool
@@ -930,6 +1451,36 @@ async def submit_response(
             followup_rate=round(followup_rate, 1),
         )
 
+        # Mark interview as COMPLETED and its AssessmentRound as completed,
+        # then advance the Mock Drive if this interview is part of one.
+        interview.status = "COMPLETED"
+        interview.completion_reason = "ALL_TURNS_COMPLETE"
+        interview.completed_at = datetime.now()
+        db.commit()
+
+        from app.models.assessment import AssessmentRound as AR, AssessmentSession as AS2
+        asmnt_session = (
+            db.query(AS2)
+            .filter(AS2.user_id == current_user.id, AS2.status == "in_progress")
+            .order_by(AS2.id.desc())
+            .first()
+        )
+        if asmnt_session:
+            int_round = (
+                db.query(AR)
+                .filter(
+                    AR.session_id == asmnt_session.id,
+                    AR.round_type == "interview",
+                    AR.status == "active",
+                )
+                .first()
+            )
+            if int_round:
+                int_round.status = "completed"
+                int_round.completed_at = datetime.now()
+                db.commit()
+            _try_advance_mock_drive(db, asmnt_session.id)
+
     return SubmitResponseResponse(
         action=action,
         message=brain_response,
@@ -952,48 +1503,48 @@ async def speech_to_text(
     """
     Transcribes candidate audio using Groq Whisper API.
     Replaces local Whisper model (was causing 503 errors).
-    
+
     Accepted formats: webm, wav, mp3, mp4, m4a, ogg, flac
     Max file size: 25MB
     """
     import os
     import tempfile
-    
+
     # Read audio bytes
     audio_bytes = await audio.read()
-    
+
     # Validate file size — Groq limit is 25MB
     if len(audio_bytes) > 25 * 1024 * 1024:
         return {"transcript": ""}
-    
+
     # Validate file is not empty
     if len(audio_bytes) < 100:
         return {"transcript": ""}
-    
+
     # Determine file extension from upload filename
     # MediaRecorder default is webm — use as fallback
     original_name = audio.filename or "audio.webm"
     extension = os.path.splitext(original_name)[1]
     if not extension or extension not in [
-        ".webm", ".wav", ".mp3", ".mp4", 
+        ".webm", ".wav", ".mp3", ".mp4",
         ".m4a", ".ogg", ".flac", ".mpga", ".mpeg"
     ]:
         extension = ".webm"
-    
+
     tmp_path = None
     try:
         # Write to temp file with correct extension
         with tempfile.NamedTemporaryFile(suffix=extension, delete=False) as tmp:
             tmp.write(audio_bytes)
             tmp_path = tmp.name
-        
+
         # Transcribe via Groq API
         transcript = groq_service.transcribe_audio(tmp_path)
         return {"transcript": transcript}
-    
+
     except Exception as e:
         error_str = str(e).lower()
-        
+
         if "429" in error_str or "rate limit" in error_str:
             # Return 429 so frontend can retry with backoff
             # Do NOT treat as silence — that would penalize
@@ -1002,12 +1553,12 @@ async def speech_to_text(
                 status_code=429,
                 content={"detail": "STT rate limited. Retry shortly."}
             )
-        
+
         # Any other error — return empty transcript
         # /respond endpoint will handle as silence
         print(f"[STT Endpoint Error] {e}")
         return {"transcript": ""}
-    
+
     finally:
         # Always delete temp file
         if tmp_path and os.path.exists(tmp_path):
@@ -1054,9 +1605,7 @@ async def get_interview_status(
     current_user: User = Depends(get_current_user),
 ):
     """Return status and score summary for an interview session."""
-    interview = db.query(InterviewSession).filter(InterviewSession.id == interview_id).first()
-    if not interview:
-        raise HTTPException(status_code=404, detail="Interview not found")
+    interview = _get_interview_for_user(db, interview_id, current_user)
 
     turns = db.query(InterviewTurn).filter(
         InterviewTurn.interview_id == interview_id,
@@ -1088,12 +1637,12 @@ async def complete_interview(
     current_user: User = Depends(get_current_user),
 ):
     """Complete interview session early (user submitted before all questions).
-    
+
     Idempotent: safe to call multiple times, returns existing completion data.
     """
-    interview = db.query(InterviewSession).filter(InterviewSession.id == interview_id).first()
-    if not interview:
-        raise HTTPException(status_code=404, detail="Interview not found")
+    interview = _get_interview_for_user(
+        db, interview_id, current_user, allow_staff=False
+    )
 
     # Idempotent: if already completed, return existing computed values
     if interview.status == "COMPLETED":
@@ -1111,18 +1660,54 @@ async def complete_interview(
             "completion_ratio": round(len(turns) / max(interview.total_turns, 1), 2),
         }
 
+    # Expiration: an expired attempt must not be completed/finalized (which
+    # would also advance the Mock Drive) after its persisted deadline passed.
+    _require_interview_not_expired(db, interview)
+
     # Mark completed
     interview.status = "COMPLETED"
     interview.completion_reason = "USER_SUBMITTED"
     interview.completed_at = datetime.now()
     db.commit()
 
+    # Also complete the AssessmentRound for THIS interview (not done by the
+    # engine itself). Scope strictly to the interview's own assessment session
+    # so completing an old/other interview can never finalize a different
+    # attempt of the same candidate.
+    from app.models.assessment import AssessmentRound, AssessmentSession as ASession
+    assessment_session = (
+        db.query(ASession)
+        .filter(
+            ASession.id == interview.session_id,
+            ASession.status == "in_progress",
+        )
+        .first()
+    )
+    mock_drive_result = None
+    if assessment_session:
+        interview_round = (
+            db.query(AssessmentRound)
+            .filter(
+                AssessmentRound.session_id == assessment_session.id,
+                AssessmentRound.round_type == "interview",
+                AssessmentRound.status == "active",
+            )
+            .first()
+        )
+        if interview_round:
+            interview_round.status = "completed"
+            interview_round.completed_at = datetime.now()
+            db.commit()
+
+        # If this session is part of a Mock Drive, advance/finalize it
+        mock_drive_result = _try_advance_mock_drive(db, assessment_session.id)
+
     turns = db.query(InterviewTurn).filter(
         InterviewTurn.interview_id == interview_id,
         InterviewTurn.is_followup == False
     ).all()
     scores = [t.final_score for t in turns if t.final_score is not None]
-    return {
+    response = {
         "status": "COMPLETED",
         "completion_reason": "USER_SUBMITTED",
         "questions_attempted": len(turns),
@@ -1130,6 +1715,9 @@ async def complete_interview(
         "performance_score": round(sum(scores) / max(len(scores), 1), 2),
         "completion_ratio": round(len(turns) / max(interview.total_turns, 1), 2),
     }
+    if mock_drive_result:
+        response["mock_drive"] = mock_drive_result
+    return response
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1144,12 +1732,7 @@ async def get_report(
 ):
     """Get interview assessment report with grouped turns."""
 
-    interview = db.query(InterviewSession).filter(
-        InterviewSession.id == interview_id
-    ).first()
-
-    if not interview:
-        raise HTTPException(status_code=404, detail="Interview not found")
+    interview = _get_interview_for_user(db, interview_id, current_user)
 
     # Fetch all turns ordered by creation
     all_turns = db.query(InterviewTurn).filter(
@@ -1237,12 +1820,12 @@ async def get_report(
         for t in main_turns
     ]
     feedback = groq_service.generate_feedback_summary(turns_data)
-    
+
     # Compute intent_score average
     intent_scores = [t.intent for t in main_turns if t.intent]
     intent_map = {"positive": 1.0, "neutral": 0.6, "negative": 0.2}
     avg_intent = sum(intent_map.get(i, 0.6) for i in intent_scores) / max(len(intent_scores), 1) if intent_scores else None
-    
+
     # Compute completion_ratio and get completion_reason
     completion_ratio = len(main_turns) / max(interview.total_turns, 1)
     completion_reason = interview.completion_reason
@@ -1273,29 +1856,29 @@ async def realtime_feedback(
 ):
     """
     Returns real-time coaching tips based on behavioral metrics.
-    
+
     Called by frontend polling (every 3 seconds) during interview recording.
     Provides actionable feedback to improve candidate presentation.
     """
     # Face not detected - highest priority
     if not snapshot.face_detected:
         return RealtimeFeedbackResponse(tip="Ensure your face is visible in the camera.")
-    
+
     # Poor eye contact
     if snapshot.eye_contact_pct < 0.4:
         return RealtimeFeedbackResponse(tip="Try to maintain eye contact with the camera.")
-    
+
     # Excessive head movement / instability
     if snapshot.head_stability < 0.4:
         return RealtimeFeedbackResponse(tip="Try to keep your head steady while speaking.")
-    
+
     # Looking away too often
     if snapshot.looking_away_count > 5:
         return RealtimeFeedbackResponse(tip="Focus on the camera to show engagement.")
-    
+
     # Moderate eye contact - gentle nudge
     if snapshot.eye_contact_pct < 0.6:
         return RealtimeFeedbackResponse(tip="Good! A bit more eye contact would help.")
-    
+
     # All good
     return RealtimeFeedbackResponse(tip="Great engagement! Keep it up.")

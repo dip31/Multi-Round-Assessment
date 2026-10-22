@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import List, Optional
 import json
 
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, text
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, TypeDecorator, text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -33,6 +33,37 @@ def tags_deserializer(value: Optional[str]) -> Optional[List[str]]:
         return None
 
 
+class TagsColumn(TypeDecorator):
+    """Persist a list of tags against the ``coding_problems.tags`` column.
+
+    The deployed PostgreSQL schema declares this column as ``text[]``, so on
+    PostgreSQL a Python list is bound directly and psycopg2 renders a proper
+    array literal ``{"a","b"}`` — never a JSON string. SQLite fixtures and older
+    serialized rows use JSON text, which this type keeps reading/writing there.
+    """
+
+    impl = Text
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, (list, tuple)):
+            values = [str(item) for item in value]
+            if dialect.name == "postgresql":
+                return values
+            return json.dumps(values)
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is None or isinstance(value, list):
+            return value
+        try:
+            return json.loads(value)
+        except (json.JSONDecodeError, TypeError):
+            return None
+
+
 class CodingProblem(Base):
     """Represents a coding challenge problem.
 
@@ -45,12 +76,26 @@ class CodingProblem(Base):
     title: str = Column(String(200), nullable=False)
     description: str = Column(Text, nullable=False)
     difficulty: Optional[str] = Column(String(10), nullable=True)
-    tags: Optional[List[str]] = Column(Text, nullable=True)
+    tags: Optional[List[str]] = Column(TagsColumn, nullable=True)
     input_format: Optional[str] = Column(Text, nullable=True)
     output_format: Optional[str] = Column(Text, nullable=True)
     constraints: Optional[str] = Column(Text, nullable=True)
     created_by: Optional[int] = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at: datetime = Column(DateTime, server_default=func.now())
+
+    # ── Generated-content provenance / blueprint scoping (additive) ──
+    # source is NULL for seeded rows, 'llm_generated' for generated rows.
+    source: Optional[str] = Column(String(30), nullable=True)
+    source_batch: Optional[str] = Column(String(64), nullable=True)
+    company_name: Optional[str] = Column(String(200), nullable=True)
+    target_role: Optional[str] = Column(String(150), nullable=True)
+    blueprint_id: Optional[int] = Column(
+        Integer,
+        ForeignKey("company_blueprints.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    blueprint_version: Optional[int] = Column(Integer, nullable=True)
 
     # ── Relationships ─────────────────────────────────────────────────
     test_cases = relationship(
@@ -68,12 +113,16 @@ class CodingProblem(Base):
     @property
     def tags_list(self) -> Optional[List[str]]:
         """Get tags as a list."""
+        # The TagsColumn type already (de)serializes per dialect; this property
+        # exists for callers that always want the list shape.
+        if isinstance(self.tags, list):
+            return self.tags
         return tags_deserializer(self.tags)
 
     @tags_list.setter
     def tags_list(self, value: Optional[List[str]]) -> None:
-        """Set tags from a list."""
-        self.tags = tags_serializer(value)
+        """Set tags from a list (the column type handles dialect encoding)."""
+        self.tags = value
 
     def __repr__(self) -> str:
         return f"<CodingProblem id={self.id} title={self.title!r}>"

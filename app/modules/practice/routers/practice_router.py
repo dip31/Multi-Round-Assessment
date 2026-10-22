@@ -50,6 +50,7 @@ from app.services.session_service import (
 from app.services.assessment_context_service import (
     get_or_create_practice_context,
     get_default_practice_policy,
+    complete_context,
     is_context_available,
     can_create_attempt,
 )
@@ -188,7 +189,7 @@ def start_practice(
     """Idempotent practice start with context awareness.
 
     M2-E: Creates an AssessmentContext for practice mode.
-    
+
     - If the user has no active session: creates context + session, activates selected round.
     - If the user already has an active session: returns existing state (resume) if matching round type.
     - Returns HTTP 409 if a different round type is already active.
@@ -206,7 +207,6 @@ def start_practice(
         # Resume or switch: return existing active session and round.
         _require_session_not_expired(existing_session)
 
-        # Practice mode always allows free round switching — no blocking.
         # Determine if this session belongs to a practice context.
         context_obj = None
         if existing_session.context_id:
@@ -227,8 +227,15 @@ def start_practice(
         elif active_round.round_type == payload.round_type and active_round.practice_type == payload.practice_type:
             # Same round already active — resume it.
             message = f"Resuming active {active_round.round_type} round."
+        elif is_practice:
+            # A practice attempt is one selected round; start another attempt
+            # only after completing this one.
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"An active {active_round.round_type} round is already in progress. Please complete it before starting a {payload.round_type} round.",
+            )
         elif progression_mode == "independent":
-            # Practice mode: close current round, start the requested one.
+            # Non-practice contexts may explicitly permit round switching.
             complete_round(db, active_round.id, current_user.id)
             active_round = start_round(db, existing_session.id, payload.round_type, payload.practice_type)
             message = f"Switched to {active_round.round_type} round."
@@ -250,24 +257,24 @@ def start_practice(
     # New session: create context + session + activate first round.
     # M2-E: Create practice context
     context = get_or_create_practice_context(db, current_user.id)
-    
+
     # Check availability (practice has no restrictions, but enforce for future modes)
     if not is_context_available(context):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Practice assessment is not currently available.",
         )
-    
+
     # Check attempt limits (practice is unlimited, but enforce for future modes)
     if not can_create_attempt(db, context):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Maximum attempts reached for this assessment.",
         )
-    
+
     # Create session with context
     new_session = create_session(db, user_id=current_user.id, context_id=context.id)
-    
+
     progression_mode = context.policy.progression_mode if context.policy else "sequential"
     if progression_mode == "independent":
         round_type_to_start = payload.round_type
@@ -275,7 +282,7 @@ def start_practice(
     else:
         round_type_to_start = ROUND_ORDER[0]
         practice_type_to_use = None
-        
+
     first_round = start_round(db, new_session.id, round_type_to_start, practice_type_to_use)
 
     return PracticeStartResponse(
@@ -419,9 +426,8 @@ def complete_practice_round(
         else (context_obj.policy.progression_mode if context_obj and context_obj.policy else "sequential")
     )
 
-    if progression_mode == "independent":
-        # Independent practice: complete ROUND only, session remains active for more practice
-        # This allows the user to practice multiple rounds in the same session
+    if is_practice:
+        # Each independent practice attempt owns one session and one round.
         message = f"{payload.round_type.capitalize()} round completed. Ready for next practice."
         if completed.practice_type:
             practice_label = {
@@ -432,8 +438,17 @@ def complete_practice_round(
                 'interview': 'Interview'
             }.get(completed.practice_type, payload.round_type.capitalize())
             message = f"{practice_label} round completed. Ready for next practice."
-        
-        # Session stays in_progress, user can start another practice round
+
+        _finalize_session_score(db, session.id)
+        completed_sess = complete_session(db, session.id, current_user.id)
+        if context_obj is not None:
+            complete_context(db, context_obj.id)
+        session_completed = True
+        next_round_obj = None
+        if completed_sess:
+            session = completed_sess
+    elif progression_mode == "independent":
+        message = f"{payload.round_type.capitalize()} round completed. Ready for next round."
         session_completed = False
         next_round_obj = None
     else:
@@ -615,7 +630,7 @@ def get_practice_round_result(
     session = get_owned_session(db, session_id, current_user.id)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found or not owned by user.")
-    
+
     result = get_round_result_summary(db, session_id, round_id)
     if result is None:
         raise HTTPException(

@@ -3,6 +3,97 @@
 from app.database.db import SessionLocal
 from app.models.aptitude import AptitudeQuestion, AptitudeTopic
 from app.models.coding import CodingProblem, CodingTestCase
+from sqlalchemy import func, text
+from sqlalchemy.orm import Session
+
+
+TECHNICAL_APTITUDE_QUESTIONS = (
+    {
+        "topic": "Operating Systems",
+        "question_text": "Which component selects the next ready process to run on a CPU?",
+        "options": ("CPU scheduler", "File system", "Device driver", "Linker"),
+        "correct_option": "A",
+    },
+    {
+        "topic": "Computer Networks",
+        "question_text": "Which transport protocol provides reliable, ordered byte-stream delivery?",
+        "options": ("TCP", "UDP", "ARP", "ICMP"),
+        "correct_option": "A",
+    },
+    {
+        "topic": "Object-Oriented Programming",
+        "question_text": "Which principle hides an object's internal state behind a public interface?",
+        "options": ("Encapsulation", "Inheritance", "Overloading", "Recursion"),
+        "correct_option": "A",
+    },
+    {
+        "topic": "Database Management Systems",
+        "question_text": "Which SQL statement retrieves rows from a table?",
+        "options": ("SELECT", "UPDATE", "ALTER", "DROP"),
+        "correct_option": "A",
+    },
+    {
+        "topic": "Data Structures",
+        "question_text": "Which data structure processes items in first-in, first-out order?",
+        "options": ("Queue", "Stack", "Heap", "Tree"),
+        "correct_option": "A",
+    },
+)
+
+
+def seed_technical_aptitude_questions(db: Session) -> None:
+    """Add the canonical technical topics required by the aptitude selector."""
+    topics = {}
+    next_topic_id = db.query(func.max(AptitudeTopic.id)).scalar() or 0
+    for seed in TECHNICAL_APTITUDE_QUESTIONS:
+        topic = db.query(AptitudeTopic).filter(AptitudeTopic.name == seed["topic"]).first()
+        if topic is None:
+            next_topic_id += 1
+            topic = AptitudeTopic(id=next_topic_id, name=seed["topic"])
+            db.add(topic)
+            db.flush()
+        topics[seed["topic"]] = topic
+
+    next_question_id = db.query(func.max(AptitudeQuestion.id)).scalar() or 0
+    for seed in TECHNICAL_APTITUDE_QUESTIONS:
+        existing = (
+            db.query(AptitudeQuestion)
+            .filter(AptitudeQuestion.question_text == seed["question_text"])
+            .first()
+        )
+        if existing is not None:
+            continue
+        options = seed["options"]
+        next_question_id += 1
+        db.add(
+            AptitudeQuestion(
+                id=next_question_id,
+                question_text=seed["question_text"],
+                option_a=options[0],
+                option_b=options[1],
+                option_c=options[2],
+                option_d=options[3],
+                correct_option=seed["correct_option"],
+                difficulty="medium",
+                topic_id=topics[seed["topic"]].id,
+                is_active=True,
+            )
+        )
+    db.commit()
+    if db.bind.dialect.name == "postgresql":
+        db.execute(
+            text(
+                "SELECT setval(pg_get_serial_sequence('aptitude_topics', 'id'), "
+                "(SELECT MAX(id) FROM aptitude_topics))"
+            )
+        )
+        db.execute(
+            text(
+                "SELECT setval(pg_get_serial_sequence('aptitude_questions', 'id'), "
+                "(SELECT MAX(id) FROM aptitude_questions))"
+            )
+        )
+        db.commit()
 
 def seed_database():
     db = SessionLocal()
@@ -174,6 +265,9 @@ def seed_database():
         for q_data in aptitude_questions:
             q = AptitudeQuestion(**q_data, is_active=True)
             db.add(q)
+
+        db.flush()
+        seed_technical_aptitude_questions(db)
 
         # 3. Seed Coding Problems & Test Cases
         coding_problems = [

@@ -15,6 +15,8 @@ class NextQuestionResponse(BaseModel):
     difficulty: str
     topic: Optional[str] = None
     subject: Optional[str] = None
+    max_questions: Optional[int] = None
+    question_number: Optional[int] = None
 
 
 class SubmitAnswerRequest(BaseModel):

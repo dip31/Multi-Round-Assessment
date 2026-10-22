@@ -28,10 +28,10 @@ def db():
     Base.metadata.create_all(
         engine,
         tables=[
-            User.__table__, 
+            User.__table__,
             AssessmentContext.__table__,
             AssessmentPolicy.__table__,
-            AssessmentSession.__table__, 
+            AssessmentSession.__table__,
             AssessmentRound.__table__
         ],
     )
@@ -54,7 +54,7 @@ def db():
         progression_config={}
     )
     session.add(policy)
-    
+
     session.commit()
     try:
         yield session
@@ -71,10 +71,10 @@ def test_start_coding_directly(db):
     user = MockUser(1)
     req = PracticeStartRequest(round_type="coding")
     resp = start_practice(payload=req, db=db, current_user=user)
-    
+
     assert resp.active_round.round_type == "coding"
     assert resp.is_new is True
-    
+
     round_in_db = get_active_round(db, resp.session_id)
     assert round_in_db.round_type == "coding"
 
@@ -83,7 +83,7 @@ def test_start_interview_directly(db):
     user = MockUser(1)
     req = PracticeStartRequest(round_type="interview")
     resp = start_practice(payload=req, db=db, current_user=user)
-    
+
     assert resp.active_round.round_type == "interview"
 
 def test_start_aptitude_directly(db):
@@ -91,7 +91,7 @@ def test_start_aptitude_directly(db):
     user = MockUser(1)
     req = PracticeStartRequest(round_type="aptitude")
     resp = start_practice(payload=req, db=db, current_user=user)
-    
+
     assert resp.active_round.round_type == "aptitude"
 
 def test_complete_independent_coding_no_auto_advance(db):
@@ -100,32 +100,34 @@ def test_complete_independent_coding_no_auto_advance(db):
     req = PracticeStartRequest(round_type="coding")
     start_resp = start_practice(payload=req, db=db, current_user=user)
     session_id = start_resp.session_id
-    
+
     complete_req = CompleteRoundRequest(round_id=start_resp.active_round.id, round_type="coding")
     complete_resp = complete_practice_round(payload=complete_req, db=db, current_user=user)
-    
+
     assert complete_resp.session_completed is True
     assert complete_resp.next_round is None
-    
+
     # Verify in DB
     rounds = db.query(AssessmentRound).filter(AssessmentRound.session_id == session_id).all()
     assert len(rounds) == 1
     assert rounds[0].round_type == "coding"
     assert rounds[0].status == "completed"
-    
+
     sess = db.query(AssessmentSession).filter(AssessmentSession.id == session_id).first()
     assert sess.status == "completed"
+    context = db.query(AssessmentContext).filter(AssessmentContext.id == sess.context_id).first()
+    assert context.status == "completed"
 
 def test_conflicting_active_round_returns_409(db):
     """Trying to start Aptitude while Coding is active raises 409."""
     user = MockUser(1)
     req_coding = PracticeStartRequest(round_type="coding")
     start_practice(payload=req_coding, db=db, current_user=user)
-    
+
     req_aptitude = PracticeStartRequest(round_type="aptitude")
     with pytest.raises(HTTPException) as exc:
         start_practice(payload=req_aptitude, db=db, current_user=user)
-    
+
     assert exc.value.status_code == 409
     assert "active coding round is already in progress" in str(exc.value.detail)
 
@@ -134,9 +136,9 @@ def test_same_round_resume(db):
     user = MockUser(1)
     req = PracticeStartRequest(round_type="coding")
     resp1 = start_practice(payload=req, db=db, current_user=user)
-    
+
     resp2 = start_practice(payload=req, db=db, current_user=user)
-    
+
     assert resp2.is_new is False
     assert resp1.session_id == resp2.session_id
     assert resp1.active_round.id == resp2.active_round.id
@@ -145,27 +147,31 @@ def test_repeated_attempts_are_distinct(db):
     """Completing a practice and starting again creates a distinct attempt."""
     user = MockUser(1)
     req = PracticeStartRequest(round_type="coding")
-    
+
     # Attempt 1
     resp1 = start_practice(payload=req, db=db, current_user=user)
     complete_req = CompleteRoundRequest(round_id=resp1.active_round.id, round_type="coding")
     complete_practice_round(payload=complete_req, db=db, current_user=user)
-    
+
     # Attempt 2
     resp2 = start_practice(payload=req, db=db, current_user=user)
-    
+
     assert resp1.session_id != resp2.session_id
     assert resp2.is_new is True
+    assert resp1.active_round.practice_type == resp2.active_round.practice_type
+    first_session = db.query(AssessmentSession).filter(AssessmentSession.id == resp1.session_id).first()
+    second_session = db.query(AssessmentSession).filter(AssessmentSession.id == resp2.session_id).first()
+    assert first_session.context_id != second_session.context_id
 
 def test_cross_user_isolation(db):
     """User 2 starting coding does not conflict with User 1's active coding round."""
     user1 = MockUser(1)
     user2 = MockUser(2)
-    
+
     req = PracticeStartRequest(round_type="coding")
-    
+
     resp1 = start_practice(payload=req, db=db, current_user=user1)
     resp2 = start_practice(payload=req, db=db, current_user=user2)
-    
+
     assert resp1.session_id != resp2.session_id
     assert resp1.active_round.id != resp2.active_round.id

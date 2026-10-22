@@ -18,16 +18,22 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        'session_problems',
-        sa.Column('id', sa.Integer(), primary_key=True),
-        sa.Column('round_id', sa.Integer(), sa.ForeignKey('assessment_rounds.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('problem_id', sa.Integer(), sa.ForeignKey('coding_problems.id', ondelete='CASCADE'), nullable=False),
-        sa.Column('problem_order', sa.Integer(), nullable=False, server_default='0'),
-        sa.Column('marked_for_review', sa.Boolean(), nullable=False, server_default=sa.text('false')),
-        sa.Column('assigned_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
-    )
-    op.create_index('idx_session_problems_round', 'session_problems', ['round_id'])
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    existing_tables = inspector.get_table_names()
+    if 'session_problems' not in existing_tables:
+        op.create_table(
+            'session_problems',
+            sa.Column('id', sa.Integer(), primary_key=True),
+            sa.Column('round_id', sa.Integer(), sa.ForeignKey('assessment_rounds.id', ondelete='CASCADE'), nullable=False),
+            sa.Column('problem_id', sa.Integer(), sa.ForeignKey('coding_problems.id', ondelete='CASCADE'), nullable=False),
+            sa.Column('problem_order', sa.Integer(), nullable=False, server_default='0'),
+            sa.Column('marked_for_review', sa.Boolean(), nullable=False, server_default=sa.text('false')),
+            sa.Column('assigned_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
+        )
+    indexes = {idx['name'] for idx in inspector.get_indexes('session_problems')}
+    if 'idx_session_problems_round' not in indexes:
+        op.create_index('idx_session_problems_round', 'session_problems', ['round_id'])
 
 
 def downgrade() -> None:

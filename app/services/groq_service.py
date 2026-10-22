@@ -9,14 +9,16 @@ import hashlib
 import json
 import logging
 import re
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from groq import Groq
 
 logger = logging.getLogger(__name__)
 
-# Current Groq production model (as of March 2026)
-GROQ_MODEL = "llama-3.3-70b-versatile"
+# Current Groq production model (as of October 2026)
+# llama-3.3-70b-versatile was retired by Groq (404 model_not_found); this key
+# serves openai/gpt-oss-120b, verified compatible with json_object response_format.
+GROQ_MODEL = "openai/gpt-oss-120b"
 
 
 class GroqService:
@@ -26,6 +28,74 @@ class GroqService:
         """Initialize Groq client with API key."""
         self.client = Groq(api_key=api_key)
 
+    def generate_role_assessment_definition(self, context: Dict[str, Any]) -> Dict[str, Any]:
+        """Return structured role and assessment design data (never candidate questions)."""
+        rounds = context.get("rounds", [])
+        company_evidence = context.get("company_evidence")
+        system = (
+            "You design role-specific assessment definitions. Understand the requested role; "
+            "identify realistic responsibilities, skills, tools, competencies and assessment topics for each supplied round. "
+            "Do not use a generic Software Engineer assessment. Do not add unrelated DSA/OOP/OS topics unless "
+            "they are genuinely relevant to this role. Do not invent company-specific requirements: use them only "
+            "when supported by provided evidence. Distinguish role-general knowledge from company-specific facts. "
+            "Return an assessment definition, never candidate questions. Do not change configured rounds, counts, durations, or difficulty. "
+            "Prefer clear subject/topic names usable by an assessment question bank; separate role responsibilities from assessable knowledge topics."
+        )
+        user = {
+            "company": context["company_name"],
+            "target_role": context["target_role"],
+            "job_description": context.get("job_description"),
+            "company_evidence": company_evidence,
+            "configured_rounds": rounds,
+            "required_json_shape": {
+                "role": "string",
+                "role_understanding": {
+                    "summary": "string", "responsibilities": ["string"], "core_skills": ["string"],
+                    "tools_and_technologies": ["string"], "competencies": ["string"]
+                },
+                "rounds": {
+                    round_config["round_type"]: {
+                        "topics": ["string"],
+                        "topic_weights": {"each topic": "percentage; sum 100"},
+                    } for round_config in rounds
+                }
+            },
+            "constraints": [
+                "Return exactly the configured round keys.",
+                "Use non-empty, distinct, role-relevant topics for every configured round.",
+                "Topic weights must be positive and sum to 100 for each round.",
+                "Use the company only as context, not as evidence of hiring history.",
+                "Do not assume Software Engineer topics or invent company-specific facts.",
+                "Return only role understanding, competencies, topics, and topic weights; application configuration is authoritative.",
+                "Return at most 6 topics per round, with topic_weights keyed exactly by those topics.",
+                "Return valid JSON only."
+            ],
+        }
+        completion = self.client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[{"role": "system", "content": system}, {"role": "user", "content": json.dumps(user)}],
+            temperature=0.1,
+            max_tokens=3000,
+            response_format={"type": "json_object"},
+            timeout=45.0,
+        )
+        raw = completion.choices[0].message.content or ""
+        def reject_duplicate_keys(pairs):
+            result = {}
+            for key, value in pairs:
+                if key in result:
+                    raise ValueError(f"LLM JSON contains duplicate key: {key}")
+                result[key] = value
+            return result
+
+        try:
+            parsed = json.loads(raw, object_pairs_hook=reject_duplicate_keys)
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise ValueError("LLM returned malformed role assessment JSON") from exc
+        if not isinstance(parsed, dict):
+            raise ValueError("LLM role assessment must be a JSON object")
+        return parsed
+
     # ── Question Pool Generation (UNCHANGED) ────────────────────────────
 
     def generate_question_pool(
@@ -34,6 +104,7 @@ class GroqService:
         projects: Dict[str, str],
         count: int = 12,
         interview_type: str = "technical",
+        blueprint_constraints: Optional[Dict[str, Any]] = None,
     ) -> List[Dict]:
         """
         Generate personalized interview question pool using Groq.
@@ -49,6 +120,18 @@ class GroqService:
         norm_type = (interview_type or "technical").lower().strip()
         if norm_type not in ("technical", "hr", "communication"):
             norm_type = "technical"
+
+        blueprint_difficulty = (blueprint_constraints or {}).get(
+            "difficulty_distribution"
+        )
+        if isinstance(blueprint_difficulty, dict) and blueprint_difficulty:
+            difficulty_instruction = (
+                "- Follow the approved blueprint difficulty distribution exactly: "
+                + json.dumps(blueprint_difficulty, ensure_ascii=True)
+                + "."
+            )
+        else:
+            difficulty_instruction = "- Distribute difficulty: 3 EASY, 5 MEDIUM, 4 HARD."
 
         # Step 1: Detect role
         detected_role = detect_role(skills, projects)
@@ -90,7 +173,7 @@ class GroqService:
         4. Technical architecture and implementation details of candidate's projects ({projects})
         5. Deep-dive into technical skills ({skills})
       - ALL questions must have "phase": "TECHNICAL".
-      - Distribute difficulty: 3 EASY, 5 MEDIUM, 4 HARD.
+    {difficulty_instruction}
       - Make questions personalized to candidate's projects and skills where possible.
 
       Return ONLY valid JSON, no markdown:
@@ -108,6 +191,7 @@ class GroqService:
         ]
       }}
       """
+
         elif norm_type == "hr":
             prompt = f"""
       You are an expert HR director conducting a behavioral and HR placement interview.
@@ -127,7 +211,7 @@ class GroqService:
         5. Situational workplace judgment (STAR method: Situation, Task, Action, Result)
         6. Alignment with company values and long-term goals
       - ALL questions must have "phase": "HR".
-      - Distribute difficulty: 3 EASY, 5 MEDIUM, 4 HARD.
+    {difficulty_instruction}
       - Vary the questions so they feel human, authentic, and situational.
 
       Return ONLY valid JSON, no markdown:
@@ -164,7 +248,7 @@ class GroqService:
         5. Explaining their problem-solving thought process step-by-step
         6. Delivering constructive feedback or presenting a structured opinion
       - ALL questions must have "phase": "COMMUNICATION".
-      - Distribute difficulty: 3 EASY, 5 MEDIUM, 4 HARD.
+    {difficulty_instruction}
 
       Return ONLY valid JSON, no markdown:
       {{
@@ -181,6 +265,30 @@ class GroqService:
         ]
       }}
       """
+
+        if blueprint_constraints:
+            constraint_lines = []
+            company_name = blueprint_constraints.get("company_name")
+            target_role = blueprint_constraints.get("target_role")
+            if company_name or target_role:
+                constraint_lines.append(
+                    f"Company: {company_name or 'unspecified'}; target role: {target_role or 'unspecified'}."
+                )
+            configured_topics = blueprint_constraints.get("topics") or []
+            if configured_topics:
+                constraint_lines.append(
+                    "The approved blueprint topics and weights are authoritative; keep "
+                    "questions aligned to this distribution: "
+                    + json.dumps(configured_topics, ensure_ascii=True)
+                )
+            configured_types = blueprint_constraints.get("question_types") or []
+            if configured_types:
+                constraint_lines.append(
+                    "Use these supported question types where applicable: "
+                    + json.dumps(configured_types, ensure_ascii=True)
+                )
+            if constraint_lines:
+                prompt += "\n\nBLUEPRINT CONSTRAINTS:\n- " + "\n- ".join(constraint_lines)
 
         try:
             result = _safe_json(
@@ -293,7 +401,7 @@ class GroqService:
 
     def rephrase_question(self, question: str, difficulty: str) -> str:
         """Rephrase a question naturally for the given difficulty level."""
-        prompt = f"""Rephrase this interview question naturally and conversationally for a {difficulty} level candidate. 
+        prompt = f"""Rephrase this interview question naturally and conversationally for a {difficulty} level candidate.
 Make it sound like a human interviewer is asking it. Return only the rephrased question, nothing else:
 
 {question}"""
@@ -558,22 +666,465 @@ Turns:
             logger.error(f"Groq feedback generation failed: {str(e)}")
             return "Interview completed successfully."
 
+    # ── Blueprint question pools (role-specific, pre-candidate) ────────────
+    #
+    # These methods generate ENTIRE question pools up front for an approved
+    # blueprint (per blueprint + version + round). They are invoked by the TPO
+    # "Generate Question Pool" flow, never during a candidate's live assessment.
+    # Unlike generate_question_pool they NEVER substitute fallback content on
+    # failure: any failure raises so the caller can mark the pool failed and
+    # block publishing rather than serve unvalidated content.
+
+    def generate_aptitude_question_pool(self, spec: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Generate ``spec['pool_size']`` aptitude MCQs pinned to the blueprint schedule.
+
+        ``spec`` keys: company_name, target_role, pool_size, positions
+        (list of ``{"topic", "difficulty" | None}`` scheduled in pool order).
+        Returns validated-shape question dicts:
+        ``{question_text, option_a..d, correct_option, difficulty, topic, explanation}``.
+        """
+        positions = spec.get("positions") or []
+        schedule_lines = []
+        for i, item in enumerate(positions, start=1):
+            topic = item.get("topic")
+            difficulty = item.get("difficulty")
+            schedule_lines.append(
+                f"{i}. topic: {topic}"
+                + (f" | difficulty: {difficulty}" if difficulty else "")
+            )
+        schedule_block = (
+            "\n".join(schedule_lines)
+            if schedule_lines
+            else "(no schedule provided: distribute across the role sensibly)"
+        )
+
+        system = (
+            f"You are an expert assessment author creating a role-specific aptitude "
+            f"question pool for the role '{spec['target_role']}' at '{spec['company_name']}'. "
+            "Return only valid JSON."
+        )
+        prompt = f"""Create exactly {spec['pool_size']} multiple-choice aptitude questions for this placement assessment.
+
+Follow the topic and difficulty schedule below EXACTLY — one output question per schedule line, in the same order, with exactly the scheduled topic and difficulty. Do not reorder, add, or drop any entry. Do not use unrelated generic topics.
+
+Required schedule:
+{schedule_block}
+
+For every question include:
+- question_text: the MCQ stem
+- option_a, option_b, option_c, option_d: four realistic answer choices
+- correct_option: exactly one of "A" | "B" | "C" | "D"
+- difficulty: exactly "easy", "medium" or "hard" matching the schedule (if the schedule omits difficulty choose the best fit)
+- topic: exactly the topic name from the schedule
+- explanation: 1-2 sentence justification
+
+Return JSON in exactly this shape:
+{{"questions": [{{"question_text": "...", "option_a": "...", "option_b": "...", "option_c": "...", "option_d": "...", "correct_option": "A", "difficulty": "easy", "topic": "...", "explanation": "..."}}]}}"""
+        try:
+            completion = self.client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.3,
+                max_tokens=9000,
+                timeout=60.0,
+                response_format={"type": "json_object"},
+            )
+            raw = completion.choices[0].message.content or ""
+        except Exception as exc:
+            raise RuntimeError(f"Aptitude pool generation failed: {exc}") from exc
+
+        payload = _safe_json(raw)
+        if not isinstance(payload, dict) or not isinstance(payload.get("questions"), list):
+            raise RuntimeError("Aptitude pool generation returned invalid JSON shape.")
+        questions = payload["questions"]
+        if len(questions) < spec["pool_size"]:
+            raise RuntimeError(
+                f"Aptitude pool generation returned {len(questions)} questions; "
+                f"the blueprint requires at least {spec['pool_size']}."
+            )
+        return questions
+
+    def generate_coding_problem_pool(self, spec: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Generate ``spec['pool_size']`` coding problems pinned to the blueprint schedule.
+
+        Returns problem dicts:
+        ``{title, description, difficulty, topic, constraints, input_format,
+        output_format, test_cases: [{input_data, expected_output, is_hidden}]}``.
+        """
+        positions = spec.get("positions") or []
+        schedule_lines = []
+        for i, item in enumerate(positions, start=1):
+            topic = item.get("topic")
+            difficulty = item.get("difficulty")
+            schedule_lines.append(
+                f"{i}. topic: {topic}"
+                + (f" | difficulty: {difficulty}" if difficulty else "")
+            )
+        schedule_block = (
+            "\n".join(schedule_lines)
+            if schedule_lines
+            else "(no schedule provided: distribute across the role sensibly)"
+        )
+
+        system = (
+            f"You are an expert coding-round author creating role-specific coding "
+            f"problems for the role '{spec['target_role']}' at '{spec['company_name']}'. "
+            "Return only valid JSON."
+        )
+        prompt = f"""Create exactly {spec['pool_size']} coding problems for this placement assessment.
+
+Follow the topic and difficulty schedule below EXACTLY — one problem per schedule line, same order, with exactly the scheduled topic and difficulty. Do not reorder, add, or drop any entry.
+
+Required schedule:
+{schedule_block}
+
+For every problem include:
+- title: short problem name
+- description: full problem statement (input/output explanation, invariants)
+- difficulty: exactly "easy", "medium" or "hard" matching the schedule
+- topic: exactly the topic name from the schedule
+- constraints: constraints on inputs
+- input_format and output_format: precise formats
+- test_cases: at least 2 cases; the first must be a "visible" sample (is_hidden=false), the rest hidden (is_hidden=true). Every case needs non-empty input_data and expected_output. Never leak hidden cases in the description.
+
+Return JSON in exactly this shape:
+{{"problems": [{{"title": "...", "description": "...", "difficulty": "easy", "topic": "...", "constraints": "...", "input_format": "...", "output_format": "...", "test_cases": [{{"input_data": "...", "expected_output": "...", "is_hidden": false}}]}}]}}"""
+        try:
+            completion = self.client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.3,
+                max_tokens=9000,
+                timeout=60.0,
+                response_format={"type": "json_object"},
+            )
+            raw = completion.choices[0].message.content or ""
+        except Exception as exc:
+            raise RuntimeError(f"Coding problem pool generation failed: {exc}") from exc
+
+        payload = _safe_json(raw)
+        if not isinstance(payload, dict) or not isinstance(payload.get("problems"), list):
+            raise RuntimeError("Coding problem pool generation returned invalid JSON shape.")
+        problems = payload["problems"]
+        if len(problems) < spec["pool_size"]:
+            raise RuntimeError(
+                f"Coding problem pool generation returned {len(problems)} problems; "
+                f"the blueprint requires at least {spec['pool_size']}."
+            )
+        return problems
+
+    def generate_interview_question_pool(
+        self, spec: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Generate ``spec['pool_size']`` interview questions for a blueprint round.
+
+        ``spec`` keys: company_name, target_role, phase ("TECHNICAL"|"HR"),
+        topics (list of configured topic names), difficulty_distribution (dict
+        or {}), pool_size.
+        Returns question dicts:
+        ``{question, difficulty, topic, phase, expected_answer, evaluation_criteria}``
+        (difficulty uppercase). ``role`` is added by the caller so the existing
+        resume/start flow detects the role without another LLM round-trip.
+        """
+        topics = spec.get("topics") or []
+        positions = spec.get("positions") or []
+        difficulty_block = spec.get("difficulty_distribution") or {}
+        difficulty_hint = (
+            ", ".join(f"{difficulty}: {int(weight * 100)}%" for difficulty, weight in difficulty_block.items())
+            if difficulty_block
+            else "no fixed difficulty split (use your best judgment)"
+        )
+
+        if positions:
+            schedule_lines = []
+            for i, item in enumerate(positions, start=1):
+                topic = item.get("topic")
+                difficulty = item.get("difficulty")
+                schedule_lines.append(
+                    f"{i}. topic: {topic}"
+                    + (f" | difficulty: {difficulty}" if difficulty else "")
+                )
+            schedule_block = "\n".join(schedule_lines)
+            topic_instruction = (
+                "Follow the topic schedule below EXACTLY — one question per schedule "
+                "line, in the same order, with exactly the scheduled topic. Do not "
+                "reorder, add, or drop any entry.\n\n"
+                f"Required schedule:\n{schedule_block}"
+            )
+            topic_field_hint = "topic: exactly the topic name from the schedule"
+        else:
+            topics_block = (
+                "\n".join(f"- {topic}" for topic in topics)
+                if topics
+                else "- (no topics configured)"
+            )
+            topic_instruction = f"Approved topics:\n{topics_block}"
+            topic_field_hint = "topic: exactly one of the approved topic names above"
+
+        system = (
+            f"You are an expert {spec['phase'].lower()} interviewer. Build a role-specific "
+            f"question pool for the role '{spec['target_role']}' at '{spec['company_name']}'. "
+            "Return only valid JSON."
+        )
+        prompt = f"""Create exactly {spec['pool_size']} {spec['phase']} interview questions for this placement assessment.
+
+The questions must be concrete, role-specific behavioral/technical questions grounded in the approved topics below. Do not fall back to generic "Software Engineer" questions unrelated to these topics or to the role.
+
+{topic_instruction}
+
+Difficulty split:
+{difficulty_hint}
+
+For every question include:
+- question: the question text (what a human interviewer would ask)
+- difficulty: exactly one of "EASY" | "MEDIUM" | "HARD"
+- {topic_field_hint}
+- phase: exactly "{spec['phase']}"
+- expected_answer: a non-empty bullet summary of what a strong answer covers
+- evaluation_criteria: 1-2 short sentences describing how to grade it
+
+Return JSON in exactly this shape:
+{{"questions": [{{"question": "...", "difficulty": "MEDIUM", "topic": "...", "phase": "{spec['phase']}", "expected_answer": "...", "evaluation_criteria": "..."}}]}}"""
+        try:
+            completion = self.client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.4,
+                max_tokens=9000,
+                timeout=60.0,
+                response_format={"type": "json_object"},
+            )
+            raw = completion.choices[0].message.content or ""
+        except Exception as exc:
+            raise RuntimeError(f"Interview question pool generation failed: {exc}") from exc
+
+        payload = _safe_json(raw)
+        if not isinstance(payload, dict) or not isinstance(payload.get("questions"), list):
+            raise RuntimeError("Interview question pool generation returned invalid JSON shape.")
+        questions = payload["questions"]
+        if len(questions) < spec["pool_size"]:
+            raise RuntimeError(
+                f"Interview question pool generation returned {len(questions)} questions; "
+                f"the blueprint requires at least {spec['pool_size']}."
+            )
+        return questions
+
+    # ── Competency Configuration Generation (EDI5 Enhancement) ─────────────
+
+    def generate_competency_configuration(self, spec: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Generate role-specific competency suggestions with weights and topic associations.
+
+        ``spec`` keys:
+        - company_name: str
+        - target_role: str
+        - blueprint_topics: List[str]  (canonical topics from the blueprint rounds)
+        - existing_competencies: List[str] | None  (names from role_understanding.competencies)
+        - round_info: List[Dict]  (each with round_type, topics, question_count)
+
+        Returns list of competency dicts:
+        {"id": str, "name": str, "weight_pct": float, "topics": List[str]}
+        Weights sum to exactly 100.0 after rounding. IDs are stable slugs from names.
+        """
+        company_name = spec.get("company_name", "")
+        target_role = spec.get("target_role", "")
+        blueprint_topics = spec.get("blueprint_topics") or []
+        existing_competencies = spec.get("existing_competencies") or []
+        round_info = spec.get("round_info") or []
+
+        system = (
+            f"You are an expert assessment designer creating competency configurations "
+            f"for the role '{target_role}' at '{company_name}'. "
+            "Return only valid JSON."
+        )
+
+        topic_block = (
+            "\n".join(f"- {t}" for t in blueprint_topics)
+            if blueprint_topics
+            else "- (no topics provided)"
+        )
+
+        round_block = ""
+        if round_info:
+            lines = []
+            for r in round_info:
+                rt = r.get("round_type", "unknown")
+                topics = r.get("topics", [])
+                qc = r.get("question_count", 0)
+                topic_str = ", ".join(topics) if topics else "(none)"
+                lines.append(f"- {rt}: {topic_str} ({qc} questions)")
+            round_block = "Blueprint rounds:\n" + "\n".join(lines) + "\n\n"
+        else:
+            round_block = ""
+
+        existing_comp_block = ""
+        if existing_competencies:
+            existing_comp_block = (
+                "LLM role understanding suggested these competency names (use as inspiration, not mandatory):\n"
+                + "\n".join(f"- {c}" for c in existing_competencies)
+                + "\n\n"
+            )
+
+        prompt = f"""Create a competency configuration for the role '{target_role}' at '{company_name}'.
+
+{round_block}Available canonical topics from the approved blueprint:
+{topic_block}
+
+{existing_comp_block}Requirements:
+- Generate 3-6 competencies relevant to this role.
+- Each competency must have a name, a weight (positive number), and 1-3 associated canonical topics from the list above.
+- Competency weights must sum to exactly 100.
+- Competency names must be unique and descriptive (e.g., "Product Strategy", "Analytical Reasoning", "Stakeholder Management").
+- Stable IDs should be lowercase slugs derived from names (e.g., "product_strategy").
+- Every associated topic must exactly match a canonical topic from the blueprint list.
+- Do not invent topics not in the blueprint.
+- Do not create competencies without topic associations.
+- Return ONLY valid JSON, no markdown, no explanation.
+
+Return JSON in exactly this shape:
+{{"competencies": [
+  {{"id": "product_strategy", "name": "Product Strategy", "weight_pct": 30.0, "topics": ["Product Management", "Business Analysis"]}},
+  {{"id": "analytical_reasoning", "name": "Analytical Reasoning", "weight_pct": 25.0, "topics": ["Data Analysis", "Statistics"]}}
+]}}"""
+
+        try:
+            completion = self.client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.2,
+                max_tokens=2000,
+                timeout=45.0,
+                response_format={"type": "json_object"},
+            )
+            raw = completion.choices[0].message.content or ""
+        except Exception as exc:
+            raise RuntimeError(f"Competency configuration generation failed: {exc}") from exc
+
+        payload = _safe_json(raw)
+        if not isinstance(payload, dict) or not isinstance(payload.get("competencies"), list):
+            raise RuntimeError("Competency configuration generation returned invalid JSON shape.")
+
+        competencies = payload["competencies"]
+        if not competencies:
+            raise RuntimeError("Competency configuration generation returned empty list.")
+
+        # Validate and normalize
+        validated = self._validate_competency_output(competencies, blueprint_topics)
+        return validated
+
+    def _validate_competency_output(self, competencies: List[Dict], blueprint_topics: List[str]) -> List[Dict[str, Any]]:
+        """Validate and normalize LLM competency output to match schema requirements."""
+        if not isinstance(competencies, list):
+            raise RuntimeError("Competencies must be a list.")
+
+        blueprint_topic_set = {t.strip().casefold() for t in blueprint_topics}
+        seen_names = set()
+        seen_ids = set()
+        validated = []
+
+        for idx, comp in enumerate(competencies):
+            if not isinstance(comp, dict):
+                raise RuntimeError(f"Competency {idx} must be an object.")
+
+            # Name
+            name = str(comp.get("name", "")).strip()
+            if not name:
+                raise RuntimeError(f"Competency {idx} missing name.")
+            if name.casefold() in seen_names:
+                raise RuntimeError(f"Duplicate competency name: {name}")
+            seen_names.add(name.casefold())
+
+            # ID - generate from name if not provided or invalid
+            comp_id = comp.get("id")
+            if comp_id:
+                comp_id = str(comp_id).strip().lower().replace(" ", "_").replace("-", "_")
+                comp_id = "".join(c for c in comp_id if c.isalnum() or c == "_")
+            if not comp_id:
+                comp_id = name.lower().replace(" ", "_").replace("-", "_")
+                comp_id = "".join(c for c in comp_id if c.isalnum() or c == "_")
+            comp_id = comp_id[:80]
+            if comp_id.casefold() in seen_ids:
+                # Make unique by appending index
+                base = comp_id
+                counter = 2
+                while comp_id.casefold() in seen_ids:
+                    comp_id = f"{base}_{counter}"
+                    counter += 1
+            seen_ids.add(comp_id.casefold())
+
+            # Weight
+            try:
+                weight = float(comp.get("weight_pct", 0))
+            except (TypeError, ValueError):
+                raise RuntimeError(f"Competency '{name}' has invalid weight_pct.")
+            if weight <= 0 or weight > 100:
+                raise RuntimeError(f"Competency '{name}' weight_pct must be positive and <= 100.")
+
+            # Topics
+            topics = comp.get("topics")
+            if not isinstance(topics, list) or not topics:
+                raise RuntimeError(f"Competency '{name}' must have at least one topic.")
+            norm_topics = []
+            for t in topics:
+                t_str = str(t).strip()
+                if not t_str:
+                    raise RuntimeError(f"Competency '{name}' has blank topic.")
+                if t_str.casefold() not in blueprint_topic_set:
+                    raise RuntimeError(f"Competency '{name}' topic '{t_str}' not in blueprint canonical topics.")
+                if t_str.casefold() in {x.casefold() for x in norm_topics}:
+                    raise RuntimeError(f"Competency '{name}' has duplicate topic '{t_str}'.")
+                norm_topics.append(t_str)
+
+            validated.append({
+                "id": comp_id,
+                "name": name,
+                "weight_pct": round(weight, 2),
+                "topics": norm_topics,
+            })
+
+        # Normalize weights to sum to exactly 100
+        total = sum(c["weight_pct"] for c in validated)
+        if total <= 0:
+            raise RuntimeError("Total competency weight must be positive.")
+
+        for c in validated:
+            c["weight_pct"] = round(c["weight_pct"] * 100.0 / total, 2)
+
+        # Fix rounding drift on the largest weight
+        drift = round(100.0 - sum(c["weight_pct"] for c in validated), 2)
+        if abs(drift) > 0.01:
+            largest = max(validated, key=lambda c: c["weight_pct"])
+            largest["weight_pct"] = round(largest["weight_pct"] + drift, 2)
+
+        return validated
+
 
 # ── Speech-to-Text (NEW — spec step 2) ─────────────────────────────────
 
     def transcribe_audio(self, audio_file_path: str) -> str:
         """
         Transcribes audio using Groq whisper-large-v3-turbo.
-        
+
         Model: whisper-large-v3-turbo
           → fastest Whisper on Groq
           → ~216x realtime speed
           → replaces local Whisper base model
           → fixes 503 errors caused by local model load failures
-        
+
         Returns: transcript string (stripped)
         Returns: empty string on ANY failure — never raises
-        
+
         The caller (/stt endpoint) handles empty string as silence.
         """
         import os
@@ -589,7 +1140,7 @@ Turns:
                     language="en"
                 )
             return transcription.strip() if transcription else ""
-        
+
         except Exception as e:
             print(f"[Groq STT Error] {e}")
             return ""
@@ -607,9 +1158,72 @@ def _classifier_fallback() -> Dict:
     }
 
 
+def _balanced_span(text: str, start: int) -> Optional[str]:
+    """Return the balanced object/array substring starting at ``start``.
+
+    Brace/bracket depth is tracked with string/escape awareness so prose around
+    (and inside) the payload never widens the span. ``None`` means unbalanced.
+    """
+    if start >= len(text) or text[start] not in "{[":
+        return None
+    depth = 0
+    in_string = False
+    escaped = False
+    for index in range(start, len(text)):
+        char = text[index]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char in "{[":
+            depth += 1
+        elif char in "}]":
+            depth -= 1
+            if depth == 0:
+                return text[start:index + 1]
+            if depth < 0:
+                return None
+    return None
+
+
+def _extract_json_value(text: str) -> Optional[Any]:
+    """Return the first value that parses as JSON inside ``text``, or ``None``.
+
+    Used only when the whole response is not parseable JSON (the model wrapped
+    the payload in prose, possibly after a non-JSON bracket). Every candidate
+    must be a complete balanced JSON value - surrounding prose is never
+    returned.
+    """
+    attempts = 0
+    for start, char in enumerate(text):
+        if char not in "{[":
+            continue
+        attempts += 1
+        if attempts > 20:
+            break
+        span = _balanced_span(text, start)
+        if span is None:
+            continue
+        try:
+            return json.loads(span)
+        except json.JSONDecodeError:
+            continue
+    return None
+
+
 def _safe_json(raw: str) -> dict or None:
     """
     Safely parse JSON from raw text, stripping markdown code fences.
+
+    If the response is prose wrapped around a JSON payload, only a balanced
+    JSON value is extracted and parsed; the prose itself is never returned (a
+    non-JSON response always yields ``None``).
     """
     cleaned = raw.strip()
     if cleaned.startswith("```json"):
@@ -624,8 +1238,14 @@ def _safe_json(raw: str) -> dict or None:
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
-        logger.warning(f"Failed to parse JSON: {raw[:100]}...")
-        return None
+        pass
+
+    extracted = _extract_json_value(cleaned)
+    if extracted is not None:
+        return extracted
+
+    logger.warning(f"Failed to parse JSON: {raw[:100]}...")
+    return None
 
 
 def _get_fallback_questions() -> List[Dict[str, str]]:

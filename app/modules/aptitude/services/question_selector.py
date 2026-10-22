@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.expression import func
 
 from app.models.aptitude import AptitudeQuestion, AptitudeTopic
+from app.services.topic_taxonomy import topic_matches_blueprint_group
 
 
 MCQ_TOPICS = [
@@ -38,7 +39,6 @@ ALL_TECHNICAL_TOPICS = [
     "Data Structures",
 ]
 
-
 def resolve_topic_names(
     practice_type: Optional[str] = None,
     subject: Optional[str] = None,
@@ -46,10 +46,10 @@ def resolve_topic_names(
     is_combined_technical_turn: Optional[bool] = None,
 ) -> Optional[List[str]]:
     """Determine the list of topic names allowed for the current question query."""
+    p_type = (practice_type or "").lower().strip()
     if topic:
         return [topic]
 
-    p_type = (practice_type or "").lower().strip()
     subj = (subject or "").upper().strip()
 
     if p_type == "technical":
@@ -85,6 +85,7 @@ def select_question_by_difficulty(
     topic: Optional[str] = None,
     exclude_ids: Optional[List[int]] = None,
     is_combined_technical_turn: Optional[bool] = None,
+    strict_blueprint: bool = False,
 ) -> Optional[AptitudeQuestion]:
     """
     Fetch a random question matching the given difficulty and practice filters.
@@ -110,23 +111,40 @@ def select_question_by_difficulty(
 
     query = db.query(AptitudeQuestion).filter(AptitudeQuestion.is_active == True)
 
+    if topic and (practice_type or "").lower().strip() in {"mcq", "aptitude"}:
+        # Blueprint headings are broad taxonomy parents; the question bank
+        # stores normalized subtopic names. Build the exact SQL allowlist from
+        # existing topic rows rather than maintaining a second alias table.
+        allowed_topics = [
+            name
+            for (name,) in db.query(AptitudeTopic.name).all()
+            if name and topic_matches_blueprint_group(name, topic)
+        ]
+
     if allowed_topics:
         query = query.join(AptitudeTopic, AptitudeQuestion.topic_id == AptitudeTopic.id).filter(
             AptitudeTopic.name.in_(allowed_topics)
         )
+    elif topic and (practice_type or "").lower().strip() in {"mcq", "aptitude"}:
+        query = query.filter(AptitudeQuestion.id == -1)
 
     if exclude_ids:
         query = query.filter(~AptitudeQuestion.id.in_(exclude_ids))
 
-    # Try matching the exact requested difficulty
-    question = query.filter(AptitudeQuestion.difficulty == difficulty).order_by(func.random()).first()
+    # A configured difficulty is strict. If the blueprint has no difficulty
+    # distribution, select any difficulty within its allowed topic group.
+    question = (
+        query.filter(AptitudeQuestion.difficulty == difficulty).order_by(func.random()).first()
+        if difficulty
+        else query.order_by(func.random()).first()
+    )
 
     # Fallback: if no question at requested difficulty, pick any difficulty within allowed topic
-    if not question:
+    if not question and not strict_blueprint:
         question = query.order_by(func.random()).first()
 
     # Last resort fallback if exclude_ids exhausted available questions
-    if not question and exclude_ids:
+    if not question and exclude_ids and not strict_blueprint:
         query_no_exclude = db.query(AptitudeQuestion).filter(AptitudeQuestion.is_active == True)
         if allowed_topics:
             query_no_exclude = query_no_exclude.join(
@@ -134,4 +152,4 @@ def select_question_by_difficulty(
             ).filter(AptitudeTopic.name.in_(allowed_topics))
         question = query_no_exclude.order_by(func.random()).first()
 
-    return question
+    return question

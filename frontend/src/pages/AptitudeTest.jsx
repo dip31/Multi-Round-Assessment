@@ -6,9 +6,10 @@ import Toast from '../components/shared/Toast';
 import ProctoringWarning from '../components/ProctoringWarning';
 import { getNextQuestion, submitAnswer } from '../services/aptitudeService';
 import { getSessionStatus, startCodingAfterAptitude } from '../services/sessionService';
+import api from '../services/api';
 import { useAdvancedProctoring } from '../hooks/useAdvancedProctoring';
 
-const MAX_QUESTIONS = 10;
+const DEFAULT_MAX_QUESTIONS = 10;
 
 export default function AptitudeTest() {
     const navigate = useNavigate();
@@ -25,6 +26,7 @@ export default function AptitudeTest() {
     const [submitting, setSubmitting] = useState(false);
 
     const [questionCount, setQuestionCount] = useState(0);
+    const [maxQuestions, setMaxQuestions] = useState(DEFAULT_MAX_QUESTIONS);
     const [answersHistory, setAnswersHistory] = useState([]); // 'answered' | 'skipped'
 
     const [timeRemaining, setTimeRemaining] = useState(null);
@@ -37,6 +39,9 @@ export default function AptitudeTest() {
     const [proctoringBlocked, setProctoringBlocked] = useState(false);
     const [testTerminated, setTestTerminated] = useState(false);
     const [testFinished, setTestFinished] = useState(null);
+    // Full-panel, non-looping error: the round cannot run until TPO resolves
+    // the blueprint question pool / inventory gap. Never auto-retries.
+    const [fatalRoundError, setFatalRoundError] = useState(null);
 
     const startTimeRef = useRef(null);
     const retryTimeoutRef = useRef(null);
@@ -45,17 +50,32 @@ export default function AptitudeTest() {
 
     const finalizeAndGoToResult = useCallback(async () => {
         try {
+            const { data } = await api.post('/aptitude/finish');
+            if (data.is_mock_drive) {
+                if (data.mock_drive?.redirect_url) {
+                    navigate(data.mock_drive.redirect_url);
+                    return;
+                }
+                setToast({ message: 'This Mock Drive round could not be completed. Resolve the round issue before continuing.' });
+                return;
+            }
+            if (data.status !== 'finalized') {
+                setToast({ message: data.detail || 'The aptitude round is not ready to finish.' });
+                return;
+            }
+
+            // Standalone assessment progression only. Mock Drives advance on
+            // the server after a successful aptitude finish.
             await startCodingAfterAptitude();
-        } catch {
-            // Ignore session finalization errors and continue to the result page.
-        } finally {
             if (sessionId && roundId) {
-                // For practice mode, go to the summary page first
                 navigate(`/result/${sessionId}/${roundId}`);
             } else {
-                // Fallback for non-practice mode
                 navigate('/result');
             }
+        } catch (err) {
+            setToast({
+                message: err.response?.data?.detail || 'Could not finish this round. You can retry after resolving the issue.',
+            });
         }
     }, [navigate, sessionId, roundId]);
 
@@ -164,14 +184,14 @@ export default function AptitudeTest() {
 
     const fetchQuestion = useCallback(async () => {
         console.log('🔍 DEBUG: fetchQuestion called, questionCount:', questionCountRef.current);
-        
+
         if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
 
-        if (questionCountRef.current >= MAX_QUESTIONS) {
+        if (questionCountRef.current >= maxQuestions) {
             console.log('🔍 DEBUG: Max questions reached, setting testFinished');
             setTestFinished({
                 reason: 'completed',
-                message: 'You have completed all 10 questions in this round. Click below to review your results.'
+            message: `You have completed all ${maxQuestions} questions in this round. Click below to review your results.`
             });
             return;
         }
@@ -184,11 +204,18 @@ export default function AptitudeTest() {
             console.log('🔍 DEBUG: Calling getNextQuestion with practiceType:', practiceType, 'subject:', subject);
             const data = await getNextQuestion(practiceType, subject);
             console.log('🔍 DEBUG: Received question data:', data);
+            if (Number.isInteger(data.max_questions) && data.max_questions > 0) {
+                setMaxQuestions(data.max_questions);
+            }
             setQuestion(data);
             testHasStartedRef.current = true;  // first question received — proctoring active
             startTimeRef.current = Date.now();
-            setQuestionCount(prev => prev + 1);
-            console.log('🔍 DEBUG: Question set, new count:', questionCountRef.current + 1);
+            setQuestionCount(prev => (
+                Number.isInteger(data.question_number) && data.question_number > 0
+                    ? data.question_number
+                    : prev + 1
+            ));
+            console.log('🔍 DEBUG: Question set, number:', data.question_number || questionCountRef.current + 1);
         } catch (err) {
             console.error('🔍 DEBUG: Error in fetchQuestion:', err);
             if (err.response?.status === 404) {
@@ -206,21 +233,44 @@ export default function AptitudeTest() {
                     console.error('No active aptitude round found on test start. Redirecting to dashboard.');
                     navigate('/dashboard');
                 }
+            } else if (err.response?.status === 409) {
+                const detail = err.response.data?.detail || '';
+                // "Reached" = all configured questions already answered → completion.
+                if (/count has been reached/i.test(detail)) {
+                    setTestFinished({
+                        reason: 'completed',
+                        message: 'All configured questions for this round have been answered. Click below to view your results.'
+                    });
+                    return;
+                }
+                // Inventory/blueprint gap: show a full-panel, non-looping block so
+                // the candidate is never stuck retrying a TPO-side configuration
+                // error (e.g. a missing or invalid generated question pool).
+                setFatalRoundError({
+                    title: 'Aptitude Round Unavailable',
+                    message: detail || 'The configured aptitude blueprint cannot currently be satisfied. Please contact the placement team — the question pool for this round must be generated before it can run.',
+                });
             } else if (!err.response) {
                 setNetworkOffline(true);
                 setToast({
                     message: "Failed to load question. Please try again.",
                     onRetry: fetchQuestion
                 });
-            } else {
-                // Auto retry every 10 seconds for GET
+            } else if (err.response.status >= 500) {
+                // Retry transient server failures. Blueprint/inventory errors
+                // are shown directly and never treated as a completed round.
                 retryTimeoutRef.current = setTimeout(fetchQuestion, 10000);
+            } else {
+                setToast({
+                    message: err.response.data?.detail || 'Unable to load the configured aptitude question.',
+                    onRetry: fetchQuestion,
+                });
             }
         } finally {
             console.log('🔍 DEBUG: Setting loading to false');
             setLoading(false);
         }
-    }, [practiceType, subject]);
+    }, [maxQuestions, practiceType, subject]);
 
     const isInitialized = useRef(false);
 
@@ -228,27 +278,52 @@ export default function AptitudeTest() {
         if (isInitialized.current) return;
         isInitialized.current = true;
 
-        const initSession = async () => {
+        const initSession = async ({ silent = false } = {}) => {
         try {
             const status = await getSessionStatus();
             setSessionId(status.id);
             if (status.rounds && status.rounds.length > 0) {
                 // Find the active aptitude round (or the last completed one if just finished)
-                const aptRounds = status.rounds.filter(r => ['aptitude', 'mcq', 'technical', 'combined'].includes(r.round_type));
+                const aptRounds = status.rounds.filter(r =>
+                    ['aptitude', 'mcq', 'technical', 'combined'].includes(r.round_type)
+                );
                 if (aptRounds.length > 0) {
-                    setRoundId(aptRounds[aptRounds.length - 1].id);
+                    const activeRound = aptRounds.find(r => r.status === 'active') || aptRounds[aptRounds.length - 1];
+                    setRoundId(activeRound.id);
+                    if (activeRound.status === 'active' && activeRound.expires_at) {
+                        const rawExpiry = String(activeRound.expires_at);
+                        const expiresAt = new Date(rawExpiry.endsWith('Z') ? rawExpiry : `${rawExpiry}Z`);
+                        setTimeRemaining(Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000)));
+                    } else {
+                        setTimeRemaining(status.time_remaining_seconds ?? 1800);
+                    }
+                } else {
+                    setTimeRemaining(status.time_remaining_seconds ?? 1800);
                 }
+            } else {
+                setTimeRemaining(status.time_remaining_seconds ?? 1800);
             }
-            setTimeRemaining(status.time_remaining_seconds ?? 1800);
         } catch (err) {
-            if (!err.response) {
+            if (!err.response && !silent) {
                 console.error("Failed to restore session", err);
                 navigate('/dashboard');
             }
         }
     };
         initSession();
+        // Resync the countdown from the authoritative server deadline whenever
+        // the tab becomes visible again, so a throttled/backgrounded interval
+        // (which can drift ahead) is corrected instead of over-reporting time.
+        const handleVisibility = () => {
+            if (document.visibilityState === 'visible') {
+                initSession({ silent: true });
+            }
+        };
+        document.addEventListener('visibilitychange', handleVisibility);
+        window.addEventListener('focus', handleVisibility);
         return () => {
+            document.removeEventListener('visibilitychange', handleVisibility);
+            window.removeEventListener('focus', handleVisibility);
             clearTimeout(retryTimeoutRef.current);
             if (noFaceTimeoutRef.current) {
                 clearTimeout(noFaceTimeoutRef.current);
@@ -479,12 +554,12 @@ export default function AptitudeTest() {
                 main question card is rendered in the central panel below) */}
             <div className="md:hidden border-b border-[var(--color-border)] bg-[var(--color-bg-surface)] px-4 py-3">
                 <div className="flex justify-between text-sm text-[var(--color-text-secondary)] font-medium mb-2">
-                    <span>Question {displayCount} of {MAX_QUESTIONS}</span>
+                    <span>Question {displayCount} of {maxQuestions}</span>
                 </div>
                 <div className="h-1.5 w-full bg-[var(--color-bg-elevated)] overflow-hidden rounded-full">
                     <div
                         className="h-full bg-[var(--color-accent)] transition-all duration-300"
-                        style={{ width: `${(displayCount / MAX_QUESTIONS) * 100}%` }}
+                        style={{ width: `${(displayCount / maxQuestions) * 100}%` }}
                     />
                 </div>
             </div>
@@ -506,7 +581,7 @@ export default function AptitudeTest() {
                         <div className="flex-1 overflow-y-auto p-6 sm:p-8">
                             <div className="mb-6 flex items-center justify-between">
                                 <span className="text-sm font-semibold tracking-wide text-[var(--color-text-secondary)] uppercase">
-                                    Question {displayCount} of {MAX_QUESTIONS}
+                                    Question {displayCount} of {maxQuestions}
                                 </span>
                             </div>
                             <QuestionCard
@@ -537,7 +612,7 @@ export default function AptitudeTest() {
                             TEST PROGRESS
                         </h3>
                         <div className="grid grid-cols-5 gap-3 mb-8">
-                            {Array.from({ length: MAX_QUESTIONS }).map((_, i) => {
+                            {Array.from({ length: maxQuestions }).map((_, i) => {
                                 const num = i + 1;
                                 let stateCls = "border-[var(--color-progress-not-visited)] bg-transparent text-[var(--color-text-secondary)]";
 
@@ -583,12 +658,12 @@ export default function AptitudeTest() {
                         <div className="mt-8 pt-6 border-t border-[var(--color-border)]">
                             <div className="flex justify-between text-xs text-[var(--color-text-secondary)] tracking-wider font-mono mb-2">
                                 <span>COMPLETION</span>
-                                <span>{displayCount - 1}/{MAX_QUESTIONS}</span>
+                                <span>{displayCount - 1}/{maxQuestions}</span>
                             </div>
                             <div className="h-2 w-full bg-[var(--color-bg-primary)] overflow-hidden rounded-full border border-[var(--color-border)]/50">
                                 <div
                                     className="h-full bg-[var(--color-text-secondary)] opacity-50 transition-all duration-300"
-                                    style={{ width: `${((displayCount - 1) / MAX_QUESTIONS) * 100}%` }}
+                                    style={{ width: `${((displayCount - 1) / maxQuestions) * 100}%` }}
                                 />
                             </div>
                         </div>
@@ -607,7 +682,7 @@ export default function AptitudeTest() {
             {showSubmitModal && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0F172A]/80 backdrop-blur-sm p-4">
                     <div className="w-full max-w-sm rounded-3xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] p-8 shadow-2xl">
-                        <h3 className="mb-2 text-2xl font-bold tracking-tight text-white">Submit Test?</h3>
+                        <h3 className="mb-2 text-2xl font-bold tracking-tight text-[var(--color-text-primary)]">Submit Test?</h3>
                         <p className="mb-8 text-sm leading-relaxed text-[var(--color-text-secondary)]">Are you sure you want to end the assessment early? Unanswered questions may affect your score.</p>
 
                         <div className="mb-8 space-y-3 rounded-2xl bg-[var(--color-bg-primary)] p-5 text-sm font-medium border border-[var(--color-border)]/50">
@@ -625,7 +700,10 @@ export default function AptitudeTest() {
                             <button onClick={() => setShowSubmitModal(false)} className="flex-1 rounded-xl bg-[var(--color-bg-elevated)] py-3.5 font-bold text-[var(--color-text-primary)] hover:bg-[var(--color-border)] transition-colors">
                                 Cancel
                             </button>
-                            <button onClick={finalizeAndGoToResult} className="flex-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-surface)] py-3.5 font-bold text-white hover:bg-[var(--color-bg-elevated)] transition-colors">
+                            <button
+                                onClick={finalizeAndGoToResult}
+                                className="flex-1 rounded-xl bg-[var(--color-accent)] py-3.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[var(--color-accent)]/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
                                 Submit Test
                             </button>
                         </div>
@@ -665,6 +743,32 @@ export default function AptitudeTest() {
                             className="w-full rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 shadow-sm transition-all text-sm flex items-center justify-center gap-2"
                         >
                             View Detailed Results →
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Fatal Round Unavailable (non-looping, non-retryable) */}
+            {fatalRoundError && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+                    <div className="w-full max-w-md rounded-3xl border border-rose-200 bg-white p-8 shadow-2xl text-center">
+                        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 text-2xl font-bold">
+                            !
+                        </div>
+                        <h3 className="mb-2 text-2xl font-bold text-slate-900">
+                            {fatalRoundError.title}
+                        </h3>
+                        <p className="mb-6 text-sm text-slate-600 leading-relaxed">
+                            {fatalRoundError.message}
+                        </p>
+                        <div className="mb-6 rounded-2xl bg-rose-50 border border-rose-200 p-4 text-xs text-rose-700 leading-relaxed text-left">
+                            This round checks the pinned assessment blueprint against its generated question pool. No questions can be served until the placement team generates and validates that pool. Retrying will not change the outcome.
+                        </div>
+                        <button
+                            onClick={() => navigate('/dashboard')}
+                            className="w-full rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-bold py-3.5 shadow-sm transition-all text-sm"
+                        >
+                            Back to Dashboard
                         </button>
                     </div>
                 </div>

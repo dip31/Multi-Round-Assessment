@@ -17,13 +17,14 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Add practice_type column to assessment_rounds
-    # Stores the specific practice variant: mcq, technical, combined, coding, interview
-    # NULL for non-practice rounds (portfolio, mock_drive, etc.)
-    op.add_column(
-        'assessment_rounds',
-        sa.Column('practice_type', sa.String(length=20), nullable=True)
-    )
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    existing_cols = {col['name'] for col in inspector.get_columns('assessment_rounds')}
+    if 'practice_type' not in existing_cols:
+        op.add_column(
+            'assessment_rounds',
+            sa.Column('practice_type', sa.String(length=20), nullable=True)
+        )
 
 
 def downgrade() -> None:

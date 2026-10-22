@@ -6,6 +6,7 @@ import {
     submitResponse,
     transcribeAudio,
     synthesizeSpeech,
+    startActiveInterview,
 } from '../services/interviewService';
 import useBasicProctoring from '../hooks/useBasicProctoring';
 import TimerComponent from '../components/TimerComponent';
@@ -20,6 +21,23 @@ const STATES = {
     COMPLETE: 'complete',
 };
 
+// Parse a server datetime (naive UTC) for the server-authoritative round
+// deadlines. The deadline is what the backend persists on AssessmentRound /
+// AssessmentSession, so the UI must not substitute its own clock arithmetic.
+const parseServerDate = (value) => {
+    if (!value) return null;
+    const raw = String(value);
+    const normalized = raw.endsWith('Z') || raw.includes('+') ? raw : `${raw}Z`;
+    const date = new Date(normalized);
+    return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const formatClock = (totalSeconds) => {
+    const safe = Math.max(0, Math.floor(totalSeconds || 0));
+    return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, '0')}`;
+};
+
+
 export default function HumanLikeInterview() {
     const [interviewState, setInterviewState] = useState(STATES.LOADING);
     const [currentQuestion, setCurrentQuestion] = useState('');
@@ -32,11 +50,14 @@ export default function HumanLikeInterview() {
     const [recordingSeconds, setRecordingSeconds] = useState(0);
     const [toast, setToast] = useState(null);
     const [summary, setSummary] = useState(null);
+    const [mockDriveResult, setMockDriveResult] = useState(null); // set when interview is part of a mock drive
+    const [roundDeadline, setRoundDeadline] = useState(null); // epoch ms of the server round deadline (null = untimed)
+    const [roundSecondsLeft, setRoundSecondsLeft] = useState(null);
 
     const navigate = useNavigate();
     const proctoring = useBasicProctoring();
 
-    const interviewId = localStorage.getItem('interview_id');
+    const [interviewId, setInterviewId] = useState(() => localStorage.getItem('interview_id'));
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
     const startTimeRef = useRef(null);
@@ -44,6 +65,17 @@ export default function HumanLikeInterview() {
     const audioContextRef = useRef(null);
     const currentAudioRef = useRef(null);
     const isPlayingRef = useRef(false);
+    const roundExpiredRef = useRef(false);
+    const roundExpiredHandlerRef = useRef(null);
+
+    // Parse a server deadline and arm the round countdown. The server value is
+    // authoritative; a missing value leaves the round untimed (legacy flows).
+    const armRoundDeadline = (serverValue) => {
+        const deadline = parseServerDate(serverValue);
+        if (!deadline || Number.isNaN(deadline.getTime())) return;
+        roundExpiredRef.current = false;
+        setRoundDeadline(deadline.getTime());
+    };
 
     // ── Audio control (useRef-based, overlap-safe) ─────────────────────
     const audioRequestIdRef = useRef(0);
@@ -94,7 +126,7 @@ export default function HumanLikeInterview() {
             const source = audioContext.createBufferSource();
             source.buffer = audioBuffer;
             source.connect(audioContext.destination);
-            
+
             currentAudioRef.current = source;
             source.start(0);
 
@@ -117,10 +149,10 @@ export default function HumanLikeInterview() {
         return () => {
             // Invalidate any in-flight audio requests on unmount
             audioRequestIdRef.current = Number.MAX_SAFE_INTEGER;
-            
+
             if (currentAudioRef.current) {
-                try { 
-                    currentAudioRef.current.stop(); 
+                try {
+                    currentAudioRef.current.stop();
                 } catch (e) { }
                 currentAudioRef.current = null;
             }
@@ -134,16 +166,46 @@ export default function HumanLikeInterview() {
 
     // ── Initial load: fetch first question via GET /next ───────────────
     useEffect(() => {
-        if (!interviewId) {
-            setToast({ type: 'error', message: 'Interview session not found' });
-            setTimeout(() => navigate('/dashboard'), 3000);
-            return;
-        }
-
         let isMounted = true;
 
         const startup = async () => {
             if (!isMounted) return;
+
+            // Resolve the interview for this screen. The Mock Drive interview
+            // round has no pool id, so navigating to it (start, advance or
+            // refresh) does not guarantee a localStorage entry. Ask the server
+            // to start/resume the active round idempotently: on refresh it
+            // returns the same session, and a stale id from a previous
+            // interview is replaced with the current round's session. If there
+            // is no active interview round (or the call fails), fall back to the
+            // stored id so legacy/practice flows are unchanged.
+            let resolvedId = localStorage.getItem('interview_id');
+            try {
+                const bootstrapped = await startActiveInterview();
+                if (bootstrapped?.interview_id) {
+                    resolvedId = bootstrapped.interview_id;
+                    localStorage.setItem('interview_id', resolvedId);
+                }
+                // Arm the overall round countdown from the server deadline so a
+                // refresh/resume shows the same remaining time, not a fresh one.
+                if (bootstrapped?.round_expires_at) {
+                    armRoundDeadline(bootstrapped.round_expires_at);
+                }
+            } catch {
+                // No active interview round for this session — use stored id.
+            }
+
+            if (!isMounted) return;
+
+            if (!resolvedId) {
+                setToast({ type: 'error', message: 'Interview session not found' });
+                setTimeout(() => navigate('/dashboard'), 3000);
+                return;
+            }
+
+            if (resolvedId !== interviewId) {
+                setInterviewId(resolvedId);
+            }
 
             try {
                 setInterviewState(STATES.LISTENING_TO_AI);
@@ -158,7 +220,7 @@ export default function HumanLikeInterview() {
 
                 // Fetch first question (ONLY call to /next)
                 if (isMounted) {
-                    const res = await getNextQuestion(interviewId);
+                    const res = await getNextQuestion(resolvedId);
                     setCurrentQuestion(res.question);
                     setTurnNumber(res.turn_number);
                     setPhase(res.phase);
@@ -177,14 +239,112 @@ export default function HumanLikeInterview() {
                 }
             } catch (error) {
                 console.error('Startup error:', error);
-                if (isMounted) {
-                    setToast({ type: 'error', message: 'Failed to load first question' });
+                if (!isMounted) return;
+
+                const status = error?.response?.status;
+
+                // Terminal interview states: the attempt is already completed
+                // (400) or its persisted deadline has passed (410). There is no
+                // first question to load, so route the candidate to the report
+                // (which stays readable) instead of leaving the UI stuck on the
+                // loading state. Clear the stale id so a reload cannot loop.
+                if (status === 400 || status === 410) {
+                    localStorage.removeItem('interview_id');
+                    setToast({
+                        type: 'error',
+                        message: status === 410
+                            ? 'This interview has expired. Showing your report.'
+                            : 'This interview is already completed. Showing your report.',
+                    });
+                    navigate(`/interview/report/${resolvedId}`);
+                    return;
                 }
+
+                setToast({ type: 'error', message: 'Failed to load first question' });
             }
         };
 
         startup();
         return () => { isMounted = false; };
+    }, []);
+
+    // ── Overall round timer (server-authoritative deadline) ────────────
+    const handleRoundExpired = async () => {
+        const id = interviewId;
+        if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            try { mediaRecorderRef.current.stop(); } catch { /* already stopped */ }
+        }
+        audioRequestIdRef.current = Number.MAX_SAFE_INTEGER;
+        if (currentAudioRef.current) {
+            try { currentAudioRef.current.stop(); } catch { /* already stopped */ }
+            currentAudioRef.current = null;
+        }
+        if (proctoring.stopCamera) proctoring.stopCamera();
+
+        setInterviewState(STATES.LISTENING_TO_AI);
+        setToast({ type: 'error', message: 'Time is up for this round. Submitting your interview…' });
+
+        if (!id) return;
+        try {
+            // The backend finalizes the expired round and advances the Mock
+            // Drive on this call; a 410 is the expected expiry response.
+            const response = await api.post(`/interview/session/${id}/complete`);
+            if (response.data?.mock_drive?.redirect_url) {
+                setMockDriveResult(response.data.mock_drive);
+                navigate(response.data.mock_drive.redirect_url);
+                return;
+            }
+        } catch (error) {
+            if (error?.response?.status !== 410) {
+                console.error('Round auto-complete failed:', error);
+            }
+        }
+        navigate(`/interview/report/${id}`);
+    };
+
+    // Keep the latest handler reachable from the interval without re-arming it.
+    useEffect(() => {
+        roundExpiredHandlerRef.current = handleRoundExpired;
+    });
+
+    useEffect(() => {
+        if (roundDeadline == null) return undefined;
+        const tick = () => {
+            const remaining = Math.max(0, Math.floor((roundDeadline - Date.now()) / 1000));
+            setRoundSecondsLeft(remaining);
+            if (remaining <= 0 && !roundExpiredRef.current) {
+                roundExpiredRef.current = true;
+                if (roundExpiredHandlerRef.current) roundExpiredHandlerRef.current();
+            }
+        };
+        tick();
+        const intervalId = setInterval(tick, 1000);
+        return () => clearInterval(intervalId);
+    }, [roundDeadline]);
+
+    // Re-sync the deadline when the tab regains focus/visibility so a suspended
+    // tab (or a reconnect) does not drift past the server deadline.
+    useEffect(() => {
+        const resync = async () => {
+            try {
+                const bootstrapped = await startActiveInterview();
+                if (bootstrapped?.round_expires_at) {
+                    armRoundDeadline(bootstrapped.round_expires_at);
+                }
+            } catch {
+                // No active interview round — nothing to sync.
+            }
+        };
+        const onVisible = () => {
+            if (document.visibilityState === 'visible') resync();
+        };
+        document.addEventListener('visibilitychange', onVisible);
+        window.addEventListener('focus', onVisible);
+        return () => {
+            document.removeEventListener('visibilitychange', onVisible);
+            window.removeEventListener('focus', onVisible);
+        };
     }, []);
 
     // ── Recording ──────────────────────────────────────────────────────
@@ -234,7 +394,7 @@ export default function HumanLikeInterview() {
             let transcript = "";
             try {
                 const sttRes = await transcribeAudio(audioBlob);
-                // Depending on the axios setup, it may be sttRes.data.transcript or sttRes.transcript. 
+                // Depending on the axios setup, it may be sttRes.data.transcript or sttRes.transcript.
                 // Using the exact format requested by the user:
                 transcript = sttRes.data ? sttRes.data.transcript : (sttRes.transcript || "");
             } catch (err) {
@@ -309,6 +469,11 @@ export default function HumanLikeInterview() {
                 setInterviewState(STATES.LISTENING_TO_AI);
                 setSummary(data.interview_summary);
 
+                // Store mock drive result if present (set by backend _try_advance_mock_drive)
+                if (data.mock_drive) {
+                    setMockDriveResult(data.mock_drive);
+                }
+
                 // Stop camera
                 if (proctoring.stopCamera) proctoring.stopCamera();
 
@@ -358,7 +523,14 @@ export default function HumanLikeInterview() {
             const response = await api.post(`/interview/session/${interviewId}/complete`);
             console.log('Interview completed:', response.data);
 
-            // Navigate to report
+            // If this interview was part of a Mock Drive, use the mock drive redirect
+            if (response.data?.mock_drive?.redirect_url) {
+                setMockDriveResult(response.data.mock_drive);
+                navigate(response.data.mock_drive.redirect_url);
+                return;
+            }
+
+            // Standalone: navigate to report
             navigate(`/interview/report/${interviewId}`);
         } catch (error) {
             console.error('Failed to finish interview:', error);
@@ -405,10 +577,19 @@ export default function HumanLikeInterview() {
                     >
                         Finish Round
                     </button>
-                    
+
                     {isFollowup && (
                         <div className="bg-amber-900/50 text-amber-300 border border-amber-700/50 px-3 py-1 rounded-full text-xs font-medium">
                             Follow-up {followupType ? `· ${followupType}` : ''}
+                        </div>
+                    )}
+                    {roundSecondsLeft !== null && (
+                        <div className={`px-3 py-1 rounded-full text-xs font-semibold font-mono ${
+                            roundSecondsLeft <= 60
+                                ? 'bg-red-500/20 text-red-300 border border-red-500/40'
+                                : 'bg-slate-500/20 text-slate-200'
+                        }`}>
+                            Time left {formatClock(roundSecondsLeft)}
                         </div>
                     )}
                     <div className={`px-4 py-2 rounded-full text-sm font-semibold ${
@@ -558,12 +739,40 @@ export default function HumanLikeInterview() {
                                         <span>Follow-up rate: {summary.followup_rate.toFixed(0)}%</span>
                                     </div>
                                 )}
-                                <button
-                                    onClick={handleViewReport}
-                                    className="px-8 py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 rounded-xl font-bold transition-all duration-300 transform hover:scale-105"
-                                >
-                                    View Your Report →
-                                </button>
+                                <div className="flex flex-col items-center gap-3">
+                                    {mockDriveResult ? (
+                                        <>
+                                            {mockDriveResult.status === 'completed' ? (
+                                                <button
+                                                    onClick={() => navigate('/mock-drive')}
+                                                    className="px-8 py-4 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded-xl font-bold transition-all duration-300 transform hover:scale-105"
+                                                >
+                                                    🎉 Mock Drive Completed →
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    onClick={() => navigate(mockDriveResult.redirect_url || '/mock-drive')}
+                                                    className="px-8 py-4 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded-xl font-bold transition-all duration-300 transform hover:scale-105"
+                                                >
+                                                    Continue to Next Round →
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={handleViewReport}
+                                                className="px-6 py-2 border border-slate-600 hover:border-slate-400 rounded-xl text-sm text-slate-300 hover:text-white transition-all"
+                                            >
+                                                View Detailed Report
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <button
+                                            onClick={handleViewReport}
+                                            className="px-8 py-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 rounded-xl font-bold transition-all duration-300 transform hover:scale-105"
+                                        >
+                                            View Your Report →
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         )}
                     </div>

@@ -48,7 +48,7 @@ def log_advanced_proctoring_event(
 ):
     """
     Log an advanced proctoring event with AI-based detection.
-    
+
     Supports computer vision events, audio analysis, and confidence scoring.
     """
     # Verify session ownership - check if session belongs to current user
@@ -56,13 +56,13 @@ def log_advanced_proctoring_event(
         AssessmentSession.id == event_data.session_id,
         AssessmentSession.user_id == current_user.id
     ).first()
-    
+
     if not session:
         raise HTTPException(
             status_code=403,
             detail="Session not found or access denied"
         )
-    
+
     # Optional: warn if session doesn't match active session (for debugging)
     active_session = get_active_session(db, current_user.id)
     if active_session and active_session.id != event_data.session_id:
@@ -71,16 +71,16 @@ def log_advanced_proctoring_event(
         logging.getLogger(__name__).warning(
             f"Proctoring session_id {event_data.session_id} doesn't match active session {active_session.id} for user {current_user.id}"
         )
-    
+
     try:
         event, risk_score = advanced_proctoring_service.log_advanced_event(db, event_data)
-        
+
         return AdvancedProctorEventResponse(
             success=True,
             event_id=event.id,
             risk_score=risk_score
         )
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -96,7 +96,7 @@ def get_proctoring_session_summary(
 ):
     """
     Get comprehensive proctoring summary for a session.
-    
+
     Includes violation counts, risk scores, and detailed event timeline.
     """
     # Verify session ownership
@@ -106,11 +106,11 @@ def get_proctoring_session_summary(
             status_code=403,
             detail="Cannot access other users' session data"
         )
-    
+
     try:
         summary = advanced_proctoring_service.get_session_proctoring_summary(db, session_id)
         return summary
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -127,19 +127,20 @@ def get_high_risk_sessions(
 ):
     """
     Get sessions with high proctoring risk scores.
-    
+
     Returns sessions exceeding the specified risk threshold, ordered by risk level.
     """
-    # TODO: Add admin role check in production
-    # if current_user.role != "admin":
-    #     raise HTTPException(status_code=403, detail="Admin access required")
-    
+    # High-risk sessions expose every candidate's proctoring data, so this is
+    # restricted to admins (matches the /advanced-proctoring admin UI).
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
     try:
         high_risk_sessions = advanced_proctoring_service.get_high_risk_sessions(
             db, risk_threshold, limit
         )
         return {"sessions": high_risk_sessions, "threshold": risk_threshold}
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -155,7 +156,7 @@ def check_violation_thresholds(
 ):
     """
     Check if session has exceeded violation thresholds.
-    
+
     Returns threshold violations, critical violations, and recommendations.
     """
     # Verify session ownership
@@ -165,11 +166,11 @@ def check_violation_thresholds(
             status_code=403,
             detail="Cannot access other users' session data"
         )
-    
+
     try:
         threshold_analysis = advanced_proctoring_service.check_violation_thresholds(db, session_id)
         return threshold_analysis
-        
+
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -181,11 +182,11 @@ def check_violation_thresholds(
 def get_supported_event_types():
     """
     Get list of supported advanced proctoring event types.
-    
+
     Returns event type definitions with risk scores and descriptions.
     """
     from app.models.advanced_proctoring import ADVANCED_PROCTORING_EVENTS, VIOLATION_RISK_SCORES
-    
+
     event_types = []
     for event_key, event_value in ADVANCED_PROCTORING_EVENTS.items():
         event_types.append({
@@ -194,7 +195,7 @@ def get_supported_event_types():
             "risk_score": VIOLATION_RISK_SCORES.get(event_key, 0.1),
             "description": _get_event_description(event_key)
         })
-    
+
     return {"event_types": event_types}
 
 

@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 import json
 
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, text
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -78,6 +78,20 @@ class AptitudeQuestion(Base):
     created_by: Optional[int] = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at: datetime = Column(DateTime, server_default=func.now())
 
+    # ── Generated-content provenance / blueprint scoping (additive) ──
+    # source is NULL for seeded rows, 'llm_generated' for generated rows.
+    source: Optional[str] = Column(String(30), nullable=True)
+    source_batch: Optional[str] = Column(String(64), nullable=True)
+    company_name: Optional[str] = Column(String(200), nullable=True)
+    target_role: Optional[str] = Column(String(150), nullable=True)
+    blueprint_id: Optional[int] = Column(
+        Integer,
+        ForeignKey("company_blueprints.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    blueprint_version: Optional[int] = Column(Integer, nullable=True)
+
     # ── Relationships ─────────────────────────────────────────────────
     topic = relationship("AptitudeTopic", back_populates="questions")
     attempts = relationship(
@@ -121,6 +135,31 @@ class AptitudeAttempt(Base):
             f"<AptitudeAttempt id={self.id} round_id={self.round_id} "
             f"is_correct={self.is_correct}>"
         )
+
+
+class AptitudeRoundQuestion(Base):
+    """Pinned question assignments for an aptitude assessment round."""
+
+    __tablename__ = "aptitude_round_questions"
+    __table_args__ = (
+        UniqueConstraint("round_id", "question_id", name="uq_aptitude_round_question"),
+        UniqueConstraint("round_id", "question_order", name="uq_aptitude_round_question_order"),
+    )
+
+    id: int = Column(Integer, primary_key=True, index=True)
+    round_id: int = Column(
+        Integer,
+        ForeignKey("assessment_rounds.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    question_id: int = Column(
+        Integer,
+        ForeignKey("aptitude_questions.id"),
+        nullable=False,
+    )
+    question_order: int = Column(Integer, nullable=False)
+    assigned_at: datetime = Column(DateTime, nullable=False, server_default=func.now())
+    question = relationship("AptitudeQuestion")
 
 
 class RLSession(Base):

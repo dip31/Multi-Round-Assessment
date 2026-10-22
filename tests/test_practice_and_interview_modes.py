@@ -17,15 +17,123 @@ import uuid
 import pytest
 from datetime import datetime
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
+from app.database.base import Base
+from app.database.db import get_db
 from app.main import app
-from app.database.db import SessionLocal
 from app.models.user import User
 from app.models.assessment import AssessmentSession, AssessmentRound
+from app.models.assessment_context import AssessmentPolicy
 from app.models.interview import ApprovedQuestionPool, InterviewSession
 from app.models.aptitude import AptitudeQuestion, AptitudeTopic, AptitudeAttempt
+from app.services.assessment_context_service import DEFAULT_PRACTICE_POLICY_ID
 from app.services.groq_service import GroqService
 from app.config.settings import settings
+
+
+# ── Isolated in-memory SQLite (never the development database) ────────
+
+@compiles(JSONB, "sqlite")
+def _compile_jsonb_sqlite(type_, compiler, **kw):
+    return "TEXT"
+
+
+engine = create_engine(
+    "sqlite:///:memory:",
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+def _seed_aptitude(db) -> None:
+    """Seed one active question per aptitude and technical topic."""
+    topics = {}
+    for name in (
+        "Quantitative Aptitude",
+        "Logical Reasoning",
+        "Verbal Ability",
+        "Data Interpretation",
+        "Operating Systems",
+        "Computer Networks",
+        "Object-Oriented Programming",
+        "Database Management Systems",
+        "Data Structures",
+    ):
+        topic = db.query(AptitudeTopic).filter(AptitudeTopic.name == name).first()
+        if topic is None:
+            topic = AptitudeTopic(name=name)
+            db.add(topic)
+            db.flush()
+        topics[name] = topic
+
+    for name, topic in topics.items():
+        if db.query(AptitudeQuestion).filter(
+            AptitudeQuestion.topic_id == topic.id
+        ).first():
+            continue
+        db.add(
+            AptitudeQuestion(
+                question_text=f"Sample question for {name}",
+                option_a="Option A",
+                option_b="Option B",
+                option_c="Option C",
+                option_d="Option D",
+                correct_option="A",
+                difficulty="medium",
+                is_active=True,
+                topic_id=topic.id,
+            )
+        )
+    db.commit()
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _setup_db():
+    """Create the schema and seed the baseline practice policy + bank."""
+    Base.metadata.create_all(bind=engine)
+    db = TestingSessionLocal()
+    if not db.query(AssessmentPolicy).filter(
+        AssessmentPolicy.id == DEFAULT_PRACTICE_POLICY_ID
+    ).first():
+        db.add(
+            AssessmentPolicy(
+                id=DEFAULT_PRACTICE_POLICY_ID,
+                name="Practice Policy",
+                session_duration_minutes=180,
+                round_duration_minutes=30,
+                resume_allowed=True,
+                exit_allowed=True,
+                progression_mode="independent",
+                progression_config={},
+            )
+        )
+        db.commit()
+    _seed_aptitude(db)
+    db.close()
+    yield
+    Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture(autouse=True)
+def _bind_isolated_db():
+    """Route the app's ``get_db`` dependency to the isolated SQLite engine."""
+    def _override():
+        db = TestingSessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = _override
+    yield
+    app.dependency_overrides.pop(get_db, None)
+
 
 client = TestClient(app)
 
@@ -71,11 +179,7 @@ def _create_student(name: str = "Test Student", cgpa: float = 8.5, backlogs: int
 
 
 def _get_test_db():
-    from app.database.db import get_db
-    if get_db in app.dependency_overrides:
-        gen = app.dependency_overrides[get_db]()
-        return next(gen)
-    return SessionLocal()
+    return TestingSessionLocal()
 
 
 def test_mcq_round_question_selection_and_privacy():
@@ -253,7 +357,8 @@ def test_session_history_round_types_and_analytics():
         # 1. Technical round
         r_tech = AssessmentRound(
             session_id=sess.id,
-            round_type="technical",
+            round_type="aptitude",
+            practice_type="technical",
             status="completed",
             score=0.85,
             started_at=datetime.utcnow(),
@@ -262,7 +367,8 @@ def test_session_history_round_types_and_analytics():
         # 2. Combined round
         r_comb = AssessmentRound(
             session_id=sess.id,
-            round_type="combined",
+            round_type="aptitude",
+            practice_type="combined",
             status="completed",
             score=0.75,
             started_at=datetime.utcnow(),
@@ -280,7 +386,8 @@ def test_session_history_round_types_and_analytics():
         # 4. HR Interview round
         r_int = AssessmentRound(
             session_id=sess.id,
-            round_type="hr_interview",
+            round_type="interview",
+            practice_type="hr_interview",
             status="completed",
             score=0.80,
             started_at=datetime.utcnow(),

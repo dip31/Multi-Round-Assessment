@@ -17,6 +17,7 @@ from app.models.session_problem import SessionProblem
 from app.models.coding import CodingProblem
 from app.schemas.coding import (
 	CodingProblemResponse,
+	CodingTestCaseResponse,
 	CodingSubmissionRequest,
 	CodingRunResponse,
 	CodingSubmissionResponse,
@@ -27,13 +28,48 @@ from app.modules.coding.services.coding_service import (
 	run_and_evaluate,
 	start_coding_round,
 	finalize_coding_round,
-    
+	_validate_existing_blueprint_assignments,
 )
+from app.modules.coding.utils.code_evaluator import CodeExecutionUnavailable
+from app.models.assessment import AssessmentRound, AssessmentSession
 from app.services import session_service
+from app.services.mock_drive_service import try_advance_mock_drive
+from app.services.assessment_blueprint_service import get_session_blueprint_round_config
 from app.config.settings import settings
 
-
 router = APIRouter(prefix="/coding", tags=["Coding Round"])
+
+
+def _to_problem_response(p: CodingProblem) -> CodingProblemResponse:
+	"""Serialize a CodingProblem ORM object to CodingProblemResponse.
+
+	Reads test_cases from the in-memory list already set on the object
+	(which has been pre-filtered to visible-only by the service) rather
+	than letting Pydantic trigger a new lazy-load that would return all
+	test cases including hidden ones.
+	"""
+	tc_responses = [
+		CodingTestCaseResponse(
+			id=tc.id,
+			input_data=tc.input_data,
+			expected_output=tc.expected_output,
+			is_hidden=tc.is_hidden,
+			explanation=tc.explanation,
+		)
+		for tc in (p.test_cases or [])
+		if not tc.is_hidden  # never expose hidden, even if filter was skipped upstream
+	]
+	return CodingProblemResponse(
+		id=p.id,
+		title=p.title,
+		description=p.description,
+		difficulty=p.difficulty,
+		tags=p.tags_list,
+		input_format=p.input_format,
+		output_format=p.output_format,
+		constraints=p.constraints,
+		test_cases=tc_responses,
+	)
 
 
 @router.get("/problems", response_model=List[CodingProblemResponse])
@@ -41,18 +77,47 @@ def get_problems(db: Session = Depends(get_db), current_user=Depends(get_current
 	"""List coding problems assigned to the user's active round (visible test cases only)."""
 	active_round = session_service.get_user_active_round(db, current_user.id, round_type="coding")
 	if active_round is None:
+		active_session = session_service.get_active_session(db, current_user.id)
+		if active_session is not None:
+			snapshot, blueprint_round = get_session_blueprint_round_config(
+				db, active_session.id, "coding"
+			)
+			if snapshot is not None and blueprint_round is not None:
+				raise HTTPException(
+					status_code=409,
+					detail="No active Coding round is available for this blueprint-backed assessment.",
+				)
 		# No active round — return global fallback for dashboard preview only
-		return list_problems(db)
+		problems = list_problems(db)
+		return [_to_problem_response(p) for p in problems]
+
 	# Return only problems assigned to this specific round
 	from app.models.session_problem import SessionProblem as SP
 	assigned = db.query(SP).filter(SP.round_id == active_round.id).order_by(SP.problem_order).all()
+	snapshot, blueprint_round = get_session_blueprint_round_config(
+		db, active_round.session_id, "coding"
+	)
+	blueprint_backed = snapshot is not None and blueprint_round is not None
+	if blueprint_backed:
+		try:
+			blueprint_problems = _validate_existing_blueprint_assignments(
+				db, blueprint_round, assigned
+			)
+		except ValueError as error:
+			raise HTTPException(status_code=409, detail=str(error))
+		for problem in blueprint_problems:
+			problem.test_cases = [test_case for test_case in problem.test_cases if not test_case.is_hidden]
+		return [_to_problem_response(problem) for problem in blueprint_problems]
+
 	problems = []
 	for sp in assigned:
 		p = db.query(CodingProblem).filter(CodingProblem.id == sp.problem_id).first()
 		if p is not None:
 			p.test_cases = [t for t in p.test_cases if not t.is_hidden]
 			problems.append(p)
-	return problems if problems else list_problems(db)
+	if not problems:
+		problems = list_problems(db)
+	return [_to_problem_response(p) for p in problems]
 
 
 @router.post("/run", response_model=CodingRunResponse)
@@ -72,14 +137,23 @@ def run_code(payload: CodingSubmissionRequest, db: Session = Depends(get_db), cu
 		raise HTTPException(status_code=400, detail="problem not assigned to current round")
 
 	# If the round has expired, finalize automatically and reject runs
-	limit_minutes = settings.CODING_ROUND_TIME_LIMIT_MINUTES
-	end_time = active_round.started_at + timedelta(minutes=limit_minutes)
+	if active_round.expires_at is None:
+		# Legacy/practice session without authoritative deadline - use default
+		end_time = active_round.started_at + timedelta(minutes=settings.CODING_ROUND_TIME_LIMIT_MINUTES)
+		logger.warning(
+			"Coding round %s has no expires_at; using default limit of %d minutes",
+			active_round.id, settings.CODING_ROUND_TIME_LIMIT_MINUTES
+		)
+	else:
+		end_time = active_round.expires_at
 	if datetime.utcnow() > end_time:
 		finalize_coding_round(db, active_round.id)
+		# Advance mock drive if this was part of a mock drive
+		try_advance_mock_drive(db, active_round.session_id)
 		raise HTTPException(status_code=400, detail="coding round has expired")
 
 	result = run_and_evaluate(db, payload.problem_id, payload.code, payload.language, visible_only=True, round_id=active_round.id)
-	
+
 	# Map to CodingRunResponse
 	return {
 		"status": result.get("status", "unknown"),
@@ -98,14 +172,39 @@ def submit_code(payload: CodingSubmissionRequest, db: Session = Depends(get_db),
 	"""Submit code: evaluate visible + hidden tests and persist a submission."""
 	active_round = session_service.get_user_active_round(db, current_user.id, round_type="coding")
 	if active_round is None:
+		# Check if there's an expired coding round that needs finalization
+		expired_round = (
+			db.query(AssessmentRound)
+			.join(AssessmentSession, AssessmentRound.session_id == AssessmentSession.id)
+			.filter(
+				AssessmentSession.user_id == current_user.id,
+				AssessmentRound.round_type == "coding",
+				AssessmentRound.status == "expired",
+			)
+			.order_by(AssessmentRound.id.desc())
+			.first()
+		)
+		if expired_round is not None:
+			# Finalize the expired round and advance mock drive
+			finalize_coding_round(db, expired_round.id)
+			try_advance_mock_drive(db, expired_round.session_id)
+			raise HTTPException(status_code=400, detail="coding round has expired")
 		raise HTTPException(status_code=404, detail="no active coding round")
 
 	# enforce timer and auto-finalize on expiry
-	limit_minutes = settings.CODING_ROUND_TIME_LIMIT_MINUTES
-	end_time = active_round.started_at + timedelta(minutes=limit_minutes)
+	if active_round.expires_at is None:
+		# Legacy/practice session without authoritative deadline - use default
+		end_time = active_round.started_at + timedelta(minutes=settings.CODING_ROUND_TIME_LIMIT_MINUTES)
+		logger.warning(
+			"Coding round %s has no expires_at; using default limit of %d minutes",
+			active_round.id, settings.CODING_ROUND_TIME_LIMIT_MINUTES
+		)
+	else:
+		end_time = active_round.expires_at
 	if datetime.utcnow() > end_time:
 		# finalize and unlock interview
 		finalize_coding_round(db, active_round.id)
+		try_advance_mock_drive(db, active_round.session_id)
 		raise HTTPException(status_code=400, detail="coding round has expired")
 	# Ensure problem is assigned to this round
 	assigned = (
@@ -116,14 +215,21 @@ def submit_code(payload: CodingSubmissionRequest, db: Session = Depends(get_db),
 	if assigned is None:
 		raise HTTPException(status_code=400, detail="problem not assigned to current round")
 
-	result = run_and_evaluate(db, payload.problem_id, payload.code, payload.language, visible_only=False, round_id=active_round.id)
-	
+	try:
+		result = run_and_evaluate(db, payload.problem_id, payload.code, payload.language, visible_only=False, round_id=active_round.id)
+	except CodeExecutionUnavailable as exc:
+		# Judge0 could not execute the code (not configured / unreachable /
+		# auth-rejected). This is an infrastructure failure: fail closed with a
+		# clear, non-2xx response and persist no candidate submission, so a mock
+		# result can never silently stand in for real assessment execution.
+		raise HTTPException(status_code=503, detail=str(exc))
+
 	# Fetch the created submission from DB to get submitted_at timestamp
 	from app.models.coding import CodingSubmission
 	submission = db.query(CodingSubmission).filter(CodingSubmission.id == result["submission_id"]).first()
 	if not submission:
 		raise HTTPException(status_code=500, detail="submission created but not found")
-	
+
 	# Map to CodingSubmissionResponse
 	return {
 		"submission_id": submission.id,
@@ -139,7 +245,7 @@ def submit_code(payload: CodingSubmissionRequest, db: Session = Depends(get_db),
 	}
 
 
-@router.post("/start")
+@router.post("/start", response_model=List[CodingProblemResponse])
 def start_round(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
 	"""Start a coding round for the authenticated user's active session."""
 	try:
@@ -147,24 +253,20 @@ def start_round(db: Session = Depends(get_db), current_user=Depends(get_current_
 	except ValueError as e:
 		raise HTTPException(status_code=400, detail=str(e))
 
-	# Return assigned problems (visible test cases filtered by service)
-	problems = payload.get("problems")
-	if problems is not None:
-		return problems
+	# Collect the problem list from whichever key was populated
+	problems = payload.get("problems") or []
+	if not problems:
+		assigned_problem_ids = [sp.problem_id for sp in payload.get("assigned", [])]
+		problems = db.query(CodingProblem).filter(CodingProblem.id.in_(assigned_problem_ids)).all()
+		for p in problems:
+			p.test_cases = [t for t in p.test_cases if not t.is_hidden]
 
-	assigned_problem_ids = [sp.problem_id for sp in payload.get("assigned", [])]
-	problems = db.query(CodingProblem).filter(CodingProblem.id.in_(assigned_problem_ids)).all()
-	for p in problems:
-		p.test_cases = [t for t in p.test_cases if not t.is_hidden]
-	return problems
+	return [_to_problem_response(p) for p in problems]
 
 
-@router.post("/start-after-aptitude")
+@router.post("/start-after-aptitude", response_model=List[CodingProblemResponse])
 def start_after_aptitude(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
-	"""Finalize the user's aptitude round and ensure coding round is available next.
-
-	This keeps the session active, unlocks the coding round, and is safe to call more than once.
-	"""
+	"""Finalize the user's aptitude round and ensure coding round is available next."""
 	active_aptitude = session_service.get_user_active_round(db, current_user.id, round_type="aptitude")
 	if active_aptitude is not None:
 		session_service.end_round(db, active_aptitude.id)
@@ -174,15 +276,14 @@ def start_after_aptitude(db: Session = Depends(get_db), current_user=Depends(get
 	except ValueError as e:
 		raise HTTPException(status_code=400, detail=str(e))
 
-	problems = payload.get("problems")
-	if problems is not None:
-		return problems
+	problems = payload.get("problems") or []
+	if not problems:
+		assigned_problem_ids = [sp.problem_id for sp in payload.get("assigned", [])]
+		problems = db.query(CodingProblem).filter(CodingProblem.id.in_(assigned_problem_ids)).all()
+		for p in problems:
+			p.test_cases = [t for t in p.test_cases if not t.is_hidden]
 
-	assigned_problem_ids = [sp.problem_id for sp in payload.get("assigned", [])]
-	problems = db.query(CodingProblem).filter(CodingProblem.id.in_(assigned_problem_ids)).all()
-	for p in problems:
-		p.test_cases = [t for t in p.test_cases if not t.is_hidden]
-	return problems
+	return [_to_problem_response(p) for p in problems]
 
 
 @router.get("/results")
@@ -190,16 +291,16 @@ def get_results(db: Session = Depends(get_db), current_user=Depends(get_current_
 	"""Get all submissions for the user's completed coding round."""
 	from app.models.coding import CodingSubmission, CodingProblem
 	from app.models.assessment import AssessmentRound, AssessmentSession
-	
+
 	# Try to get active coding round
 	active_round = session_service.get_user_active_round(db, current_user.id, round_type="coding")
-	
+
 	if active_round is None:
 		# Find the user's latest session (active or completed)
 		session = db.query(AssessmentSession).filter(
 			AssessmentSession.user_id == current_user.id
 		).order_by(AssessmentSession.id.desc()).first()
-		
+
 		if session:
 			# Find completed coding round for that session
 			completed_round = db.query(AssessmentRound).filter(
@@ -207,19 +308,19 @@ def get_results(db: Session = Depends(get_db), current_user=Depends(get_current_
 				AssessmentRound.round_type == "coding",
 				AssessmentRound.status == "completed"
 			).order_by(AssessmentRound.id.desc()).first()
-			
+
 			if completed_round:
 				active_round = completed_round
 			else:
 				return []
 		else:
 			return []
-	
+
 	# Get submissions for this round
 	submissions = db.query(CodingSubmission).filter(
 		CodingSubmission.round_id == active_round.id
 	).all()
-	
+
 	results = []
 	for sub in submissions:
 		problem = db.query(CodingProblem).filter(CodingProblem.id == sub.problem_id).first()
@@ -235,7 +336,7 @@ def get_results(db: Session = Depends(get_db), current_user=Depends(get_current_
 			"execution_time": sub.execution_time,
 			"submitted_at": sub.submitted_at.isoformat() if sub.submitted_at else None,
 		})
-	
+
 	return results
 
 
@@ -249,16 +350,48 @@ def finish_round(db: Session = Depends(get_db), current_user=Depends(get_current
 
 	# Finalize and unlock interview round
 	score = finalize_coding_round(db, active_round.id)
-	return {"status": "finalized", "round_score": score}
+
+	# If this coding round was part of a Mock Drive, advance to the next enabled round
+	mock_drive_advance = try_advance_mock_drive(db, active_round.session_id)
+
+	response = {
+		"status": "finalized",
+		"round_score": score,
+		"round_id": active_round.id,
+		"session_id": active_round.session_id,
+	}
+	if mock_drive_advance:
+		response["mock_drive"] = mock_drive_advance
+	return response
 
 
 @router.get("/submission/{submission_id}", response_model=CodingSubmissionStatusResponse)
-def get_submission(submission_id: int, db: Session = Depends(get_db)):
+def get_submission(
+	submission_id: int,
+	db: Session = Depends(get_db),
+	current_user=Depends(get_current_user),
+):
 	from app.models.coding import CodingSubmission
+	from app.models.assessment import AssessmentRound, AssessmentSession
 
 	sub = db.query(CodingSubmission).filter(CodingSubmission.id == submission_id).first()
 	if not sub:
 		raise HTTPException(status_code=404, detail="submission not found")
+
+	# Candidate isolation: only the submission owner (or staff roles) may read it.
+	round_obj = db.query(AssessmentRound).filter(AssessmentRound.id == sub.round_id).first()
+	owner_id = None
+	if round_obj is not None:
+		session_obj = (
+			db.query(AssessmentSession)
+			.filter(AssessmentSession.id == round_obj.session_id)
+			.first()
+		)
+		owner_id = session_obj.user_id if session_obj is not None else None
+
+	if owner_id != current_user.id and current_user.role not in ("admin", "faculty", "tpo"):
+		raise HTTPException(status_code=404, detail="submission not found")
+
 	return {
 		"submission_id": sub.id,
 		"problem_id": sub.problem_id,

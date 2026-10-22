@@ -83,8 +83,8 @@ export default function StudentSidebar() {
                             onClick={() => setMobileOpen(false)}
                             className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                                 active
-                                    ? 'bg-indigo-600 text-white shadow-sm'
-                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                                    ? 'bg-sky-100 text-sky-700 shadow-sm'
+                                    : 'text-slate-600 hover:bg-sky-50 hover:text-sky-700'
                             }`}
                         >
                             {item.icon}
@@ -101,8 +101,8 @@ export default function StudentSidebar() {
                     onClick={() => setMobileOpen(false)}
                     className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                         location.pathname === '/profile'
-                            ? 'bg-slate-100 text-slate-900'
-                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                            ? 'bg-sky-100 text-sky-700'
+                            : 'text-slate-600 hover:bg-sky-50 hover:text-sky-700'
                     }`}
                 >
                     <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white font-bold text-xs shrink-0">
@@ -113,7 +113,7 @@ export default function StudentSidebar() {
 
                 <button
                     onClick={handleLogout}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-all"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-slate-500 hover:bg-sky-50 hover:text-sky-700 transition-all"
                 >
                     <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -128,7 +128,7 @@ export default function StudentSidebar() {
     return (
         <>
             {/* Desktop sidebar */}
-            <aside className="hidden lg:flex flex-col w-56 shrink-0 bg-white border-r border-slate-200 h-screen sticky top-0">
+            <aside className="hidden lg:flex flex-col w-56 shrink-0 sidebar-glass border-r border-slate-200 h-screen sticky top-0">
                 <SidebarContent />
             </aside>
 
@@ -153,7 +153,7 @@ export default function StudentSidebar() {
 
             {/* Mobile drawer */}
             <aside
-                className={`lg:hidden fixed top-0 left-0 z-50 h-full w-64 bg-white border-r border-slate-200 shadow-xl transform transition-transform duration-200 ${
+                className={`lg:hidden fixed top-0 left-0 z-50 h-full w-64 sidebar-glass border-r border-slate-200 shadow-xl transform transition-transform duration-200 ${
                     mobileOpen ? 'translate-x-0' : '-translate-x-full'
                 }`}
             >
