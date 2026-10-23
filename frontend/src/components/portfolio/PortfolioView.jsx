@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
     getPortfolio,
     updatePortfolio,
@@ -13,6 +13,8 @@ import {
     deleteAchievement,
     addResearch,
     deleteResearch,
+    getSharingStatus,
+    updateSharingStatus,
 } from '../../services/portfolioService';
 import { viewResumeFile } from '../../services/resumeService';
 import {
@@ -26,11 +28,33 @@ import {
 
 export default function PortfolioView({ compact = false }) {
     const navigate = useNavigate();
+    const location = useLocation();
 
     const [portfolio, setPortfolio] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'projects' | 'certifications' | 'experience' | 'research' | 'highlights' | 'journey'
+    const [activeTab, setActiveTab] = useState('overview');
+    const [sharingStatus, setSharingStatus] = useState({ is_public: false, share_token: null, public_url: null });
+    const [sharingLoading, setSharingLoading] = useState(false);
+
+    // Map URL paths to tabs
+    const pathToTab = {
+        '/portfolio': 'overview',
+        '/portfolio/profile': 'overview',
+        '/portfolio/resume': 'resumes',
+        '/portfolio/projects': 'projects',
+        '/portfolio/certifications': 'certifications',
+        '/portfolio/experience': 'experience',
+        '/portfolio/research': 'research',
+        '/portfolio/skills': 'highlights',
+        '/portfolio/verification': 'journey',
+    };
+
+    // Sync activeTab with URL on mount and navigation
+    useEffect(() => {
+        const tab = pathToTab[location.pathname] || 'overview';
+        setActiveTab(tab);
+    }, [location.pathname]);
 
     // Modal toggles
     const [showEditProfile, setShowEditProfile] = useState(false);
@@ -57,9 +81,61 @@ export default function PortfolioView({ compact = false }) {
         }
     }, []);
 
+    const fetchSharingStatus = useCallback(async () => {
+        try {
+            const data = await getSharingStatus();
+            setSharingStatus(data);
+        } catch (err) {
+            console.error('Failed to load sharing status:', err);
+        }
+    }, []);
+
     useEffect(() => {
         fetchPortfolioData();
-    }, [fetchPortfolioData]);
+        fetchSharingStatus();
+    }, [fetchPortfolioData, fetchSharingStatus]);
+
+    // Navigation handler that updates both tab and URL
+    const handleTabChange = (tabId) => {
+        setActiveTab(tabId);
+        const tabToPath = {
+            'overview': '/portfolio',
+            'projects': '/portfolio/projects',
+            'certifications': '/portfolio/certifications',
+            'experience': '/portfolio/experience',
+            'research': '/portfolio/research',
+            'highlights': '/portfolio/skills',
+            'journey': '/portfolio/verification',
+            'resumes': '/portfolio/resume',
+        };
+        if (tabToPath[tabId]) {
+            navigate(tabToPath[tabId]);
+        }
+    };
+
+    const handleToggleSharing = async (enabled) => {
+        setSharingLoading(true);
+        try {
+            const data = await updateSharingStatus({ enabled });
+            setSharingStatus(data);
+        } catch (err) {
+            console.error('Failed to update sharing:', err);
+            alert(err.response?.data?.detail || 'Failed to update sharing settings');
+        } finally {
+            setSharingLoading(false);
+        }
+    };
+
+    const handleCopyPublicLink = async () => {
+        if (!sharingStatus.public_url) return;
+        try {
+            await navigator.clipboard.writeText(sharingStatus.public_url);
+            alert('Public portfolio link copied to clipboard!');
+        } catch (err) {
+            console.error('Failed to copy:', err);
+            alert('Failed to copy link');
+        }
+    };
 
     if (loading) {
         return (
@@ -85,7 +161,7 @@ export default function PortfolioView({ compact = false }) {
         return (
             <div className="bg-white border border-rose-200 rounded-3xl p-8 text-center shadow-xs">
                 <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-3 text-xl font-bold">
-                    ⚠️
+                    [!]
                 </div>
                 <h3 className="text-base font-bold text-slate-900 mb-1">Unable to Load Portfolio</h3>
                 <p className="text-xs text-slate-500 mb-4 max-w-md mx-auto">{error}</p>
@@ -235,7 +311,7 @@ export default function PortfolioView({ compact = false }) {
                                         rel="noopener noreferrer"
                                         className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition-colors"
                                     >
-                                        <span>💻</span> GitHub ↗
+                                        <span>[GitHub]</span> GitHub ↗
                                     </a>
                                 )}
                                 {external_profiles.linkedin && (
@@ -245,7 +321,7 @@ export default function PortfolioView({ compact = false }) {
                                         rel="noopener noreferrer"
                                         className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-50 hover:bg-sky-100 text-sky-700 font-medium transition-colors border border-sky-100"
                                     >
-                                        <span>🔗</span> LinkedIn ↗
+                                        <span>[LinkedIn]</span> LinkedIn ↗
                                     </a>
                                 )}
                                 {external_profiles.leetcode && (
@@ -313,6 +389,38 @@ export default function PortfolioView({ compact = false }) {
                             >
                                 Academic Profile ↗
                             </button>
+                            {/* Portfolio Sharing Controls */}
+                            <div className="flex items-center gap-2 ml-2 md:ml-4 pt-2 md:pt-0 border-l md:border-l-0 border-t md:border-t-0 border-slate-200">
+                                {sharingStatus.is_public ? (
+                                    <>
+                                        <button
+                                            onClick={handleCopyPublicLink}
+                                            disabled={!sharingStatus.public_url}
+                                            className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold rounded-xl border border-emerald-200 transition-all flex items-center gap-1"
+                                            title="Copy public portfolio link"
+                                        >
+                                            [Link] Copy Link
+                                        </button>
+                                        <button
+                                            onClick={() => handleToggleSharing(false)}
+                                            disabled={sharingLoading}
+                                            className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-xl border border-rose-200 transition-all flex items-center gap-1"
+                                            title="Disable public sharing"
+                                        >
+                                            [Lock] Disable
+                                        </button>
+                                    </>
+                                ) : (
+                                    <button
+                                        onClick={() => handleToggleSharing(true)}
+                                        disabled={sharingLoading}
+                                        className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-200 transition-all flex items-center gap-1"
+                                        title="Enable public sharing"
+                                    >
+                                        {sharingLoading ? '[Loading]' : '[Link]'} Enable Sharing
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -371,7 +479,7 @@ export default function PortfolioView({ compact = false }) {
             {/* ── 2. CORE EVIDENCE DISTINCTION EXPLAINER ── */}
             <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-100 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
                 <div className="flex items-center gap-2 text-indigo-900 font-bold">
-                    <span>🛡️</span>
+                    <span>[Shield]</span>
                     <span>EDI5 Evidence-Aware Verification Architecture:</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-4 text-slate-600">
@@ -390,21 +498,6 @@ export default function PortfolioView({ compact = false }) {
                 </div>
             </div>
 
-            {/* ── 3. IMPROVEMENT RECOMMENDATIONS STRIP (IF ANY) ── */}
-            {improvement_suggestions.length > 0 && (
-                <div className="p-4 rounded-2xl bg-amber-50/80 border border-amber-200/70 flex items-start gap-3 text-xs text-amber-900">
-                    <span className="text-base mt-0.5">💡</span>
-                    <div className="space-y-1 flex-1">
-                        <span className="font-bold block">Actionable Portfolio Recommendations:</span>
-                        <ul className="list-disc pl-4 space-y-0.5 text-amber-800 text-[11px]">
-                            {improvement_suggestions.map((sug, i) => (
-                                <li key={i}>{sug}</li>
-                            ))}
-                        </ul>
-                    </div>
-                </div>
-            )}
-
             {/* ── 4. TABS NAVIGATION ── */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-slate-200 scrollbar-none text-xs">
                 {[
@@ -419,7 +512,7 @@ export default function PortfolioView({ compact = false }) {
                 ].map((t) => (
                     <button
                         key={t.id}
-                        onClick={() => setActiveTab(t.id)}
+                        onClick={() => handleTabChange(t.id)}
                         className={`px-4 py-2.5 rounded-xl font-bold whitespace-nowrap transition-all cursor-pointer ${
                             activeTab === t.id
                                 ? 'bg-indigo-600 text-white shadow-xs'
@@ -990,7 +1083,7 @@ export default function PortfolioView({ compact = false }) {
                                     >
                                         <div>
                                             <div className="flex items-center gap-1.5 mb-1">
-                                                <span className="text-base">🏆</span>
+                                                <span className="text-base">[Trophy]</span>
                                                 <h4 className="text-xs sm:text-sm font-bold text-slate-900">
                                                     {ach.title}
                                                 </h4>

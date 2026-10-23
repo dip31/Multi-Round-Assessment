@@ -159,7 +159,8 @@ async def text_to_speech(
         try:
             cached = redis_client.get(cache_key)
             if isinstance(cached, (bytes, bytearray)):
-                logger.debug(f"TTS cache hit for text: {text[:50]}...")
+                safe_text = text[:50].encode('ascii', 'replace').decode('ascii')
+                logger.debug(f"TTS cache hit for text: {safe_text}...")
                 return bytes(cached)
         except Exception as e:
             logger.warning(f"Redis cache get failed: {str(e)}")
@@ -211,7 +212,8 @@ async def text_to_speech(
             )
         elif status_code == 422:
             # Text validation error — try truncating
-            logger.warning(f"Sarvam returned 422 for text: {text[:100]}...")
+            safe_text = text[:100].encode('ascii', 'replace').decode('ascii')
+            logger.warning(f"Sarvam returned 422 for text: {safe_text}...")
             truncated = text[:2400]
             try:
                 response = sarvam_client.text_to_speech.convert(

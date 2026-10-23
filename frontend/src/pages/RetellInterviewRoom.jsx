@@ -135,6 +135,67 @@ export default function RetellInterviewRoom() {
             .catch((error) => console.error('Failed to resolve assessment session:', error));
     }, [interviewId]);
 
+    // Subscribe to retellClient callbacks with automatic cleanup on unmount
+    useEffect(() => {
+        console.log('[RetellDiag:React] Registering retellClient event subscriptions');
+
+        const unsubscribeTranscript = retellClient.onTranscript((transcriptData, turntaking) => {
+            console.log('[RetellDiag:React] onTranscript callback fired, utterances count:', transcriptData.length, 'turntaking:', turntaking);
+            liveTranscriptRef.current = transcriptData;
+            setLiveTranscript(transcriptData);
+            
+            if (transcriptData.length > 0) {
+                const latestUser = [...transcriptData].reverse().find(u => u.role === 'user');
+                if (latestUser) {
+                    setTranscript(latestUser.content);
+                }
+                if (voiceMode === 'edi5_core') {
+                    const latestAgent = [...transcriptData].reverse().find(u => u.role === 'agent');
+                    if (latestAgent) setCurrentQuestion(latestAgent.content);
+                }
+            }
+        });
+
+        const unsubscribeAgentStart = retellClient.onAgentStartTalking(() => {
+            console.log('[RetellDiag:React] agent_start_talking fired');
+            setIsAISpeaking(true);
+        });
+
+        const unsubscribeAgentStop = retellClient.onAgentStopTalking(() => {
+            console.log('[RetellDiag:React] agent_stop_talking fired');
+            setIsAISpeaking(false);
+        });
+
+        const unsubscribeCallEnded = retellClient.onCallEnded(() => {
+            console.log('[RetellDiag:React] call_ended fired');
+            setRoomState(STATES.COMPLETE);
+            handleInterviewComplete();
+        });
+
+        const unsubscribeError = retellClient.onError((error) => {
+            console.error('[RetellDiag:React] error fired:', error);
+            setToast({
+                type: 'error',
+                message: 'Connection error. Please try again.',
+            });
+            setRoomState(STATES.ERROR);
+        });
+
+        return () => {
+            console.log('[RetellDiag:React] Unregistering retellClient event subscriptions');
+            unsubscribeTranscript();
+            unsubscribeAgentStart();
+            unsubscribeAgentStop();
+            unsubscribeCallEnded();
+            unsubscribeError();
+        };
+    }, [voiceMode]);
+
+    // Diagnostic logging for liveTranscript React state updates
+    useEffect(() => {
+        console.log('[RetellDiag:React] liveTranscript state length:', liveTranscript.length);
+    }, [liveTranscript]);
+
     // Initialize Retell Web Call
     const initializeRetell = useCallback(async () => {
         if (isInitializedRef.current) return;
@@ -143,49 +204,13 @@ export default function RetellInterviewRoom() {
         setRoomState(STATES.CONNECTING);
         setConnectionStatus('connecting');
         
-        console.log('Retell init - callId:', retellCallId);
-        console.log('Retell init - accessToken:', retellAccessToken ? retellAccessToken.substring(0, 20) + '...' : 'MISSING');
-        console.log('Retell init - iceServers:', retellIceServers);
+        console.log('[RetellDiag] Retell init - callId:', retellCallId);
+        console.log('[RetellDiag] Retell init - accessToken:', retellAccessToken ? retellAccessToken.substring(0, 20) + '...' : 'MISSING');
+        console.log('[RetellDiag] Retell init - iceServers:', retellIceServers);
         
         try {
             // Initialize Retell client
             await retellClient.initialize(retellCallId, retellAccessToken, retellIceServers);
-            
-            // Set up callbacks
-            retellClient.onTranscript((transcriptData) => {
-                liveTranscriptRef.current = transcriptData;
-                setLiveTranscript(transcriptData);
-                
-                // Detect AI speaking state - check if latest message is from agent
-                if (transcriptData.length > 0) {
-                    const latestMessage = transcriptData[transcriptData.length - 1];
-                    setIsAISpeaking(latestMessage.role === 'agent');
-                    
-                    const latestUser = [...transcriptData].reverse().find(u => u.role === 'user');
-                    if (latestUser) {
-                        setTranscript(latestUser.content);
-                    }
-                    if (voiceMode === 'edi5_core') {
-                        const latestAgent = [...transcriptData].reverse().find(u => u.role === 'agent');
-                        if (latestAgent) setCurrentQuestion(latestAgent.content);
-                    }
-                }
-            });
-            
-            retellClient.onCallEnded(() => {
-                console.log('Retell call ended');
-                setRoomState(STATES.COMPLETE);
-                handleInterviewComplete();
-            });
-            
-            retellClient.onError((error) => {
-                console.error('Retell error:', error);
-                setToast({
-                    type: 'error',
-                    message: 'Connection error. Please try again.',
-                });
-                setRoomState(STATES.ERROR);
-            });
             
             // Start the call (connects WebSocket, WebRTC, starts audio)
             await retellClient.startCall();
@@ -194,14 +219,14 @@ export default function RetellInterviewRoom() {
             setConnectionStatus('connected');
             
         } catch (error) {
-            console.error('Failed to initialize Retell:', error);
+            console.error('[RetellDiag] Failed to initialize Retell:', error);
             setToast({
                 type: 'error',
                 message: 'Failed to connect to Retell. Please retry or contact support; this interview will not switch providers automatically.',
             });
             setRoomState(STATES.ERROR);
         }
-    }, [retellCallId, retellAccessToken, retellIceServers, voiceMode]);
+    }, [retellCallId, retellAccessToken, retellIceServers]);
 
     const fetchFirstQuestion = async () => {
         if (!interviewId) return;
@@ -323,7 +348,7 @@ export default function RetellInterviewRoom() {
         };
     }, [isRecording]);
 
-    // Initialize on mount — run exactly once
+    // Initialize on mount — run exactly once per session
     useEffect(() => {
         if (interviewId && retellCallId && retellAccessToken) {
             initializeRetell();
@@ -333,9 +358,10 @@ export default function RetellInterviewRoom() {
             clearInterval(timerIntervalRef.current);
             clearInterval(tipPollingRef.current);
             retellClient.endCall().catch(() => {});
+            isInitializedRef.current = false;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [initializeRetell, interviewId, retellCallId, retellAccessToken]);
 
     // Get phase color
     const getPhaseColor = (p) => {
@@ -571,8 +597,8 @@ export default function RetellInterviewRoom() {
                                     </>
                                 )}
                                 
-                                {/* Live Transcript Display - Enhanced with better formatting */}
-                                {liveTranscript.length > 0 && (
+                                {/* Live Conversation Panel - Single authoritative panel */}
+                                {(roomState === STATES.CONNECTING || roomState === STATES.READY || roomState === STATES.LISTENING || roomState === STATES.PROCESSING) && (
                                     <div className="mb-6 p-4 bg-slate-800/50 rounded-xl border border-slate-700">
                                         <div className="flex items-center justify-between mb-3">
                                             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Live Conversation</p>
@@ -581,58 +607,76 @@ export default function RetellInterviewRoom() {
                                             </span>
                                         </div>
                                         <div className="space-y-2 max-h-60 overflow-y-auto">
-                                            {liveTranscript.map((utt, idx) => {
-                                                const isUser = utt.role === 'user';
-                                                const isFinal = utt.is_final !== false;
-                                                return (
-                                                    <div 
-                                                        key={`${utt.utterance_id || idx}-${utt.role}`}
-                                                        className={`flex gap-3 animate-slide-in ${!isFinal ? 'opacity-70' : ''}`}
-                                                    >
-                                                        {/* Speaker Avatar */}
-                                                        <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                                                            isUser 
-                                                                ? 'bg-blue-600/20 border border-blue-500/30' 
-                                                                : 'bg-purple-600/20 border border-purple-500/30'
-                                                        }`}>
-                                                            {isUser ? (
-                                                                <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                                                </svg>
-                                                            ) : (
-                                                                <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 002 2v10a2 2 0 002 2z" />
-                                                                </svg>
-                                                            )}
-                                                        </div>
-                                                        
-                                                        {/* Message Content */}
-                                                        <div className="flex-1 min-w-0">
-                                                            <div className="flex items-baseline gap-2 mb-1">
-                                                                <span className={`text-xs font-semibold ${isUser ? 'text-blue-300' : 'text-purple-300'}`}>
-                                                                    {isUser ? 'You' : 'Interviewer'}
-                                                                </span>
-                                                                <span className="text-[10px] text-slate-500 uppercase tracking-wider">
-                                                                    {utt.message_type || (isUser ? 'ANSWER' : 'QUESTION')}
-                                                                </span>
-                                                                {!isFinal && (
-                                                                    <span className="text-[10px] text-amber-400 animate-pulse flex items-center gap-1">
-                                                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                                                                        Transcribing...
-                                                                    </span>
+                                            {liveTranscript.length > 0 ? (
+                                                liveTranscript.map((utt, idx) => {
+                                                    const isUser = utt.role === 'user';
+                                                    const isFinal = utt.is_final !== false;
+                                                    // Stable key: use utterance_id if available, fallback to role + index
+                                                    const stableKey = utt.utterance_id || `${utt.role}-${idx}`;
+                                                    return (
+                                                        <div 
+                                                            key={stableKey}
+                                                            className={`flex gap-3 animate-slide-in ${!isFinal ? 'opacity-70' : ''}`}
+                                                        >
+                                                            {/* Speaker Avatar */}
+                                                            <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+                                                                isUser 
+                                                                    ? 'bg-blue-600/20 border border-blue-500/30' 
+                                                                    : 'bg-purple-600/20 border border-purple-500/30'
+                                                            }`}>
+                                                                {isUser ? (
+                                                                    <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                                                    </svg>
+                                                                ) : (
+                                                                    <svg className="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 002-2H5a2 2 0 002 2v10a2 2 0 002 2z" />
+                                                                    </svg>
                                                                 )}
                                                             </div>
-                                                            <p className={`text-sm leading-relaxed ${isUser ? 'text-blue-200' : 'text-purple-200'} break-words`}>
-                                                                {utt.content}
-                                                            </p>
+                                                            
+                                                            {/* Message Content */}
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="flex items-baseline gap-2 mb-1">
+                                                                    <span className={`text-xs font-semibold ${isUser ? 'text-blue-300' : 'text-purple-300'}`}>
+                                                                        {isUser ? 'You' : 'Interviewer'}
+                                                                    </span>
+                                                                    <span className="text-[10px] text-slate-500 uppercase tracking-wider">
+                                                                        {utt.message_type || (isUser ? 'ANSWER' : 'QUESTION')}
+                                                                    </span>
+                                                                    {!isFinal && (
+                                                                        <span className="text-[10px] text-amber-400 animate-pulse flex items-center gap-1">
+                                                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                                                                            Transcribing...
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <p className={`text-sm leading-relaxed ${isUser ? 'text-blue-200' : 'text-purple-200'} break-words`}>
+                                                                    {utt.content}
+                                                                </p>
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                );
-                                            })}
+                                                    );
+                                                })
+                                            ) : (
+                                                // Empty state - adaptive based on connection status
+                                                <div className="text-center text-slate-500 py-8">
+                                                    <svg className="w-10 h-10 mx-auto text-slate-700 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                                                    </svg>
+                                                    <p className="text-sm">
+                                                        {connectionStatus === 'connected' ? 'Waiting for conversation to start...' : 'Connecting to interviewer...'}
+                                                    </p>
+                                                    <p className="text-[11px] text-slate-600 mt-1">
+                                                        {connectionStatus === 'connected'
+                                                            ? 'Transcript will appear here once the interviewer speaks or you respond.'
+                                                            : 'Transcript will appear here once the connection is established.'}
+                                                    </p>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
-                                )}
-                                
+                                )}                               
                                 {transcript && roomState !== STATES.READY && (
                                     <div className="mt-8 pt-6 border-t border-slate-800">
                                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Your Response</p>

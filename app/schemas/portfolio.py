@@ -98,6 +98,12 @@ class SkillEvidenceItem(BaseModel):
     project_evidence: bool = False
     assessment_evidence: bool = False
     verified: bool = False
+    # Evidence-backed fields from StudentCompetency
+    score: Optional[float] = None  # 0-100 competency score
+    confidence: Optional[float] = None  # 0-1 confidence level
+    freshness: Optional[str] = None  # "high", "medium", "low"
+    evidence_source: Optional[str] = None  # "interview", "aptitude", "coding", "practice"
+    evidence_count: Optional[int] = None  # Number of eligible evidence records
 
 
 class AssessmentHighlightItem(BaseModel):
@@ -147,3 +153,48 @@ class PortfolioResponse(BaseModel):
 class PortfolioUpdate(BaseModel):
     about: Optional[str] = None
     external_profiles: Optional[ExternalProfiles] = None
+
+
+class PublicPortfolioResponse(BaseModel):
+    """Read-only public portfolio for recruiters - excludes private contact info."""
+    profile: Dict[str, Any]  # Limited: name, headline, department, institution, graduation_year, target_role
+    education: List[Dict[str, Any]]
+    about: str
+    skills: List[SkillEvidenceItem]  # Only verified + assessment-backed skills
+    projects: List[ProjectItem]  # Only public-visible projects
+    certifications: List[CertificationItem]  # Only verified certifications
+    experience: List[ExperienceItem]
+    achievements: List[AchievementItem]
+    research: List[ResearchItem]
+    patents: List[PatentItem]
+    assessment_highlights: List[AssessmentHighlightItem]
+    badges: List[BadgeItem]
+    learning_journey: List[Dict[str, Any]]
+    external_profiles: ExternalProfiles
+    completeness: CompletenessBreakdown
+
+
+class SharingStatus(BaseModel):
+    is_public: bool
+    share_token: Optional[str] = None
+    public_url: Optional[str] = None
+
+
+class EnableSharingRequest(BaseModel):
+    enabled: bool
+
+
+class VerifyItemRequest(BaseModel):
+    item_type: str  # "project" | "certification" | "experience" | "achievement" | "research" | "patent" | "skill"
+    item_id: str
+    student_id: int
+    decision: str  # "Verified" | "Rejected" | "Under Review"
+    reviewer_notes: Optional[str] = None
+
+
+class VerifyItemResponse(BaseModel):
+    success: bool
+    message: str
+    item_type: str
+    item_id: str
+    new_status: str

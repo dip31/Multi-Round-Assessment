@@ -8,6 +8,7 @@ async notifications for audit, analytics, and session lifecycle tracking.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, Dict, Optional, List
 
@@ -25,6 +26,13 @@ from app.models.interview import (
     InterviewMessageType,
 )
 from app.modules.interview.services.retell_adapter import RetellAdapter, get_retell_adapter
+from app.modules.interview.services.transcript_normalizer import (
+    normalize_retell_transcript, CanonicalTranscriptEvent
+)
+from app.modules.interview.services.retell_finalization_service import (
+    get_retell_finalization_service
+)
+from app.modules.interview.routers.transcript_websocket import broadcast_transcript_update
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -80,23 +88,25 @@ async def handle_retell_webhook(
     raw_body = await request.body()
     raw_body_str = raw_body.decode("utf-8")
     
+    logger.info(f"[RetellWebhook] Received webhook, signature_present={bool(x_retell_signature)}, body_len={len(raw_body_str)}")
+    
     # Verify webhook signature
     if not adapter.verify_webhook_signature(raw_body_str, x_retell_signature or ""):
-        logger.warning("Invalid Retell webhook signature")
+        logger.warning("[RetellWebhook] Invalid signature")
         raise HTTPException(status_code=401, detail="Invalid signature")
     
     # Parse event
     try:
         event = adapter.parse_webhook_event(raw_body_str)
     except ValueError as e:
-        logger.error(f"Failed to parse webhook: {e}")
+        logger.error(f"[RetellWebhook] Failed to parse: {e}")
         raise HTTPException(status_code=400, detail=str(e))
     
     event_type = event["event_type"]
     call_id = event["call_id"]
     call_data = event["call_data"]
     
-    logger.info(f"Retell webhook: {event_type} for call {call_id}")
+    logger.info(f"[RetellWebhook] {event_type} for call {call_id}")
     
     # Idempotency check
     start_ts = call_data.get("start_timestamp")
@@ -131,6 +141,8 @@ async def handle_retell_webhook(
         else:
             logger.info(f"Unhandled webhook event type: {event_type}")
     except Exception as e:
+        # Rollback any pending transaction to prevent session poisoning
+        db.rollback()
         logger.error(f"Error processing webhook {event_type} for call {call_id}: {e}")
         # Don't raise - we acknowledged the webhook
         # In production, send to dead letter queue
@@ -144,12 +156,17 @@ async def _handle_call_started(
     db: Session,
 ) -> None:
     """Handle call_started webhook."""
-    interview.status = "ACTIVE"
-    if not interview.started_at:
-        from datetime import datetime
-        interview.started_at = datetime.fromtimestamp(call_data.get("start_timestamp", 0) / 1000)
-    db.commit()
-    logger.info(f"Interview {interview.id} marked ACTIVE via call_started")
+    try:
+        interview.status = "ACTIVE"
+        if not interview.started_at:
+            from datetime import datetime
+            interview.started_at = datetime.fromtimestamp(call_data.get("start_timestamp", 0) / 1000)
+        db.commit()
+        logger.info(f"Interview {interview.id} marked ACTIVE via call_started")
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to handle call_started for interview {interview.id}: {e}")
+        raise
 
 
 async def _handle_call_ended(
@@ -160,14 +177,29 @@ async def _handle_call_ended(
     """Handle call_ended webhook."""
     from datetime import datetime
     
-    # Only complete if not already completed by EDI5 logic
-    if interview.phase != "COMPLETE":
-        interview.phase = "COMPLETE"
-        interview.status = "COMPLETED"
-        interview.completion_reason = "CALL_ENDED"
-        interview.completed_at = datetime.fromtimestamp(call_data.get("end_timestamp", 0) / 1000)
-        db.commit()
-        logger.info(f"Interview {interview.id} completed via call_ended webhook")
+    try:
+        # Only complete if not already completed by EDI5 logic
+        if interview.phase != "COMPLETE":
+            interview.phase = "COMPLETE"
+            interview.status = "COMPLETED"
+            interview.completion_reason = "CALL_ENDED"
+            interview.completed_at = datetime.fromtimestamp(call_data.get("end_timestamp", 0) / 1000)
+            db.commit()
+            logger.info(f"Interview {interview.id} completed via call_ended webhook")
+
+        # Trigger final transcript retrieval (async, non-blocking)
+        # The finalization service will handle "not ready" gracefully
+        try:
+            finalization_service = get_retell_finalization_service(db)
+            # Fire and forget - don't await to keep webhook fast
+            # The service will mark status appropriately
+            asyncio.create_task(finalization_service.finalize_interview_transcript(interview.id))
+        except Exception as e:
+            logger.warning(f"Failed to trigger finalization for interview {interview.id}: {e}")
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to handle call_ended for interview {interview.id}: {e}")
+        raise
 
 
 async def _handle_call_analyzed(
@@ -176,15 +208,28 @@ async def _handle_call_analyzed(
     db: Session,
 ) -> None:
     """Handle call_analyzed webhook - post-call analysis complete."""
-    # Store analysis results if needed
-    analysis = call_data.get("call_analysis", {})
-    if analysis:
-        interview.personalization_metadata = {
-            **(interview.personalization_metadata or {}),
-            "retell_analysis": analysis,
-        }
-        db.commit()
-    logger.info(f"Interview {interview.id} analysis stored via call_analyzed")
+    try:
+        # Store analysis results if needed
+        analysis = call_data.get("call_analysis", {})
+        if analysis:
+            interview.personalization_metadata = {
+                **(interview.personalization_metadata or {}),
+                "retell_analysis": analysis,
+            }
+            db.commit()
+        logger.info(f"Interview {interview.id} analysis stored via call_analyzed")
+
+        # call_analyzed means transcript is usually ready - trigger finalization
+        try:
+            finalization_service = get_retell_finalization_service(db)
+            # Fire and forget
+            asyncio.create_task(finalization_service.finalize_interview_transcript(interview.id))
+        except Exception as e:
+            logger.warning(f"Failed to trigger finalization (call_analyzed) for interview {interview.id}: {e}")
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to handle call_analyzed for interview {interview.id}: {e}")
+        raise
 
 
 async def _handle_transcript_updated(
@@ -196,7 +241,13 @@ async def _handle_transcript_updated(
     
     Parses Retell's transcript object and persists structured messages
     to InterviewConversation/InterviewMessage for question-wise analysis.
+    
+    For retell_hosted mode, live transcript comes from frontend SDK directly.
+    Webhook only handles persistence; broadcasting to frontend WS is skipped
+    to avoid duplicates with SDK 'update' events.
     """
+    logger.info(f"[RetellWebhook] _handle_transcript_updated called for interview {interview.id}")
+    
     # Store the flat transcript string for backward compatibility
     transcript = call_data.get("transcript", "")
     interview.personalization_metadata = {
@@ -206,12 +257,57 @@ async def _handle_transcript_updated(
         "retell_transcript_updated_at": call_data.get("start_timestamp"),
     }
     
+    # Check if this is retell_hosted mode
+    metadata = interview.personalization_metadata or {}
+    voice_mode = metadata.get("voice_mode")
+    is_hosted_mode = voice_mode == "retell_hosted"
+    
     # Parse structured transcript object from Retell
     transcript_obj = call_data.get("transcript_object")
+    logger.debug(f"[RetellWebhook] transcript_obj type: {type(transcript_obj)}, present: {transcript_obj is not None}")
     if transcript_obj:
         await _persist_structured_transcript(interview, transcript_obj, db)
+
+        # For retell_hosted mode: SDK 'update' events are the sole live transcript source.
+        # Skip broadcasting to frontend WS to avoid duplicates with SDK events.
+        if not is_hosted_mode:
+            # Broadcast to frontend WebSocket for real-time display (edi5_core mode only).
+            # extract_utterances tolerates both the bare-array and the
+            # {"utterances": [...]} shapes; the previous unguarded
+            # transcript_obj.get("utterances") raised AttributeError on Retell's
+            # actual array payload and aborted the handler before broadcasting.
+            utterances = extract_utterances(transcript_obj)
+            logger.info(f"[RetellWebhook] extracted utterances: {len(utterances)}")
+            if utterances:
+                turn_id_for_event = None
+                if interview.current_turn and interview.current_turn > 0:
+                    turn = db.query(InterviewTurn).filter(
+                        InterviewTurn.interview_id == interview.id,
+                        InterviewTurn.turn_number == interview.current_turn,
+                    ).first()
+                    if turn:
+                        turn_id_for_event = turn.id
+                canonical_events = normalize_retell_transcript(
+                    utterances,
+                    base_sequence=0,
+                    interview_turn_id=turn_id_for_event,
+                )
+                logger.info(f"[TranscriptBroadcast] webhook interview_id={interview.id}, utterances={len(utterances)}, broadcasting={len(canonical_events)}")
+                for event in canonical_events:
+                    logger.debug(f"[TranscriptBroadcast] sending turn_id={event.turn_id}, speaker={event.speaker}, seq={event.sequence}")
+                    await broadcast_transcript_update(interview.id, event.to_frontend_dict())
+            else:
+                logger.debug(f"[TranscriptBroadcast] webhook no utterances to broadcast")
+        else:
+            logger.info(f"[RetellWebhook] retell_hosted mode: skipping WS broadcast for interview {interview.id} (SDK is sole live source)")
+    else:
+        logger.warning(f"[RetellWebhook] No transcript_object in call_data, keys: {list(call_data.keys())}")
     
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.error(f"[RetellWebhook] Commit failed in _handle_transcript_updated for interview {interview.id}: {e}")
 
 
 async def _persist_structured_transcript(
@@ -238,7 +334,7 @@ async def _persist_structured_transcript(
     }
     """
     try:
-        utterances = transcript_obj.get("utterances", [])
+        utterances = extract_utterances(transcript_obj)
         if not utterances:
             return
         
@@ -271,6 +367,17 @@ async def _persist_structured_transcript(
         new_messages = []
         ai_count = 0
         candidate_count = 0
+        
+        # Resolve real turn_id if a valid InterviewTurn exists, otherwise None (nullable)
+        # Never pass a logical turn counter (like interview.current_turn) as turn_id
+        resolved_turn_id = None
+        if interview.current_turn and interview.current_turn > 0:
+            turn = db.query(InterviewTurn).filter(
+                InterviewTurn.interview_id == interview.id,
+                InterviewTurn.turn_number == interview.current_turn,
+            ).first()
+            if turn:
+                resolved_turn_id = turn.id
         
         for idx, utterance in enumerate(utterances):
             utterance_id = utterance.get("utterance_id")
@@ -315,6 +422,7 @@ async def _persist_structured_transcript(
                 retell_utterance_id=utterance_id,
                 is_final=is_final,
                 confidence=confidence,
+                turn_id=resolved_turn_id,
                 # timestamp will use server_default
             )
             new_messages.append(message)
@@ -324,16 +432,28 @@ async def _persist_structured_transcript(
             # Add all new messages
             for msg in new_messages:
                 db.add(msg)
-            
-            # Update conversation counts
-            conversation.total_messages = len(existing_utterance_ids)
-            conversation.ai_message_count = ai_count
-            conversation.candidate_message_count = candidate_count
-            
+            db.flush()
+        
+        # F-6 fix: Recompute conversation counts from the ENTIRE persisted
+        # message set, not just the newly added messages in this call.
+        # This prevents counters from resetting to 0 on repeat webhook updates.
+        all_messages = db.query(InterviewMessage).filter(
+            InterviewMessage.conversation_id == conversation.id
+        ).all()
+        
+        total_ai = sum(1 for m in all_messages if m.speaker == InterviewMessageSpeaker.AI.value)
+        total_candidate = sum(1 for m in all_messages if m.speaker == InterviewMessageSpeaker.CANDIDATE.value)
+        
+        conversation.total_messages = len(all_messages)
+        conversation.ai_message_count = total_ai
+        conversation.candidate_message_count = total_candidate
+        
+        if new_messages:
             logger.info(f"Persisted {len(new_messages)} new transcript messages for interview {interview.id}")
         
     except Exception as e:
-        logger.error(f"Failed to persist structured transcript for interview {interview.id}: {e}")
+        db.rollback()
+        logger.error(f"Failed to persist structured transcript for interview {interview.id}: {type(e).__name__}: {e}")
         # Don't raise - webhook should still succeed
 
 
@@ -344,22 +464,27 @@ async def _handle_transfer_event(
     db: Session,
 ) -> None:
     """Handle transfer-related webhooks."""
-    transfer_info = {
-        "event": event_type,
-        "timestamp": call_data.get("start_timestamp"),
-        "destination": call_data.get("transfer_destination"),
-        "option": call_data.get("transfer_option"),
-    }
-    
-    interview.personalization_metadata = {
-        **(interview.personalization_metadata or {}),
-        "retell_transfers": [
-            *(interview.personalization_metadata or {}).get("retell_transfers", []),
-            transfer_info,
-        ],
-    }
-    db.commit()
-    logger.info(f"Interview {interview.id} transfer event: {event_type}")
+    try:
+        transfer_info = {
+            "event": event_type,
+            "timestamp": call_data.get("start_timestamp"),
+            "destination": call_data.get("transfer_destination"),
+            "option": call_data.get("transfer_option"),
+        }
+        
+        interview.personalization_metadata = {
+            **(interview.personalization_metadata or {}),
+            "retell_transfers": [
+                *(interview.personalization_metadata or {}).get("retell_transfers", []),
+                transfer_info,
+            ],
+        }
+        db.commit()
+        logger.info(f"Interview {interview.id} transfer event: {event_type}")
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to handle transfer event for interview {interview.id}: {e}")
+        raise
 
 
 # ── Health Check ───────────────────────────────────────────────────────────

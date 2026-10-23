@@ -24,6 +24,10 @@ class QuestionItem(BaseModel):
     difficulty: str  # EASY, MEDIUM, HARD
     topic: str  # General, Experience, Technical, etc.
     phase: str  # HR, TECHNICAL
+    id: Optional[str] = None  # Stable question ID
+    expected_concepts: Optional[List[str]] = None  # Rubric concepts for evaluation
+    grounded_in: Optional[str] = None
+    personalized: Optional[bool] = None
 
 
 class QuestionPoolResponse(BaseModel):
@@ -241,3 +245,70 @@ class InterviewReportResponse(BaseModel):
     retell_analysis: Optional[Dict[str, Any]] = None
     # Question-wise detailed analysis for post-interview review
     question_wise_analysis: Optional[Dict[str, Any]] = None
+
+
+# ── Question-Wise Analysis ───────────────────────────────────────────────
+class QuestionConceptAnalysis(BaseModel):
+    """Per-concept analysis result."""
+    concept: str
+    status: str  # demonstrated, missing, incorrect, partial
+    evidence: Optional[str] = None
+
+
+class QuestionAnalysisResult(BaseModel):
+    """Detailed analysis for a single question."""
+    question_id: Optional[str] = None
+    question_number: int
+    question_text: str
+    question_type: str  # QUESTION, FOLLOW_UP
+    candidate_answer: Optional[str] = None
+    expected_concepts: List[str] = []
+    concept_analysis: List[QuestionConceptAnalysis] = []
+    covered_concepts: List[str] = []
+    missing_concepts: List[str] = []
+    incorrect_concepts: List[str] = []
+    partial_concepts: List[str] = []
+    strengths: List[str] = []
+    gaps: List[str] = []
+    score: float  # 0-10
+    max_score: float = 10.0
+    depth_level: str = "Basic"  # Surface, Basic, Good, Strong, Expert
+    confidence: float = 0.8  # 0-1, separate from score
+    interview_type: Optional[str] = None
+
+
+class CompetencyChange(BaseModel):
+    """Competency profile change from interview."""
+    skill: str
+    previous_score: float
+    new_score: float
+    previous_confidence: float
+    new_confidence: float
+    source: str  # interview, aptitude, coding
+    demonstrated_concepts: List[str]
+    missing_concepts: List[str]
+    reasoning: Optional[str] = None
+
+
+class InterviewAnalysisResponse(BaseModel):
+    """Complete structured interview analysis response."""
+    interview_id: int
+    overall_score: float
+    confidence: float
+    strong_areas: List[str]
+    improvement_areas: List[str]
+    recurring_gaps: List[str]
+    pattern_summary: str
+    questions: List[QuestionAnalysisResult]
+    competency_changes: List[CompetencyChange] = []
+    analysis_status: str = "completed"  # pending, processing, completed, failed
+    analyzed_at: Optional[str] = None
+
+
+class AnalysisStatusResponse(BaseModel):
+    """Async analysis job status."""
+    interview_id: int
+    status: str  # pending, processing, completed, failed
+    progress: Optional[int] = None  # 0-100
+    message: Optional[str] = None
+    result: Optional[InterviewAnalysisResponse] = None

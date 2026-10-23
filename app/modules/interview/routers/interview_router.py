@@ -83,6 +83,10 @@ from app.modules.interview.schemas.interview_schema import (
     InterviewerListResponse,
     InterviewerProfileResponse,
     InterviewerVoiceInfo,
+    QuestionAnalysisResult,
+    CompetencyChange,
+    InterviewAnalysisResponse,
+    AnalysisStatusResponse,
 )
 from app.modules.interview.config import interviewer_profiles
 from app.modules.interview.services import question_planner
@@ -93,7 +97,9 @@ from app.modules.interview.services.interview_orchestrator import (
 from app.modules.interview.services.interview_rl_engine import InterviewRLEngine
 from app.modules.interview.services.retell_adapter import get_retell_adapter, RetellCallConfig
 from app.modules.interview.services.retell_llm_websocket import retell_llm_websocket_endpoint
-from app.modules.interview.services.interview_analysis import InterviewAnalysisService, get_interview_analysis_service
+from app.modules.interview.services.interview_analysis import (
+    InterviewAnalysisService, get_interview_analysis_service
+)
 from app.services.phone_detection_service import detect_phones
 from app.services.proctoring_logger import log_violation
 from pydantic import BaseModel
@@ -1127,9 +1133,53 @@ async def complete_interview(
     scores = [t.final_score for t in turns if t.final_score is not None]
     finalize_linked_round(scores)
     db.commit()
+    
+    # Determine if analysis should run now
+    # For Retell modes, gate analysis on transcript finalization
+    metadata = interview.personalization_metadata or {}
+    voice_mode = metadata.get("voice_mode")
+    is_retell_mode = voice_mode in ("edi5_core", "retell_hosted")
+    
+    should_run_analysis = True
+    if is_retell_mode:
+        # Only run analysis if transcript is finalized
+        if interview.transcript_status == "completed":
+            logger.info(f"Retell interview {interview_id}: transcript finalized, running analysis")
+        else:
+            should_run_analysis = False
+            logger.info(f"Retell interview {interview_id}: transcript_status={interview.transcript_status}, triggering finalization & deferring analysis")
+            # Trigger finalization if not already running, so non-webhook environments finalize reliably
+            try:
+                from app.modules.interview.services.retell_finalization_service import get_retell_finalization_service
+                finalization_svc = get_retell_finalization_service(db)
+                import asyncio
+                asyncio.create_task(finalization_svc.finalize_interview_transcript(interview.id))
+            except Exception as e:
+                logger.warning(f"Failed to auto-trigger finalization in complete_interview for {interview_id}: {e}")
+    
+    analysis_status = "deferred"
+    if should_run_analysis:
+        # Trigger post-interview analysis
+        try:
+            analysis_service = get_interview_analysis_service()
+            analysis = analysis_service.analyze_interview(
+                db=db,
+                interview_id=interview_id,
+                persist=True,
+                update_competency=True,
+            )
+            analysis_status = "completed"
+            logger.info(f"Analysis completed for interview {interview_id}")
+        except Exception as e:
+            logger.error(f"Analysis failed for interview {interview_id}: {e}")
+            analysis_status = "failed"
+    else:
+        logger.info(f"Interview {interview_id}: analysis deferred until transcript finalization")
+    
     return {
         "status": "COMPLETED",
         "completion_reason": "USER_SUBMITTED",
+        "analysis_status": analysis_status,
         "questions_attempted": len(turns),
         "questions_total": interview.total_turns,
         "performance_score": round(sum(scores) / max(len(scores), 1), 2),
@@ -1171,6 +1221,47 @@ async def save_retell_transcript(
     return {"status": "saved"}
 
 
+@router.post("/session/{interview_id}/finalize-transcript")
+async def finalize_transcript(
+    interview_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Manually trigger final transcript retrieval from Retell.
+    
+    Useful when webhooks were missed or for reconciliation.
+    Idempotent: safe to call multiple times.
+    """
+    interview = db.query(InterviewSession).join(
+        AssessmentSession,
+        AssessmentSession.id == InterviewSession.session_id,
+    ).filter(
+        InterviewSession.id == interview_id,
+        AssessmentSession.user_id == current_user.id,
+    ).first()
+    if not interview:
+        raise HTTPException(status_code=404, detail="Interview not found")
+
+    if not interview.retell_call_id:
+        return {
+            "status": "no_call",
+            "message": "No Retell call ID; transcript sourced from live events only",
+        }
+
+    from app.modules.interview.services.retell_finalization_service import get_retell_finalization_service
+    finalization_service = get_retell_finalization_service(db)
+    result = await finalization_service.finalize_interview_transcript(interview_id, force=True)
+
+    return {
+        "status": result.status,
+        "message": result.message,
+        "transcript_finalized": result.transcript_finalized,
+        "messages_reconciled": result.messages_reconciled,
+        "error": result.error,
+    }
+
+
 async def _persist_browser_transcript(
     interview: InterviewSession,
     transcript: str,
@@ -1200,10 +1291,13 @@ async def _persist_browser_transcript(
         # Parse transcript lines
         lines = [line.strip() for line in transcript.split('\n') if line.strip()]
         
-        # Track existing to avoid duplicates
-        existing_count = db.query(InterviewMessage).filter(
+        # F-8 fix: Build fingerprints of existing messages for content-based dedup
+        existing_messages = db.query(InterviewMessage).filter(
             InterviewMessage.conversation_id == conversation.id
-        ).count()
+        ).all()
+        existing_fingerprints = {
+            f"{m.speaker}:{m.text[:200]}" for m in existing_messages
+        }
         
         new_messages = []
         ai_count = 0
@@ -1231,9 +1325,12 @@ async def _persist_browser_transcript(
                     speaker = InterviewMessageSpeaker.SYSTEM
                     message_type = InterviewMessageType.SYSTEM
                 
-                # Skip if we already have this many messages
-                if idx < existing_count:
+                # F-8 fix: Deduplicate by (speaker, content) fingerprint
+                # instead of fragile positional index.
+                fingerprint = f"{speaker.value}:{content[:200]}"
+                if fingerprint in existing_fingerprints:
                     continue
+                existing_fingerprints.add(fingerprint)
                 
                 message = InterviewMessage(
                     conversation_id=conversation.id,
@@ -1399,36 +1496,78 @@ async def get_report(
     question_wise_analysis = None
     if not hosted_mode:
         try:
-            analysis_service = get_interview_analysis_service()
-            analysis = analysis_service.analyze_interview(db, interview_id)
-            question_wise_analysis = {
-                "overall_score": analysis.overall_score,
-                "strong_areas": analysis.strong_areas,
-                "improvement_areas": analysis.improvement_areas,
-                "recurring_gaps": analysis.recurring_gaps,
-                "pattern_summary": analysis.pattern_summary,
-                "confidence": analysis.confidence,
-                "questions": [
-                    {
-                        "question_id": qa.question_id,
-                        "question_number": qa.question_number,
-                        "question_text": qa.question_text,
-                        "question_type": qa.question_type,
-                        "candidate_answer": qa.candidate_answer,
-                        "expected_concepts": qa.expected_concepts,
-                        "covered_concepts": qa.covered_concepts,
-                        "missing_concepts": qa.missing_concepts,
-                        "incorrect_concepts": qa.incorrect_concepts,
-                        "strengths": qa.strengths,
-                        "gaps": qa.gaps,
-                        "score": qa.score,
-                        "max_score": qa.max_score,
-                        "depth_level": qa.depth_level,
-                        "confidence": qa.confidence,
-                    }
-                    for qa in analysis.question_analyses
-                ],
-            }
+            # F-4 fix: Read persisted analysis instead of re-running it.
+            # Analysis is triggered once at interview completion. Report views
+            # must NOT repeat the LLM call or mutate competency records.
+            from app.models.interview import InterviewQuestionAnalysis
+            existing_analyses = db.query(InterviewQuestionAnalysis).filter(
+                InterviewQuestionAnalysis.interview_id == interview_id
+            ).order_by(InterviewQuestionAnalysis.question_number).all()
+            
+            if existing_analyses:
+                question_wise_analysis = {
+                    "overall_score": sum(qa.score for qa in existing_analyses) / len(existing_analyses),
+                    "strong_areas": [],  # Computed from persisted data
+                    "improvement_areas": [],
+                    "recurring_gaps": [],
+                    "pattern_summary": "Analysis based on persisted results",
+                    "confidence": sum(qa.confidence for qa in existing_analyses) / len(existing_analyses),
+                    "questions": [
+                        {
+                            "question_id": qa.question_id,
+                            "question_number": qa.question_number,
+                            "question_text": qa.question_text,
+                            "question_type": qa.question_type,
+                            "candidate_answer": qa.candidate_answer,
+                            "expected_concepts": qa.expected_concepts,
+                            "covered_concepts": qa.covered_concepts,
+                            "missing_concepts": qa.missing_concepts,
+                            "incorrect_concepts": qa.incorrect_concepts,
+                            "strengths": qa.strengths,
+                            "gaps": qa.gaps,
+                            "score": qa.score,
+                            "max_score": qa.max_score,
+                            "depth_level": qa.depth_level,
+                            "confidence": qa.confidence,
+                        }
+                        for qa in existing_analyses
+                    ],
+                }
+            else:
+                # No persisted analysis yet — run read-only analysis
+                # (persist=False, update_competency=False to avoid side effects on GET)
+                analysis_service = get_interview_analysis_service()
+                analysis = analysis_service.analyze_interview(
+                    db, interview_id, persist=False, update_competency=False
+                )
+                question_wise_analysis = {
+                    "overall_score": analysis.overall_score,
+                    "strong_areas": analysis.strong_areas,
+                    "improvement_areas": analysis.improvement_areas,
+                    "recurring_gaps": analysis.recurring_gaps,
+                    "pattern_summary": analysis.pattern_summary,
+                    "confidence": analysis.confidence,
+                    "questions": [
+                        {
+                            "question_id": qa.question_id,
+                            "question_number": qa.question_number,
+                            "question_text": qa.question_text,
+                            "question_type": qa.question_type,
+                            "candidate_answer": qa.candidate_answer,
+                            "expected_concepts": qa.expected_concepts,
+                            "covered_concepts": qa.covered_concepts,
+                            "missing_concepts": qa.missing_concepts,
+                            "incorrect_concepts": qa.incorrect_concepts,
+                            "strengths": qa.strengths,
+                            "gaps": qa.gaps,
+                            "score": qa.score,
+                            "max_score": qa.max_score,
+                            "depth_level": qa.depth_level,
+                            "confidence": qa.confidence,
+                        }
+                        for qa in analysis.question_analyses
+                    ],
+                }
         except Exception as e:
             logger.warning(f"Failed to generate question-wise analysis: {e}")
             question_wise_analysis = None
@@ -1500,21 +1639,9 @@ async def realtime_feedback(
 # ═══════════════════════════════════════════════════════════════════════
 # ENDPOINT: GET /interview/session/{interview_id}/analysis
 # Detailed question-wise post-interview analysis
-# ══════════════════════════════════════════════════════════════════════
-class QuestionWiseAnalysisResponse(BaseModel):
-    """Detailed question-wise analysis response."""
-    interview_id: int
-    overall_score: float
-    strong_areas: List[str]
-    improvement_areas: List[str]
-    recurring_gaps: List[str]
-    pattern_summary: str
-    confidence: float
-    questions: List[Dict[str, Any]]
-
-
-@router.get("/session/{interview_id}/analysis", response_model=QuestionWiseAnalysisResponse)
-async def get_question_wise_analysis(
+# ═══════════════════════════════════════════════════════════════════════
+@router.get("/session/{interview_id}/analysis", response_model=InterviewAnalysisResponse)
+async def get_interview_analysis(
     interview_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -1522,7 +1649,7 @@ async def get_question_wise_analysis(
     """Get detailed question-wise analysis for a completed interview.
     
     Provides per-question evaluation with expected concepts, covered concepts,
-    missing concepts, scores, and gap analysis.
+    missing concepts, scores, gap analysis, and competency changes.
     """
     interview = db.query(InterviewSession).filter(
         InterviewSession.id == interview_id
@@ -1542,40 +1669,136 @@ async def get_question_wise_analysis(
     
     try:
         analysis_service = get_interview_analysis_service()
-        analysis = analysis_service.analyze_interview(db, interview_id)
+        # Check if analysis already persisted
+        from app.models.interview import InterviewQuestionAnalysis
+        existing_analyses = db.query(InterviewQuestionAnalysis).filter(
+            InterviewQuestionAnalysis.interview_id == interview_id
+        ).all()
         
-        return QuestionWiseAnalysisResponse(
-            interview_id=interview_id,
-            overall_score=analysis.overall_score,
-            strong_areas=analysis.strong_areas,
-            improvement_areas=analysis.improvement_areas,
-            recurring_gaps=analysis.recurring_gaps,
-            pattern_summary=analysis.pattern_summary,
-            confidence=analysis.confidence,
-            questions=[
-                {
-                    "question_id": qa.question_id,
-                    "question_number": qa.question_number,
-                    "question_text": qa.question_text,
-                    "question_type": qa.question_type,
-                    "candidate_answer": qa.candidate_answer,
-                    "expected_concepts": qa.expected_concepts,
-                    "covered_concepts": qa.covered_concepts,
-                    "missing_concepts": qa.missing_concepts,
-                    "incorrect_concepts": qa.incorrect_concepts,
-                    "strengths": qa.strengths,
-                    "gaps": qa.gaps,
-                    "score": qa.score,
-                    "max_score": qa.max_score,
-                    "depth_level": qa.depth_level,
-                    "confidence": qa.confidence,
-                }
-                for qa in analysis.question_analyses
-            ],
-        )
+        if existing_analyses:
+            # Build response from persisted data
+            question_analyses = []
+            for qa in existing_analyses:
+                question_analyses.append(QuestionAnalysisResult(
+                    question_id=qa.question_id,
+                    question_number=qa.question_number,
+                    question_text=qa.question_text,
+                    question_type=qa.question_type,
+                    candidate_answer=qa.candidate_answer,
+                    expected_concepts=qa.expected_concepts,
+                    covered_concepts=qa.covered_concepts,
+                    missing_concepts=qa.missing_concepts,
+                    incorrect_concepts=qa.incorrect_concepts,
+                    strengths=qa.strengths,
+                    gaps=qa.gaps,
+                    score=qa.score,
+                    max_score=qa.max_score,
+                    depth_level=qa.depth_level,
+                    confidence=qa.confidence,
+                ))
+            
+            overall_score = sum(q.score for q in question_analyses) / len(question_analyses) if question_analyses else 0
+            confidence = sum(q.confidence for q in question_analyses) / len(question_analyses) if question_analyses else 0.5
+            
+            return InterviewAnalysisResponse(
+                interview_id=interview_id,
+                overall_score=overall_score,
+                confidence=confidence,
+                strong_areas=[],  # Could compute from persisted
+                improvement_areas=[],
+                recurring_gaps=[],
+                pattern_summary="Analysis retrieved from persisted results",
+                questions=question_analyses,
+                analysis_status="completed",
+            )
+        else:
+            # Generate fresh analysis
+            analysis = analysis_service.analyze_interview(db, interview_id)
+            
+            return InterviewAnalysisResponse(
+                interview_id=interview_id,
+                overall_score=analysis.overall_score,
+                confidence=analysis.confidence,
+                strong_areas=analysis.strong_areas,
+                improvement_areas=analysis.improvement_areas,
+                recurring_gaps=analysis.recurring_gaps,
+                pattern_summary=analysis.pattern_summary,
+                questions=[
+                    QuestionAnalysisResult(
+                        question_id=qa.question_id,
+                        question_number=qa.question_number,
+                        question_text=qa.question_text,
+                        question_type=qa.question_type,
+                        candidate_answer=qa.candidate_answer,
+                        expected_concepts=qa.expected_concepts,
+                        covered_concepts=qa.covered_concepts,
+                        missing_concepts=qa.missing_concepts,
+                        incorrect_concepts=qa.incorrect_concepts,
+                        strengths=qa.strengths,
+                        gaps=qa.gaps,
+                        score=qa.score,
+                        max_score=qa.max_score,
+                        depth_level=qa.depth_level,
+                        confidence=qa.confidence,
+                    )
+                    for qa in analysis.question_analyses
+                ],
+                competency_changes=[
+                    CompetencyChange(**c) for c in analysis.competency_changes
+                ],
+                analysis_status="completed",
+            )
     except Exception as e:
         logger.error(f"Failed to generate question-wise analysis for interview {interview_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate analysis")
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# ENDPOINT: GET /interview/session/{interview_id}/analysis/status
+# Async analysis job status
+# ══════════════════════════════════════════════════════════════════════
+@router.get("/session/{interview_id}/analysis/status", response_model=AnalysisStatusResponse)
+async def get_analysis_status(
+    interview_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get analysis job status for a completed interview."""
+    interview = db.query(InterviewSession).filter(
+        InterviewSession.id == interview_id
+    ).first()
+    
+    if not interview:
+        raise HTTPException(status_code=404, detail="Interview not found")
+    
+    # Verify ownership
+    assessment = db.query(AssessmentSession).filter(
+        AssessmentSession.id == interview.session_id,
+        AssessmentSession.user_id == current_user.id,
+    ).first()
+    
+    if not assessment:
+        raise HTTPException(status_code=403, detail="Not authorized to access this interview")
+    
+    # Check if analysis exists in DB
+    from app.models.interview import InterviewQuestionAnalysis
+    existing = db.query(InterviewQuestionAnalysis).filter(
+        InterviewQuestionAnalysis.interview_id == interview_id
+    ).first()
+    
+    if existing:
+        return AnalysisStatusResponse(
+            interview_id=interview_id,
+            status="completed",
+            progress=100,
+        )
+    else:
+        return AnalysisStatusResponse(
+            interview_id=interview_id,
+            status="pending",
+            progress=0,
+            message="Analysis not yet generated. Will be created on first request to /analysis.",
+        )
 
 
 # ── Include Retell Webhook Router ────────────────────────────────────────

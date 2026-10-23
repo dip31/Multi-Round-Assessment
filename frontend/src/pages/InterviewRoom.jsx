@@ -27,7 +27,7 @@ export default function InterviewRoom() {
     const [turnNumber, setTurnNumber] = useState(0);
     const [totalTurns] = useState(10);
     const [difficulty, setDifficulty] = useState(null);
-    const [phase, setPhase] = useState('HR');
+    const [phase, setPhase] = useState(null);
     const [transcript, setTranscript] = useState('');
     const [recordingSeconds, setRecordingSeconds] = useState(0);
     const [toast, setToast] = useState(null);

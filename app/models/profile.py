@@ -50,6 +50,9 @@ class StudentProfile(Base):
     twelfth_marks: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     bio: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     portfolio_data: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}", nullable=False)
+    # Portfolio sharing fields
+    share_token: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, unique=True, index=True)
+    is_public: Mapped[bool] = mapped_column(default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now(), nullable=False

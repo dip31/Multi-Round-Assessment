@@ -696,7 +696,11 @@ export default function ResumeUpload() {
                                             onChange={handleFileSelect}
                                             className="hidden"
                                         />
-                                        <div className="text-4xl mb-2">📄</div>
+                                        <div className="text-4xl mb-2 text-slate-400">
+                                            <svg className="w-16 h-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                            </svg>
+                                        </div>
                                         <div className="font-bold text-slate-800 text-sm">
                                             {selectedFile ? selectedFile.name : 'Click to select or drag & drop resume'}
                                         </div>
@@ -821,61 +825,6 @@ export default function ResumeUpload() {
                                     </div>
                                 )}
 
-                                <div className="mt-8 rounded-2xl border border-slate-200 p-5">
-                                    <h4 className="font-bold text-slate-900 text-sm">Choose interview intelligence</h4>
-                                    <p className="mt-1 text-xs text-slate-500">
-                                        Retell-hosted mode is simpler to connect. EDI5 Core mode uses adaptive EDI5 questions and scoring.
-                                    </p>
-                                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        {[
-                                            {
-                                                id: 'retell_hosted',
-                                                title: 'Retell-hosted LLM',
-                                                description: 'Retell runs the conversation. Your report includes its transcript and analysis, without EDI5 per-answer scores.',
-                                            },
-                                            {
-                                                id: 'edi5_core',
-                                                title: 'EDI5 Core',
-                                                description: 'EDI5 chooses questions, follow-ups, and scores answers. Requires a public Retell WebSocket endpoint.',
-                                            },
-                                        ].map((mode) => {
-                                            const available = Boolean(voiceModes?.[mode.id]?.available);
-                                            const reason = voiceModes?.[mode.id]?.reason;
-                                            return (
-                                                <button
-                                                    key={mode.id}
-                                                    type="button"
-                                                    disabled={!available || state !== STATES.IDLE}
-                                                    onClick={() => setSelectedVoiceMode(mode.id)}
-                                                    className={`rounded-xl border-2 p-4 text-left transition-colors ${
-                                                        selectedVoiceMode === mode.id
-                                                            ? 'border-indigo-600 bg-indigo-50'
-                                                            : 'border-slate-200 bg-white'
-                                                    } disabled:cursor-not-allowed disabled:opacity-50`}
-                                                >
-                                                    <span className="flex items-center justify-between gap-3">
-                                                        <span className="font-bold text-sm text-slate-900">{mode.title}</span>
-                                                        <span className={`h-4 w-4 rounded-full border-2 ${
-                                                            selectedVoiceMode === mode.id ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'
-                                                        }`} />
-                                                    </span>
-                                                    <span className="mt-2 block text-xs text-slate-600">{mode.description}</span>
-                                                    {!available && (
-                                                        <span className="mt-2 block text-[11px] font-medium text-amber-700">
-                                                            {voiceModesError ? 'Could not check backend mode availability.' : reason || (voiceModes ? 'Not configured on the backend.' : 'Checking backend configuration...')}
-                                                        </span>
-                                                    )}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                    {!voiceModes?.retell_hosted?.available && !voiceModes?.edi5_core?.available && voiceModes && (
-                                        <p className="mt-3 text-xs text-red-600">
-                                            Neither Retell mode is currently configured. Ask an administrator to configure Retell credentials before starting.
-                                        </p>
-                                    )}
-                                </div>
-
                                 <div className="mt-8 pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
                                     <button
                                         type="button"
@@ -893,14 +842,12 @@ export default function ResumeUpload() {
 
                 {/* State: Processing & Generating */}
                 {state === STATES.UPLOADING && (
-                    <div className="bg-white border border-slate-200 rounded-3xl p-10 shadow-sm text-center">
-                        <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-6 text-2xl animate-pulse">
-                            🤖
-                        </div>
+                    <div className="flex flex-col items-center justify-center py-12">
+                        <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-6"></div>
                         <h3 className="text-xl font-bold text-slate-900 mb-2">
                             Analyzing Resume & Generating Questions
                         </h3>
-                        <p className="text-slate-500 text-xs max-w-md mx-auto mb-8">
+                        <p className="text-slate-500 text-xs max-w-md mx-auto mb-6 text-center">
                             Our AI is analyzing your technical competencies, project highlights, and role alignment to prepare tailored interview prompts.
                         </p>
 

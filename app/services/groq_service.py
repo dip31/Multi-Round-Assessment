@@ -16,7 +16,7 @@ from groq import Groq
 logger = logging.getLogger(__name__)
 
 # Current Groq production model (as of March 2026)
-GROQ_MODEL = "gpt/oss-120b"
+GROQ_MODEL = "openai/gpt-oss-120b"
 
 # ── Interviewer voice-of-the-prompt defaults ───────────────────────────────
 # Used when a caller supplies no interviewer persona. These two strings are a
@@ -678,7 +678,9 @@ def _safe_json(raw: str) -> dict or None:
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
-        logger.warning(f"Failed to parse JSON: {raw[:100]}...")
+        # Sanitize for Windows console (cp1252) - replace non-ASCII chars
+        safe_raw = raw[:100].encode('ascii', 'replace').decode('ascii')
+        logger.warning(f"Failed to parse JSON: {safe_raw}...")
         return None
 
 

@@ -39,6 +39,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
         """Check the rate limit for the client IP before proceeding."""
+        # BaseHTTPMiddleware breaks WebSocket connections — skip them
+        if request.scope.get("type") == "websocket":
+            return await call_next(request)
+
         client_ip = request.client.host if request.client else "unknown"
         now = time.time()
         window_start = now - self.window_seconds

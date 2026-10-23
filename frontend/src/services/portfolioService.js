@@ -79,3 +79,18 @@ export const updateExternalProfiles = async (links) => {
     const response = await api.put('/portfolio/external-profiles', links);
     return response.data;
 };
+
+export const getSharingStatus = async () => {
+    const response = await api.get('/portfolio/sharing');
+    return response.data;
+};
+
+export const updateSharingStatus = async (payload) => {
+    const response = await api.post('/portfolio/sharing', payload);
+    return response.data;
+};
+
+export const getPublicPortfolio = async (shareToken) => {
+    const response = await api.get(`/portfolio/public/${shareToken}`);
+    return response.data;
+};

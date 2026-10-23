@@ -21,6 +21,7 @@ import Analytics from './pages/Analytics';
 import PracticeResultDashboard from './pages/PracticeResultDashboard';
 import PracticeSummary from './pages/PracticeSummary';
 import Portfolio from './pages/Portfolio';
+import PublicPortfolio from './pages/PublicPortfolio';
 import AdminLogin from './pages/AdminLogin';
 import AdminAnalyticsDashboard from './pages/AdminAnalyticsDashboard';
 import AdminCandidateReports from './pages/AdminCandidateReports';
@@ -295,6 +296,36 @@ export default function App() {
               <Portfolio />
             </RoleRoute>
           }
+        />
+        <Route
+          path="/portfolio/certifications"
+          element={
+            <RoleRoute allowedRoles={['student']}>
+              <Portfolio />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/portfolio/experience"
+          element={
+            <RoleRoute allowedRoles={['student']}>
+              <Portfolio />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/portfolio/research"
+          element={
+            <RoleRoute allowedRoles={['student']}>
+              <Portfolio />
+            </RoleRoute>
+          }
+        />
+        
+        {/* Public Portfolio - accessible without authentication for recruiters */}
+        <Route
+          path="/portfolio/public/:shareToken"
+          element={<PublicPortfolio />}
         />
         
         {/* Analytics - removed from primary nav, kept as route */}

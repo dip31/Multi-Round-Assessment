@@ -505,7 +505,7 @@ def upgrade() -> None:
         sa.Column('severity', sa.String(length=10), nullable=False, server_default=sa.text("'INFO'")),
         sa.Column('round_type', sa.String(length=20), nullable=True),
         sa.Column('confidence', sa.Float(), nullable=True),
-        sa.Column('event_metadata', sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
+        sa.Column('event_metadata', postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default=sa.text("'{}'")),
         sa.Column('created_at', sa.DateTime(), server_default=sa.text('CURRENT_TIMESTAMP')),
         sa.CheckConstraint("severity IN ('INFO', 'WARNING', 'CRITICAL')", name='chk_severity'),
         sa.CheckConstraint("round_type IN ('APTITUDE', 'CODING', 'INTERVIEW')", name='advanced_proctoring_events_round_type_check'),

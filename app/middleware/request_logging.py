@@ -21,6 +21,10 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
         """Process the request, measure duration, and log the result."""
+        # BaseHTTPMiddleware breaks WebSocket connections — skip them
+        if request.scope.get("type") == "websocket":
+            return await call_next(request)
+
         start = time.perf_counter()
         response = await call_next(request)
         duration_ms = (time.perf_counter() - start) * 1000

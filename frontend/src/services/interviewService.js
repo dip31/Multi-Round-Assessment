@@ -4,13 +4,189 @@ import api from './api';
 /**
  * Retell Web Call Client using official Retell Web SDK (legacy RetellWebClient)
  * Handles real-time voice communication via Retell's Web Call SDK
+ *
+ * SDK v3 legacy RetellWebClient events (verified from source):
+ *   - 'update'              → { event_type: "update", transcript: Utterance[], turntaking?: "agent_turn" | "user_turn" }
+ *   - 'agent_start_talking'  → no payload
+ *   - 'agent_stop_talking'   → no payload
+ *   - 'metadata'             → { event_type: "metadata", metadata: ... }
+ *   - 'call_started'         → no payload
+ *   - 'call_ended'           → no payload
+ *   - 'call_ready'           → analyser component or undefined
+ *   - 'error'                → error message string
+ *   - 'node_transition'      → node transition event
+ *   - 'audio'                → Float32Array (only with emitRawAudioSamples)
+ *
+ * NOTE: There is NO 'transcript', 'transcript_update', 'data', or
+ * 'disconnected' event on the legacy client. Transcript data arrives
+ * ONLY through the 'update' event.
+ *
+ * The 'update' event delivers a FULL cumulative transcript snapshot on every
+ * partial STT result. We deduplicate by tracking the last seen transcript
+ * fingerprint (length + last utterance content hash).
  */
 class RetellWebCallClient {
     constructor() {
         this.client = null;
-        this.onTranscriptCallback = null;
-        this.onCallEndedCallback = null;
-        this.onErrorCallback = null;
+        this._transcriptListeners = new Set();
+        this._agentStartListeners = new Set();
+        this._agentStopListeners = new Set();
+        this._callEndedListeners = new Set();
+        this._errorListeners = new Set();
+        
+        // Deduplication state for cumulative snapshots
+        this._lastTranscriptFingerprint = null;
+    }
+
+    /**
+     * Normalize the transcript array from a Retell 'update' event.
+     *
+     * The SDK sends Utterance[] with shape (verified from SDK types):
+     *   { role: 'agent'|'user'|'transfer_target', content: string, metadata?: { is_backchannel?, response_id?, interrupt_id? } }
+     *
+     * IMPORTANT: The base Utterance type has NO 'is_final', NO 'id', NO 'utterance_id'.
+     * The SDK sends a FULL cumulative snapshot on every partial STT result.
+     *
+     * We normalize to a consistent shape for the UI:
+     *   { role: 'agent'|'user', content: string, is_final: boolean, utterance_id: string }
+     *   
+     * Since SDK provides no 'is_final' or stable IDs, we:
+     * - Deduplicate by comparing transcript fingerprint (length + last content)
+     * - Infer interim/final from turntaking: user_turn = candidate speaking = likely interim
+     * - Generate deterministic utterance_id from content hash + index
+     */
+    /**
+     * Normalize the transcript array from a Retell 'update' event.
+     *
+     * The SDK sends Utterance[] with shape (verified from SDK types):
+     *   { role: 'agent'|'user'|'transfer_target', content: string, metadata?: { is_backchannel?, response_id?, interrupt_id? } }
+     *
+     * We normalize to a consistent shape for the UI:
+     *   { role: 'agent'|'user', content: string, is_final: boolean, utterance_id: string }
+     *
+     * Utterance normalization rules:
+     * - Tolerates bare array or { utterances: [...] } wrapper
+     * - Case-insensitive role mapping (agent/assistant/bot -> agent, user/candidate -> user)
+     * - Extracts content from u.content, u.text, or words array fallback
+     * - Filters out empty utterances
+     * - Computes is_final: previous turns are always final; last turn is final if speaker no longer has turn
+     * - Generates deterministic utterance_id from content hash + index
+     */
+    static _normalizeTranscript(transcript, turntaking) {
+        let rawList = transcript;
+        if (!Array.isArray(rawList)) {
+            if (rawList && rawList.utterances && Array.isArray(rawList.utterances)) {
+                rawList = rawList.utterances;
+            } else {
+                return [];
+            }
+        }
+
+        // Filter and map to basic role + content first
+        const relevant = [];
+        for (const u of rawList) {
+            if (!u) continue;
+            const rawRole = String(u.role || '').toLowerCase().trim();
+            const role = (rawRole === 'agent' || rawRole === 'assistant' || rawRole === 'bot')
+                ? 'agent'
+                : (rawRole === 'user' || rawRole === 'candidate')
+                    ? 'user'
+                    : null;
+            if (!role) continue;
+
+            let content = '';
+            if (typeof u.content === 'string') {
+                content = u.content;
+            } else if (typeof u.text === 'string') {
+                content = u.text;
+            } else if (Array.isArray(u.words)) {
+                content = u.words
+                    .map(w => (typeof w === 'string' ? w : w?.word || w?.content || ''))
+                    .filter(Boolean)
+                    .join(' ');
+            }
+            content = content.trim();
+            if (!content) continue;
+
+            relevant.push({
+                role,
+                content,
+                metadata: u.metadata || {},
+            });
+        }
+
+        return relevant.map((u, idx) => {
+            // Generate deterministic ID from content hash + index for stability across snapshots
+            const contentHash = u.content.split('').reduce((h, c) => Math.imul(31, h) + c.charCodeAt(0) | 0, 0) >>> 0;
+            const utteranceId = `utt-${contentHash}-${idx}`;
+
+            // Determine finality:
+            // 1. All turns before the last one are completed (final)
+            // 2. For the last turn, it is final if the turntaking indicates the speaker is done
+            const isLast = (idx === relevant.length - 1);
+            let isFinal = true;
+            if (isLast) {
+                if (u.role === 'user' && turntaking === 'user_turn') {
+                    isFinal = false; // candidate actively speaking
+                } else if (u.role === 'agent' && turntaking === 'agent_turn') {
+                    isFinal = false; // interviewer actively speaking
+                }
+            }
+
+            return {
+                role: u.role,
+                content: u.content,
+                is_final: isFinal,
+                utterance_id: utteranceId,
+                metadata: u.metadata,
+            };
+        });
+    }
+
+    /**
+     * Compute a fingerprint for deduplicating cumulative transcript snapshots.
+     * Uses count + hash of all relevant utterance contents + turntaking to catch in-place STT updates
+     * and turn transitions without missing updates.
+     */
+    static _computeFingerprint(transcript, turntaking) {
+        let rawList = transcript;
+        if (!Array.isArray(rawList)) {
+            if (rawList && rawList.utterances && Array.isArray(rawList.utterances)) {
+                rawList = rawList.utterances;
+            } else {
+                return 'empty';
+            }
+        }
+        if (rawList.length === 0) {
+            return 'empty';
+        }
+
+        let hash = 0;
+        let count = 0;
+        for (const u of rawList) {
+            if (!u) continue;
+            const rawRole = String(u.role || '').toLowerCase().trim();
+            if (rawRole !== 'agent' && rawRole !== 'user' && rawRole !== 'assistant' && rawRole !== 'candidate' && rawRole !== 'bot') {
+                continue;
+            }
+            let content = '';
+            if (typeof u.content === 'string') content = u.content;
+            else if (typeof u.text === 'string') content = u.text;
+            else if (Array.isArray(u.words)) {
+                content = u.words.map(w => (typeof w === 'string' ? w : w?.word || w?.content || '')).filter(Boolean).join(' ');
+            }
+            content = content.trim();
+            if (!content) continue;
+
+            count++;
+            for (let i = 0; i < content.length; i++) {
+                hash = Math.imul(31, hash) + content.charCodeAt(i) | 0;
+            }
+        }
+        if (count === 0) {
+            return 'empty';
+        }
+        return `${count}:${hash >>> 0}:${turntaking || ''}`;
     }
 
     /**
@@ -20,56 +196,132 @@ class RetellWebCallClient {
         // Create Retell Web Client (legacy, but works with access token)
         this.client = new RetellWebClient();
 
-        // Set up event listeners on the client
-        this.client.on('callReady', (analyzer) => {
-            console.log('Retell call ready, analyzer:', !!analyzer);
-        });
+        // ── 'update' is the ONLY event that carries transcript data ────────
+        // Payload: { event_type: "update", transcript: Utterance[], turntaking?: "agent_turn" | "user_turn" }
+        this.client.on('update', (update) => {
+            const rawTranscript = update?.transcript;
+            const utterancesArray = Array.isArray(rawTranscript)
+                ? rawTranscript
+                : (rawTranscript?.utterances && Array.isArray(rawTranscript.utterances) ? rawTranscript.utterances : []);
 
-        // Legacy RetellWebClient emits 'transcript' events directly
-        this.client.on('transcript', (transcript) => {
-            console.log('Retell SDK transcript event:', transcript);
-            if (this.onTranscriptCallback) {
-                this.onTranscriptCallback(transcript);
+            console.log('[RetellDiag] SDK update event fired:', {
+                eventType: update?.event_type,
+                payloadKeys: update ? Object.keys(update) : [],
+                hasTranscriptArray: Array.isArray(rawTranscript),
+                utterancesReceived: utterancesArray.length,
+                turntaking: update?.turntaking,
+                listenersCount: this._transcriptListeners.size,
+            });
+
+            // Accept both direct transcript array or wrapper object with 'utterances'
+            const transcriptArray = update?.transcript || (update?.utterances && Array.isArray(update.utterances) ? update.utterances : []);
+            if (!transcriptArray || transcriptArray.length === 0) {
+                console.log('[RetellDiag] No transcript in payload, skipping');
+                return;
             }
-        });
 
-        this.client.on('data', (event) => {
-            console.log('Retell SDK data event:', JSON.stringify(event).substring(0, 500));
-            // Handle transcript updates - multiple possible event types
-            if ((event.type === 'transcript' || event.type === 'update' || event.type === 'transcript_update') && event.transcript) {
-                if (this.onTranscriptCallback) {
-                    this.onTranscriptCallback(event.transcript);
+            // Deduplicate cumulative snapshots using fingerprint
+            const fingerprint = RetellWebCallClient._computeFingerprint(transcriptArray, update.turntaking);
+            if (fingerprint === this._lastTranscriptFingerprint && fingerprint !== 'empty') {
+                console.debug('[RetellDiag] Duplicate transcript fingerprint, skipping:', fingerprint);
+                return;
+            }
+            this._lastTranscriptFingerprint = fingerprint;
+            const normalized = RetellWebCallClient._normalizeTranscript(transcriptArray, update.turntaking);
+
+            console.log('[RetellDiag] Normalized transcript:', {
+                normalizedCount: normalized.length,
+                fingerprint,
+                listenersCount: this._transcriptListeners.size,
+            });
+
+            if (this._transcriptListeners.size === 0) {
+                console.warn('[RetellDiag] Transcript present but NO listeners registered — dropping update');
+                return;
+            }
+
+            if (normalized.length > 0) {
+                for (const listener of this._transcriptListeners) {
+                    try {
+                        listener(normalized, update.turntaking);
+                    } catch (err) {
+                        console.error('[RetellDiag] Error in transcript listener:', err);
+                    }
                 }
             }
         });
 
-        this.client.on('disconnected', () => {
-            console.log('Retell SDK disconnected');
-            if (this.onCallEndedCallback) this.onCallEndedCallback({});
+        // ── Agent speaking state ───────────────────────────────────────────
+        this.client.on('agent_start_talking', () => {
+            console.log('[RetellDiag] agent_start_talking event fired');
+            for (const listener of this._agentStartListeners) {
+                try {
+                    listener();
+                } catch (err) {
+                    console.error('[RetellDiag] Error in agentStart listener:', err);
+                }
+            }
+        });
+
+        this.client.on('agent_stop_talking', () => {
+            console.log('[RetellDiag] agent_stop_talking event fired');
+            for (const listener of this._agentStopListeners) {
+                try {
+                    listener();
+                } catch (err) {
+                    console.error('[RetellDiag] Error in agentStop listener:', err);
+                }
+            }
+        });
+
+        // ── Call lifecycle ─────────────────────────────────────────────────
+        this.client.on('call_started', () => {
+            console.log('[RetellDiag] call_started');
+        });
+
+        this.client.on('call_ready', (analyzer) => {
+            console.log('[RetellDiag] call_ready, analyzer:', !!analyzer);
+        });
+
+        this.client.on('call_ended', () => {
+            console.log('[RetellDiag] call_ended');
+            for (const listener of this._callEndedListeners) {
+                try {
+                    listener({});
+                } catch (err) {
+                    console.error('[RetellDiag] Error in callEnded listener:', err);
+                }
+            }
         });
 
         this.client.on('error', (error) => {
-            console.error('Retell SDK error:', error);
-            if (this.onErrorCallback) this.onErrorCallback(error);
+            console.error('[RetellDiag] error:', error);
+            for (const listener of this._errorListeners) {
+                try {
+                    listener(error);
+                } catch (err) {
+                    console.error('[RetellDiag] Error in error listener:', err);
+                }
+            }
         });
 
-        // Also listen for other possible events
-        this.client.on('agent_start_talking', () => console.log('Agent started talking'));
-        this.client.on('agent_stop_talking', () => console.log('Agent stopped talking'));
-        this.client.on('metadata', (meta) => console.log('Metadata:', meta));
-        this.client.on('call_ended', (data) => console.log('Call ended event:', JSON.stringify(data)));
-        this.client.on('end', (data) => console.log('End event:', JSON.stringify(data)));
+        this.client.on('metadata', (meta) => {
+            console.debug('[RetellDiag] metadata event received');
+        });
+
+        // Reset fingerprint state on fresh init
+        this._lastTranscriptFingerprint = null;
 
         // Store connection config for startCall
-        // Backend returns transport: "gateway" - must specify explicitly
         this._callConfig = {
             accessToken,
             callId,
             transport: 'gateway',
+            call_details: true,
             iceServers: iceServers || [{ urls: 'stun:stun.l.google.com:19302' }],
         };
 
-        console.log('Retell SDK initialized for call:', callId);
+        console.log('[RetellDiag] Initialized for call:', callId);
         return this;
     }
 
@@ -83,9 +335,9 @@ class RetellWebCallClient {
 
         try {
             await this.client.startCall(this._callConfig);
-            console.log('Retell call started');
+            console.log('[Retell] call started');
         } catch (error) {
-            console.error('Failed to start Retell call:', error);
+            console.error('[Retell] failed to start call:', error);
             throw error;
         }
     }
@@ -97,11 +349,12 @@ class RetellWebCallClient {
         if (this.client) {
             try {
                 this.client.stopCall();
-                console.log('Retell call ended');
+                console.log('[Retell] call ended');
             } catch (error) {
-                console.error('Error ending call:', error);
+                console.error('[Retell] error ending call:', error);
             }
         }
+        this._lastTranscriptFingerprint = null;
     }
 
     /**
@@ -117,19 +370,60 @@ class RetellWebCallClient {
         }
     }
 
-    // Event callbacks
-    onTranscript(callback) { this.onTranscriptCallback = callback; }
-    onCallEnded(callback) { this.onCallEndedCallback = callback; }
-    onError(callback) { this.onErrorCallback = callback; }
+    // Event callbacks with Set management and unsubscribe functions
+    onTranscript(callback) {
+        if (typeof callback !== 'function') return () => {};
+        this._transcriptListeners.add(callback);
+        console.log('[Retell] transcript listener registered, total listeners:', this._transcriptListeners.size);
+        return () => {
+            this._transcriptListeners.delete(callback);
+            console.log('[Retell] transcript listener removed, total listeners:', this._transcriptListeners.size);
+        };
+    }
+
+    onAgentStartTalking(callback) {
+        if (typeof callback !== 'function') return () => {};
+        this._agentStartListeners.add(callback);
+        return () => {
+            this._agentStartListeners.delete(callback);
+        };
+    }
+
+    onAgentStopTalking(callback) {
+        if (typeof callback !== 'function') return () => {};
+        this._agentStopListeners.add(callback);
+        return () => {
+            this._agentStopListeners.delete(callback);
+        };
+    }
+
+    onCallEnded(callback) {
+        if (typeof callback !== 'function') return () => {};
+        this._callEndedListeners.add(callback);
+        return () => {
+            this._callEndedListeners.delete(callback);
+        };
+    }
+
+    onError(callback) {
+        if (typeof callback !== 'function') return () => {};
+        this._errorListeners.add(callback);
+        return () => {
+            this._errorListeners.delete(callback);
+        };
+    }
+
+    clearListeners() {
+        this._transcriptListeners.clear();
+        this._agentStartListeners.clear();
+        this._agentStopListeners.clear();
+        this._callEndedListeners.clear();
+        this._errorListeners.clear();
+    }
 }
 
-// Export singleton instance
 export const retellClient = new RetellWebCallClient();
 
-
-/**
- * Upload a resume PDF and generate personalized question pool
- */
 export const uploadResume = async (file) => {
     const formData = new FormData();
     formData.append('file', file);

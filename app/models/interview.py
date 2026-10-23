@@ -5,6 +5,17 @@ Maps to the following PostgreSQL tables:
 - interview_sessions
 - approved_question_pools
 - interview_turns
+- interview_conversations
+- interview_messages
+- interview_question_analysis
+- student_competencies
+- competency_evidence
+
+Transcript finalization fields added to interview_sessions:
+- transcript_status (pending/processing/completed/failed)
+- transcript_finalized_at
+- transcript_finalization_error
+- transcript_source (live/final/browser)
 """
 
 from __future__ import annotations
@@ -13,7 +24,7 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 from enum import Enum
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -69,6 +80,21 @@ class InterviewSession(Base):
     # Nullable - only populated when using Retell voice provider.
     retell_call_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     retell_agent_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    # ── Transcript finalization ───────────────────────────────────────
+    # Tracks authoritative final transcript retrieval from Retell.
+    transcript_status: Mapped[str] = mapped_column(
+        String(20), server_default="pending", nullable=False
+    )  # pending | processing | completed | failed
+    transcript_finalized_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=False), nullable=True
+    )
+    transcript_finalization_error: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )
+    transcript_source: Mapped[str | None] = mapped_column(
+        String(20), nullable=True
+    )  # live | final | browser
 
     # ── Personalization metadata (added for question personalization feature) ──
     extraction_confidence: Mapped[str | None] = mapped_column(String(10), nullable=True)
@@ -168,6 +194,7 @@ class InterviewTurn(Base):
         index=True,
     )
     turn_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    question_id: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)  # Pool question ID
     question_text: Mapped[str] = mapped_column(Text, nullable=False)
     question_difficulty: Mapped[str | None] = mapped_column(String(10), nullable=True)
     candidate_response: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -206,6 +233,160 @@ class InterviewTurn(Base):
 
     def __repr__(self) -> str:
         return f"<InterviewTurn id={self.id} interview_id={self.interview_id} turn={self.turn_number}>"
+
+
+class InterviewQuestionAnalysis(Base):
+    """Per-question analysis results for post-interview evaluation.
+    
+    Stores the structured output of semantic answer analysis including
+    expected concepts, covered concepts, missing concepts, scores, and confidence.
+    """
+    
+    __tablename__ = "interview_question_analysis"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    interview_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("interview_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    turn_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("interview_turns.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    question_id: Mapped[str | None] = mapped_column(String(50), nullable=True)  # Pool question ID
+    question_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    question_text: Mapped[str] = mapped_column(Text, nullable=False)
+    question_type: Mapped[str] = mapped_column(String(20), nullable=False)  # QUESTION, FOLLOW_UP
+    candidate_answer: Mapped[str] = mapped_column(Text, nullable=True)
+    
+    # Expected vs demonstrated concepts (JSON arrays)
+    expected_concepts: Mapped[List[str]] = mapped_column(JSONB, server_default=text("'[]'"), nullable=False)
+    covered_concepts: Mapped[List[str]] = mapped_column(JSONB, server_default=text("'[]'"), nullable=False)
+    missing_concepts: Mapped[List[str]] = mapped_column(JSONB, server_default=text("'[]'"), nullable=False)
+    incorrect_concepts: Mapped[List[str]] = mapped_column(JSONB, server_default=text("'[]'"), nullable=False)
+    partial_concepts: Mapped[List[str]] = mapped_column(JSONB, server_default=text("'[]'"), nullable=False)
+    
+    # Evidence mapping (concept -> candidate statement)
+    evidence: Mapped[Dict[str, str]] = mapped_column(JSONB, server_default=text("'{}'"), nullable=False)
+    
+    # Qualitative assessment
+    strengths: Mapped[List[str]] = mapped_column(JSONB, server_default=text("'[]'"), nullable=False)
+    gaps: Mapped[List[str]] = mapped_column(JSONB, server_default=text("'[]'"), nullable=False)
+    
+    # Scoring
+    score: Mapped[float] = mapped_column(Float, nullable=False)  # 0-10 scale
+    max_score: Mapped[float] = mapped_column(Float, server_default=text("10.0"), nullable=False)
+    depth_level: Mapped[str] = mapped_column(String(20), server_default=text("'Basic'"), nullable=False)  # Surface, Basic, Good, Strong, Expert
+    confidence: Mapped[float] = mapped_column(Float, server_default=text("0.8"), nullable=False)  # 0-1
+    
+    # Metadata
+    interview_type: Mapped[str] = mapped_column(String(20), nullable=True)
+    analyzed_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), server_default=func.now(), nullable=False)
+    
+    # Relationships
+    interview: Mapped["InterviewSession"] = relationship("InterviewSession", lazy="select")
+    turn: Mapped["InterviewTurn"] = relationship("InterviewTurn", lazy="select")
+
+
+class StudentCompetency(Base):
+    """Current competency level for a student skill.
+    
+    Tracks the student's demonstrated competency per skill with confidence
+    and freshness metadata for decay/recency handling.
+    """
+    
+    __tablename__ = "student_competencies"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    skill: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    
+    # Competency score (0-100)
+    score: Mapped[float] = mapped_column(Float, server_default=text("0.0"), nullable=False)
+    
+    # Confidence in this score (0-1)
+    confidence: Mapped[float] = mapped_column(Float, server_default=text("0.5"), nullable=False)
+    
+    # Freshness: when this competency was last verified/updated
+    last_verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), server_default=func.now(), nullable=False)
+    
+    # Freshness tier: high (>30 days), medium (30-90 days), low (>90 days)
+    freshness: Mapped[str] = mapped_column(String(20), server_default=text("'high'"), nullable=False)
+    
+    # Source of latest evidence
+    evidence_source: Mapped[str | None] = mapped_column(String(50), nullable=True)  # interview, aptitude, coding, practice
+    evidence_id: Mapped[int | None] = mapped_column(Integer, nullable=True)  # InterviewSession ID, etc.
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=False), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+    
+    # Composite unique constraint
+    __table_args__ = (
+        UniqueConstraint("user_id", "skill", name="uq_student_competency_user_skill"),
+    )
+    
+    def __repr__(self) -> str:
+        return f"<StudentCompetency user={self.user_id} skill={self.skill} score={self.score:.1f} confidence={self.confidence:.2f}>"
+
+
+class CompetencyEvidence(Base):
+    """Historical evidence records for competency changes.
+    
+    Immutable log of every competency update with full context for audit
+    and recalculation purposes.
+    """
+    
+    __tablename__ = "competency_evidence"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    skill: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
+    
+    # Score change
+    previous_score: Mapped[float] = mapped_column(Float, nullable=False)
+    new_score: Mapped[float] = mapped_column(Float, nullable=False)
+    score_delta: Mapped[float] = mapped_column(Float, nullable=False)
+    
+    # Confidence change
+    previous_confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    new_confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    
+    # Evidence details
+    source: Mapped[str] = mapped_column(String(50), nullable=False)  # interview, aptitude, coding, practice
+    source_id: Mapped[int] = mapped_column(Integer, nullable=False)  # InterviewSession.id, etc.
+    question_analysis_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("interview_question_analysis.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    
+    # Concepts that drove this update
+    demonstrated_concepts: Mapped[List[str]] = mapped_column(JSONB, server_default=text("'[]'"), nullable=False)
+    missing_concepts: Mapped[List[str]] = mapped_column(JSONB, server_default=text("'[]'"), nullable=False)
+    
+    # Human-readable reasoning
+    reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=False), server_default=func.now(), nullable=False)
+    
+    def __repr__(self) -> str:
+        return f"<CompetencyEvidence user={self.user_id} skill={self.skill} {self.previous_score:.1f}→{self.new_score:.1f}>"
 
 
 class ProctoringViolation(Base):

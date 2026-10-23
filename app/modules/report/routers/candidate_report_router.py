@@ -156,8 +156,22 @@ def get_candidate_analytics(
             r_attempts = [a for a in attempts if a.round_id == r.id]
             r_topics = {a.question.topic.name for a in r_attempts if a.question and a.question.topic}
             
-            # Determine authoritative round label
-            if r.round_type == "technical":
+            # Determine authoritative round label - check practice_type for practice rounds
+            if r.practice_type:
+                # This is a practice round, use practice_type for labeling
+                if r.practice_type == "technical":
+                    round_label = "Technical Practice"
+                elif r.practice_type == "combined":
+                    round_label = "Combined Practice"
+                elif r.practice_type == "mcq":
+                    round_label = "MCQ Practice"
+                elif r.practice_type == "coding":
+                    round_label = "Coding Practice"
+                elif r.practice_type == "interview":
+                    round_label = "Interview Practice"
+                else:
+                    round_label = f"Practice ({r.practice_type})"
+            elif r.round_type == "technical":
                 round_label = "Technical Round"
             elif r.round_type == "combined":
                 round_label = "Combined Round"
@@ -585,16 +599,20 @@ def get_detailed_student_analytics(
         for lvl, data in difficulty_stats.items()
     ]
 
-    # Round-wise performance
+    # Round-wise performance - group by round_type, but use practice_type for practice rounds
     round_type_counts = {}
     for r in rounds:
         if r.status != "completed":
             continue
-        rtype = r.round_type
+        # For practice rounds, use practice_type as the effective type for grouping
+        if r.practice_type:
+            rtype = f"practice_{r.practice_type}"
+        else:
+            rtype = r.round_type
         round_type_counts.setdefault(rtype, []).append(r)
 
-    # Combined round specific split
-    combined_rounds = round_type_counts.get("combined", [])
+    # Combined round specific split - handle both regular and practice combined rounds
+    combined_rounds = round_type_counts.get("combined", []) + round_type_counts.get("practice_combined", [])
     comb_mcq_att = 0
     comb_mcq_cor = 0
     comb_tech_att = 0
@@ -625,6 +643,11 @@ def get_detailed_student_analytics(
         "technical_interview": "Technical Interview",
         "hr_interview": "HR Interview",
         "communication_interview": "Communication Interview",
+        "practice_mcq": "MCQ Practice",
+        "practice_technical": "Technical Practice",
+        "practice_combined": "Combined Practice",
+        "practice_coding": "Coding Practice",
+        "practice_interview": "Interview Practice",
     }
 
     for r_type, r_list in round_type_counts.items():
@@ -636,7 +659,8 @@ def get_detailed_student_analytics(
             "attempts": len(r_list),
             "avg_score": avg_s,
         }
-        if r_type == "combined" and (comb_mcq_att + comb_tech_att) > 0:
+        # Handle combined round split for both regular and practice combined rounds
+        if r_type in ("combined", "practice_combined") and (comb_mcq_att + comb_tech_att) > 0:
             item["mcq_attempted"] = comb_mcq_att
             item["mcq_accuracy"] = round((comb_mcq_cor / comb_mcq_att) * 100, 1) if comb_mcq_att > 0 else None
             item["technical_attempted"] = comb_tech_att
@@ -660,11 +684,25 @@ def get_detailed_student_analytics(
         ) if cod_submissions else None,
     }
 
-    # Interview analytics
+    # Interview analytics - include both regular and practice interview rounds
     int_rounds_completed = [r for r in rounds if "interview" in r.round_type and r.status == "completed"]
-    tech_ints = [r for r in int_rounds_completed if r.round_type in ("technical_interview", "interview")]
-    hr_ints = [r for r in int_rounds_completed if r.round_type == "hr_interview"]
-    comm_ints = [r for r in int_rounds_completed if r.round_type == "communication_interview"]
+    
+    # Categorize interviews by type - check practice_type for practice rounds
+    tech_ints = []
+    hr_ints = []
+    comm_ints = []
+    for r in int_rounds_completed:
+        if r.practice_type:
+            # Practice interview rounds
+            if r.practice_type == "interview":
+                # For practice interviews, check the interview type from rl_state or default to technical
+                tech_ints.append(r)
+        elif r.round_type in ("technical_interview", "interview"):
+            tech_ints.append(r)
+        elif r.round_type == "hr_interview":
+            hr_ints.append(r)
+        elif r.round_type == "communication_interview":
+            comm_ints.append(r)
 
     def avg_score(r_list):
         scores = [float(r.score) * 100 for r in r_list if r.score is not None]

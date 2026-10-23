@@ -53,6 +53,9 @@ from app.modules.interview.services.interview_orchestrator import InterviewOrche
 from app.modules.interview.services.answer_understanding import AnswerUnderstanding
 from app.modules.interview.services import question_planner
 from app.modules.interview.services.interview_rl_engine import InterviewRLEngine
+from app.modules.interview.services.transcript_normalizer import (
+    normalize_retell_transcript, select_changed_events, CanonicalTranscriptEvent
+)
 from app.services.groq_service import GroqService
 
 logger = logging.getLogger(__name__)
@@ -103,6 +106,12 @@ class RetellLLMContext:
     # For streaming responses
     pending_response_id: Optional[int] = None
     streaming_content: str = ""
+
+    # turn_id -> (text, is_final) of what we have already pushed to the
+    # frontend. Retell resends the whole conversation on every transcript
+    # update; this keeps us from rebroadcasting utterances that did not change.
+    # Scoped to the context so it is discarded when the call ends.
+    broadcast_fingerprints: Dict[str, Any] = field(default_factory=dict)
 
 
 class RetellLLMWebSocketHandler:
@@ -251,19 +260,46 @@ class RetellLLMWebSocketHandler:
         
         logger.debug(f"Transcript updated: {len(transcript)} utterances, turntaking={turntaking}")
         
+        # Get current active turn ID for mapping
+        current_turn_id = None
+        if self.context.interview_session:
+            current_turn_id = self.context.interview_session.current_turn
+        
+        # Broadcast canonical transcript events to frontend WebSocket.
+        # Uses select_changed_events so only new/modified utterances are emitted.
+        if transcript and self.context.edi5_interview_id:
+            try:
+                canonical_events = normalize_retell_transcript(
+                    transcript,
+                    base_sequence=0,
+                    interview_turn_id=current_turn_id,
+                )
+                changed_events = select_changed_events(
+                    self.context.broadcast_fingerprints,
+                    canonical_events,
+                )
+                if changed_events:
+                    from app.modules.interview.routers.transcript_websocket import broadcast_transcript_update
+                    for event in changed_events:
+                        await broadcast_transcript_update(
+                            self.context.edi5_interview_id,
+                            event.to_frontend_dict(),
+                        )
+            except Exception as e:
+                logger.warning(f"[TranscriptBroadcast] failed to broadcast in edi5_core: {e}")
+        
         # Persist structured transcript for analysis
         if self.context.interview_session and self.context.db_session:
-            await self._persist_structured_transcript(transcript)
+            await self._persist_structured_transcript(transcript, current_turn_id)
     
-    async def _persist_structured_transcript(self, transcript: List[Dict[str, Any]]) -> None:
+    async def _persist_structured_transcript(self, transcript: List[Dict[str, Any]], current_turn_id: Optional[int] = None) -> None:
         """Persist structured transcript messages from custom LLM WebSocket.
         
         The transcript from Retell in edi5_core mode contains utterances with:
         - role: "agent" or "user"
         - content: text
-        - utterance_id: unique ID
-        - is_final: boolean
-        - confidence: float
+        - is_final: boolean (optional)
+        - confidence: float (optional)
         """
         try:
             interview = self.context.interview_session
@@ -288,31 +324,27 @@ class RetellLLMWebSocketHandler:
                 db.add(conversation)
                 db.flush()
             
-            # Track existing utterance IDs
-            existing_utterance_ids = set()
-            existing_messages = db.query(InterviewMessage.retell_utterance_id).filter(
-                InterviewMessage.conversation_id == conversation.id,
-                InterviewMessage.retell_utterance_id.isnot(None)
+            # Fetch existing messages by sequence number for this conversation
+            existing_messages = db.query(InterviewMessage).filter(
+                InterviewMessage.conversation_id == conversation.id
             ).all()
-            for (uid,) in existing_messages:
-                if uid:
-                    existing_utterance_ids.add(uid)
             
-            new_messages = []
+            existing_by_seq = {msg.sequence_number: msg for msg in existing_messages}
+            
             ai_count = 0
             candidate_count = 0
+            added_count = 0
+            updated_count = 0
             
             for idx, utterance in enumerate(transcript):
-                utterance_id = utterance.get("utterance_id")
+                seq_num = idx + 1
                 role = utterance.get("role", "").lower()
                 content = utterance.get("content", "").strip()
                 is_final = utterance.get("is_final", True)
                 confidence = utterance.get("confidence")
+                utterance_id = utterance.get("utterance_id") or utterance.get("id")
                 
                 if not content:
-                    continue
-                
-                if utterance_id and utterance_id in existing_utterance_ids:
                     continue
                 
                 if role == "agent":
@@ -329,30 +361,38 @@ class RetellLLMWebSocketHandler:
                 else:
                     message_type = InterviewMessageType.ANSWER
                 
-                message = InterviewMessage(
-                    conversation_id=conversation.id,
-                    sequence_number=idx + 1,
-                    speaker=speaker.value,
-                    text=content,
-                    message_type=message_type.value,
-                    retell_utterance_id=utterance_id,
-                    is_final=is_final,
-                    confidence=confidence,
-                )
-                new_messages.append(message)
-                if utterance_id:
-                    existing_utterance_ids.add(utterance_id)
+                existing_msg = existing_by_seq.get(seq_num)
+                if existing_msg:
+                    # Update existing message if content changed or it wasn't final
+                    if existing_msg.text != content or existing_msg.is_final != is_final:
+                        existing_msg.text = content
+                        existing_msg.is_final = is_final
+                        existing_msg.confidence = confidence
+                        updated_count += 1
+                else:
+                    # Create new message
+                    message = InterviewMessage(
+                        conversation_id=conversation.id,
+                        sequence_number=seq_num,
+                        speaker=speaker.value,
+                        text=content,
+                        message_type=message_type.value,
+                        is_final=is_final,
+                        confidence=confidence,
+                        retell_utterance_id=utterance_id,
+                        turn_id=current_turn_id,
+                    )
+                    db.add(message)
+                    added_count += 1
             
-            if new_messages:
-                for msg in new_messages:
-                    db.add(msg)
-                
-                conversation.total_messages = len(existing_utterance_ids)
-                conversation.ai_message_count = ai_count
-                conversation.candidate_message_count = candidate_count
-                
-                db.commit()
-                logger.debug(f"Persisted {len(new_messages)} structured messages for interview {interview.id}")
+            # Update conversation counts
+            conversation.total_messages = len(transcript)
+            conversation.ai_message_count = ai_count
+            conversation.candidate_message_count = candidate_count
+            
+            db.commit()
+            if added_count > 0 or updated_count > 0:
+                logger.debug(f"Transcript synced: {added_count} added, {updated_count} updated for interview {interview.id}")
                 
         except Exception as e:
             logger.error(f"Failed to persist structured transcript for interview {self.context.edi5_interview_id}: {e}")

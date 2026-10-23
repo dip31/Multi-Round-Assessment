@@ -34,38 +34,7 @@ export default function InterviewReport() {
         setExpandedTurns(prev => ({ ...prev, [turnNum]: !prev[turnNum] }));
     };
 
-    const handleDownloadReport = () => {
-        try {
-            // Trigger native print / save as PDF
-            window.print();
-
-            // Also provide instant evaluation summary JSON file
-            const reportData = {
-                title: report?.is_edi5_scored ? "EDI5 AI Interview Evaluation Report" : "Retell Interview Transcript Report",
-                date: new Date().toLocaleDateString(),
-                overall_score: report?.overall_score ?? null,
-                feedback: report?.feedback || "",
-                strengths: report?.strengths || [],
-                improvements: report?.improvements || [],
-                breakdown: report?.breakdown || {},
-                questions: report?.questions || [],
-            };
-            const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `Interview_Report_${new Date().toISOString().split('T')[0]}.json`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-
-            setToast({ type: 'success', message: 'Report download initiated!' });
-        } catch (err) {
-            console.error('Download report error:', err);
-            setToast({ type: 'error', message: 'Unable to download report.' });
-        }
-    };
+    
 
     if (loading) {
         return <PageSkeleton variant="light" cardCount={4} />;
@@ -335,12 +304,6 @@ export default function InterviewReport() {
                         className="px-8 py-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-900 font-semibold rounded-xl transition-all active:scale-[0.98]"
                     >
                         Back to Dashboard
-                    </button>
-                    <button
-                        onClick={handleDownloadReport}
-                        className="px-8 py-3 bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white font-semibold rounded-xl transition-all flex items-center gap-2"
-                    >
-                        <span></span> Download Report
                     </button>
                 </div>
             </main>

@@ -66,7 +66,9 @@ export default function Analytics() {
                 <div className="min-h-screen flex items-center justify-center p-6">
                     <div className="bg-white border border-slate-200 rounded-3xl p-8 max-w-md w-full text-center shadow-sm">
                     <div className="w-14 h-14 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-2xl font-bold">
-                        ⚠️
+                        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
                     </div>
                     <h2 className="text-xl font-bold text-slate-900 mb-2">Unable to Load Analytics</h2>
                     <p className="text-slate-500 text-xs mb-6 leading-relaxed">{error}</p>
@@ -86,7 +88,6 @@ export default function Analytics() {
     const summary = data?.summary || {};
     const trend = Array.isArray(data?.trend) ? data.trend : [];
     const subjects = Array.isArray(data?.subjects) ? data.subjects : [];
-    const topics = Array.isArray(data?.topics) ? data.topics : [];
     const rounds = Array.isArray(data?.rounds) ? data.rounds : [];
     const difficulty = Array.isArray(data?.difficulty) ? data.difficulty : [];
     const coding = data?.coding || {};
@@ -95,8 +96,6 @@ export default function Analytics() {
     const focusAreas = Array.isArray(data?.focus_areas) ? data.focus_areas : [];
     const recommendation = data?.recommendation;
     const consistency = data?.consistency || {};
-
-    const hasAnyAttempts = (summary.questions_attempted || 0) > 0 || trend.length > 0;
 
     return (
         <StudentModeLayout>
@@ -407,7 +406,9 @@ export default function Analytics() {
                     {/* Strengths */}
                     <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs">
                         <div className="flex items-center gap-2 mb-4">
-                            <span className="text-lg">💪</span>
+                            <svg className="w-5 h-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
                             <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
                                 Key Strengths
                             </h3>
@@ -432,7 +433,9 @@ export default function Analytics() {
                     {/* Focus Areas */}
                     <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs">
                         <div className="flex items-center gap-2 mb-4">
-                            <span className="text-lg">🎯</span>
+                            <svg className="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                            </svg>
                             <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
                                 Focus Areas / Weaknesses
                             </h3>
@@ -458,7 +461,9 @@ export default function Analytics() {
                     <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs flex flex-col justify-between">
                         <div>
                             <div className="flex items-center gap-2 mb-4">
-                                <span className="text-lg">🚀</span>
+                                <svg className="w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
                                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
                                     Recommended Next Practice
                                 </h3>
