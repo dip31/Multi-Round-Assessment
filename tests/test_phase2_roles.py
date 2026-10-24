@@ -38,8 +38,8 @@ def test_login_response_payload():
     assert data["user"]["role"] == "student"
 
 
-def test_faculty_and_tpo_staff_access():
-    """Verify faculty and TPO can access cohort analytics and student rosters."""
+def test_faculty_roster_scope_and_tpo_global_reporting_access():
+    """Faculty use their scoped roster; institution-wide reporting is TPO/admin only."""
     # 1. Register and login as Faculty
     fac_email = f"phase2_prof_{uuid.uuid4().hex[:6]}@test.com"
     client.post(
@@ -61,9 +61,9 @@ def test_faculty_and_tpo_staff_access():
     fac_token = fac_data["access_token"]
     fac_headers = {"Authorization": f"Bearer {fac_token}"}
 
-    # Faculty can access cohort stats
+    # Faculty cannot access institution-wide aggregate reports.
     cohort_resp = client.get("/api/v1/report/admin/cohort-stats", headers=fac_headers)
-    assert cohort_resp.status_code == 200
+    assert cohort_resp.status_code == 403
 
     # Faculty can access cohort students roster
     students_resp = client.get("/api/v1/profile/cohort/students", headers=fac_headers)
@@ -91,7 +91,7 @@ def test_faculty_and_tpo_staff_access():
     tpo_token = tpo_data["access_token"]
     tpo_headers = {"Authorization": f"Bearer {tpo_token}"}
 
-    # TPO can access cohort stats and students roster
+    # TPO can access institution-wide cohort stats and roster.
     tpo_cohort_resp = client.get("/api/v1/report/admin/cohort-stats", headers=tpo_headers)
     assert tpo_cohort_resp.status_code == 200
 

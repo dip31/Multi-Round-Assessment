@@ -2,8 +2,13 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
+    filterMockDrives,
     getVisibleMockDrives,
     hideMockDriveFromHistory,
+    mockDriveCgpaOptions,
+    mockDriveEmptyState,
+    mockDriveRole,
+    mockDriveRoleOptions,
     sortMockDrivesByCompanyName,
 } from './mockDriveHistory.js';
 
@@ -11,6 +16,7 @@ const dashboardSource = await readFile(
     new URL('../pages/TPOMockDrivesPage.jsx', import.meta.url),
     'utf8',
 );
+const historySource = await readFile(new URL('./mockDriveHistory.js', import.meta.url), 'utf8');
 
 test('removing a drive hides only that drive in local view state', () => {
     const drives = [{ id: 1 }, { id: 2 }, { id: 3 }];
@@ -69,9 +75,76 @@ test('visible Mock Drives are sorted after the current history filter', () => {
     );
 });
 
+const filterFixtures = [
+    { id: 1, company_name: 'Acme', target_role: 'Software Engineer', status: 'draft', minimum_cgpa: 7 },
+    { id: 2, company_name: 'Beta', target_role: 'Data Engineer', status: 'published', minimum_cgpa: '8.0' },
+    { id: 3, company_name: 'Citi', target_role: 'Software Engineer', status: 'active', minimum_cgpa: 7.5 },
+    { id: 4, company_name: 'Delta', position: 'Data Engineer', status: 'completed', minimum_cgpa: null },
+    { id: 5, company_name: 'Echo', status: 'published', minimum_cgpa: 'not-a-number' },
+];
+
+test('side-panel status results match each existing horizontal status value', () => {
+    for (const status of ['draft', 'published', 'active', 'completed']) {
+        const horizontalTabResults = filterFixtures.filter(drive => drive.status === status);
+        assert.deepEqual(filterMockDrives(filterFixtures, { status }), horizontalTabResults);
+    }
+    assert.deepEqual(filterMockDrives(filterFixtures, { status: 'all' }), filterFixtures);
+});
+
+test('role and position options use loaded fields and tolerate missing roles', () => {
+    assert.equal(mockDriveRole(filterFixtures[3]), 'Data Engineer');
+    assert.equal(mockDriveRole(filterFixtures[4]), '');
+    assert.deepEqual(mockDriveRoleOptions(filterFixtures), ['Data Engineer', 'Software Engineer']);
+    assert.deepEqual(filterMockDrives(filterFixtures, { role: 'Software Engineer' }).map(d => d.id), [1, 3]);
+});
+
+test('configured minimum CGPA filtering handles numeric strings and missing or invalid values', () => {
+    assert.deepEqual(mockDriveCgpaOptions(filterFixtures), [7, 7.5, 8]);
+    assert.deepEqual(filterMockDrives(filterFixtures, { minimumCgpa: '8' }).map(d => d.id), [2]);
+    assert.deepEqual(filterMockDrives(filterFixtures, { minimumCgpa: '7' }).map(d => d.id), [1]);
+    assert.deepEqual(filterMockDrives(filterFixtures, { minimumCgpa: '9' }), []);
+    assert.deepEqual(filterMockDrives(filterFixtures), filterFixtures);
+});
+
+test('status, role, text search, and CGPA filters combine without mutating source data', () => {
+    const result = filterMockDrives(filterFixtures, {
+        status: 'published', role: 'Data Engineer', search: 'beta', minimumCgpa: '8',
+    });
+    assert.deepEqual(result.map(drive => drive.id), [2]);
+    assert.equal(filterMockDrives(filterFixtures, {
+        status: 'published', role: 'Data Engineer', search: 'beta', minimumCgpa: '7',
+    }).length, 0);
+    assert.equal(filterFixtures.length, 5);
+});
+
+test('Clear Filters restores all loaded drives and empty states distinguish filters from removed history', () => {
+    assert.deepEqual(filterMockDrives(filterFixtures, { status: 'all' }), filterFixtures);
+    assert.equal(mockDriveEmptyState({
+        loadedDrives: filterFixtures, visibleDrives: filterFixtures, status: 'published',
+        search: '', role: '', minimumCgpa: '',
+    }), 'filters');
+    assert.equal(mockDriveEmptyState({
+        loadedDrives: filterFixtures, visibleDrives: [], status: 'all',
+        search: '', role: '', minimumCgpa: '',
+    }), 'history');
+    assert.equal(mockDriveEmptyState({
+        loadedDrives: [], visibleDrives: [], status: 'all', search: '', role: '', minimumCgpa: '',
+    }), 'empty');
+});
+
 test('Placement & Mock Drives renders the sorted visible drive list', () => {
     assert.match(dashboardSource, /sortMockDrivesByCompanyName\(\s*getVisibleMockDrives\(mockDrives, hiddenMockDriveIds\)/);
-    assert.match(dashboardSource, /visibleMockDrives\.map\(drive =>/);
+    assert.match(dashboardSource, /displayedMockDrives\.map\(drive =>/);
+    assert.match(dashboardSource, /filterMockDrives\(visibleMockDrives, \{/);
+    assert.match(historySource, /search\)\.trim\(\)\.toLocaleLowerCase\(\)/);
+    assert.match(dashboardSource, /status: mockDriveStatusFilter/);
+    assert.match(dashboardSource, /Date\.parse\(a\.created_at\) - Date\.parse\(b\.created_at\)/);
+    const loader = dashboardSource.split('const loadMockDrives = useCallback')[1]?.split('useEffect')[0];
+    assert.match(loader, /api\.get\('\/tpo\/mock-drives', \{ params \}\)/);
+    assert.doesNotMatch(loader, /driveSearch|driveSort|driveRoleFilter|driveCgpaFilter/);
+    assert.match(dashboardSource, /aria-controls="mock-drive-side-filters"/);
+    assert.match(dashboardSource, /setMockDriveStatusFilter\('all'\)/);
+    assert.match(dashboardSource, /mockDriveEmptyState\(/);
 });
 
 test('history removal is confirmed and does not call a Mock Drive DELETE API', () => {

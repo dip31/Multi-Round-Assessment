@@ -14,6 +14,8 @@ from fastapi import FastAPI, Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import JSONResponse
 
+from app.config.security import decode_access_token
+
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """Token-bucket-style rate limiter keyed by client IP.
@@ -29,32 +31,53 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         app: FastAPI,
         max_requests: int = 100,
         window_seconds: int = 60,
+        read_max_requests: int | None = None,
     ) -> None:
         super().__init__(app)
         self.max_requests = max_requests
         self.window_seconds = window_seconds
+        # Read-only dashboards may fan out over paginated data and existing
+        # per-record APIs. Keep a higher read ceiling without loosening the
+        # mutation ceiling.
+        self.read_max_requests = read_max_requests or max_requests * 6
         self._requests: Dict[str, List[float]] = defaultdict(list)
+
+    @staticmethod
+    def _client_key(request: Request) -> str:
+        """Isolate authenticated users while retaining an IP bucket for anon traffic."""
+        client_ip = request.client.host if request.client else "unknown"
+        authorization = request.headers.get("authorization", "")
+        scheme, _, token = authorization.partition(" ")
+        if scheme.lower() == "bearer" and token:
+            payload = decode_access_token(token)
+            user_id = payload.get("sub") if payload else None
+            if user_id is not None:
+                return f"user:{user_id}"
+        return f"ip:{client_ip}"
 
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
         """Check the rate limit for the client IP before proceeding."""
-        client_ip = request.client.host if request.client else "unknown"
+        client_key = self._client_key(request)
+        read_only = request.method in {"GET", "HEAD", "OPTIONS"}
+        request_limit = self.read_max_requests if read_only else self.max_requests
+        bucket_key = f"{client_key}:{'read' if read_only else 'write'}"
         now = time.time()
         window_start = now - self.window_seconds
 
         # Purge stale timestamps
-        self._requests[client_ip] = [
-            ts for ts in self._requests[client_ip] if ts > window_start
+        self._requests[bucket_key] = [
+            ts for ts in self._requests[bucket_key] if ts > window_start
         ]
 
-        if len(self._requests[client_ip]) >= self.max_requests:
+        if len(self._requests[bucket_key]) >= request_limit:
             return JSONResponse(
                 status_code=429,
                 content={"detail": "Too many requests. Please try again later."},
             )
 
-        self._requests[client_ip].append(now)
+        self._requests[bucket_key].append(now)
         return await call_next(request)
 
 

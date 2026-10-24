@@ -36,6 +36,7 @@ from app.models.profile import StudentProfile
 from app.models.company_data import CompanyBlueprint
 from app.models.assessment_context import AssessmentPolicy
 from app.models.assessment import AssessmentRound
+from app.models.interview import InterviewSession, InterviewTurn
 from app.models.question_pool_generation import (
     GeneratedQuestionPool,
     POOL_STATUS_COMPLETE,
@@ -322,6 +323,43 @@ def test_two_interview_rounds_stay_distinct_across_reload(
         "technical_interview",
         "hr_interview",
     }
+
+    # The report must resolve each canonical interview round separately even
+    # though both AssessmentRound rows share round_type="interview".
+    db_session.add_all([
+        InterviewSession(
+            session_id=session_id, phase="TECHNICAL", rl_state={},
+            status="COMPLETED", completion_reason="USER_SUBMITTED",
+        ),
+        InterviewSession(
+            session_id=session_id, phase="HR", rl_state={},
+            status="COMPLETED", completion_reason="USER_SUBMITTED",
+        ),
+    ])
+    db_session.flush()
+    interview_sessions = db_session.query(InterviewSession).filter_by(session_id=session_id).order_by(InterviewSession.id).all()
+    db_session.add_all([
+        InterviewTurn(
+            interview_id=interview_sessions[0].id, turn_number=1,
+            question_text="Technical report fixture", candidate_response="Technical response",
+            final_score=0.4, behavioral_snapshot={},
+        ),
+        InterviewTurn(
+            interview_id=interview_sessions[1].id, turn_number=1,
+            question_text="HR report fixture", candidate_response="HR response",
+            final_score=0.9, behavioral_snapshot={},
+        ),
+    ])
+    db_session.commit()
+    report = client.get(
+        f"/api/v1/mock-drives/{drive_id}/result", headers=student_headers
+    )
+    assert report.status_code == 200, report.text
+    report_rounds = {row["round_type"]: row for row in report.json()["rounds"]}
+    assert report_rounds["technical_interview"]["details"]["turns"][0]["question"] == "Technical report fixture"
+    assert report_rounds["technical_interview"]["score"] == 0.4
+    assert report_rounds["hr_interview"]["details"]["turns"][0]["question"] == "HR report fixture"
+    assert report_rounds["hr_interview"]["score"] == 0.9
 
 
 def test_interview_round_durations_follow_blueprint_config(

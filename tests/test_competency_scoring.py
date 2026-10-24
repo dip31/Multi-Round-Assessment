@@ -306,6 +306,29 @@ def test_coding_accepted_score_normalized(db_session):
     assert comp["status"] == COMPETENCY_ASSESSED
 
 
+def test_competency_scores_are_available_by_supported_assessment_type(db_session):
+    """Mixed evidence retains per-type scores and the combined normalized score."""
+    tpo = _make_user(db_session, "tpo")
+    competencies = [_competency("Algorithms", 100, ["Shared Topic"], cid="alg")]
+    _, _, session = _seed_context_session(db_session, tpo, _snapshot(competencies))
+    aptitude_round = AssessmentRound(
+        session_id=session.id, round_type="aptitude", status="active", max_questions=5
+    )
+    db_session.add(aptitude_round)
+    db_session.flush()
+    _add_aptitude_attempt(db_session, aptitude_round.id, "Shared Topic", is_correct=False)
+    coding_round = _coding_round(db_session, session)
+    _add_coding_submission(db_session, coding_round.id, ["Shared Topic"], score=0.75)
+    map_session_evidence(db_session, session)
+    db_session.commit()
+
+    result = score_session_competencies(db_session, session)
+    competency = result["competencies"][0]
+    assert competency["normalized_score"] == 37.5
+    assert competency["assessment_type_scores"] == {"aptitude": 0.0, "coding": 75.0}
+    assert competency["assessment_type_evidence_counts"] == {"aptitude": 1, "coding": 1}
+
+
 def test_coding_internal_error_excluded(db_session):
     """Coding submission with internal_error status → excluded (None), not countable."""
     tpo = _make_user(db_session, "tpo")
@@ -321,6 +344,23 @@ def test_coding_internal_error_excluded(db_session):
     assert comp["status"] == COMPETENCY_NOT_ASSESSED
     assert comp["normalized_score"] is None
     assert comp["evidence_count"] == 0
+
+
+def test_coding_compilation_failure_is_missing_evidence_not_zero(db_session):
+    tpo = _make_user(db_session, "tpo")
+    competencies = [_competency("Algorithms", 100, ["Dynamic Programming"], cid="alg")]
+    _, _, session = _seed_context_session(db_session, tpo, _snapshot(competencies))
+    round_ = _coding_round(db_session, session)
+    _add_coding_submission(
+        db_session, round_.id, ["Dynamic Programming"], status="compilation_error", score=0.0
+    )
+    map_session_evidence(db_session, session)
+    db_session.commit()
+
+    competency = score_session_competencies(db_session, session)["competencies"][0]
+    assert competency["normalized_score"] is None
+    assert competency["status"] == COMPETENCY_NOT_ASSESSED
+    assert competency["evidence_count"] == 0
 
 
 def test_coding_running_excluded(db_session):

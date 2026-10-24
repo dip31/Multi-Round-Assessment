@@ -10,6 +10,7 @@ export default function Register() {
     const [role, setRole] = useState('student');
 
     // Student specific fields
+    const [studentDepartment, setStudentDepartment] = useState('');
     const [department, setDepartment] = useState('Computer Science');
     const [graduationYear, setGraduationYear] = useState('2026');
     const [targetRole, setTargetRole] = useState('Software Development Engineer');
@@ -31,6 +32,7 @@ export default function Register() {
         if (!name || name.trim().length < 2) e.name = 'Name must be at least 2 characters';
         if (!email || !/\S+@\S+\.\S+/.test(email)) e.email = 'Valid email address is required';
         if (!password || password.length < 8) e.password = 'Password must be at least 8 characters';
+        if (role === 'student' && !studentDepartment) e.department = 'Select your department';
         setErrors(e);
         return Object.keys(e).length === 0;
     };
@@ -42,7 +44,7 @@ export default function Register() {
 
         setLoading(true);
         try {
-            await register(name.trim(), email.trim().toLowerCase(), password, role);
+            await register(name.trim(), email.trim().toLowerCase(), password, role, role === 'student' ? studentDepartment : undefined);
 
             // Log in right away or redirect to login
             navigate('/login');
@@ -187,16 +189,18 @@ export default function Register() {
                                             Department
                                         </label>
                                         <select
-                                            value={department}
-                                            onChange={(e) => setDepartment(e.target.value)}
+                                            value={studentDepartment}
+                                            onChange={(e) => setStudentDepartment(e.target.value)}
                                             className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
                                         >
+                                            <option value="">Select your department</option>
                                             <option value="Computer Science">Computer Science</option>
                                             <option value="Information Technology">Information Technology</option>
                                             <option value="Electronics & Communication">Electronics & Comm</option>
                                             <option value="Mechanical Engineering">Mechanical</option>
                                             <option value="Civil Engineering">Civil</option>
                                         </select>
+                                        {errors.department && <p className="mt-1 text-xs text-red-600 font-medium">{errors.department}</p>}
                                     </div>
                                     <div>
                                         <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1.5">

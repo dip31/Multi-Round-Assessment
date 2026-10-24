@@ -30,7 +30,7 @@ class StudentProfile(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True
     )
     roll_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    department: Mapped[str] = mapped_column(String(100), default="Computer Science", nullable=False)
+    department: Mapped[str] = mapped_column(String(100), default="Department Not Specified", nullable=False)
     cgpa: Mapped[float] = mapped_column(Float, default=7.50, nullable=False)
     graduation_year: Mapped[int] = mapped_column(Integer, default=2026, nullable=False)
     backlogs_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import StudentModeLayout from '../components/StudentModeLayout';
 import { getProfile } from '../services/profileService';
 import api from '../services/api';
@@ -14,16 +14,35 @@ const ROUND_LABELS = {
 
 export default function MockDriveOverview() {
     const navigate = useNavigate();
+    const { pathname } = useLocation();
+    const isResultsPage = pathname === '/mock-drive/results';
     const [profileData, setProfileData] = useState(null);
     const [availableDrives, setAvailableDrives] = useState([]);
+    const [driveHistory, setDriveHistory] = useState([]);
     const [activeDriveStatus, setActiveDriveStatus] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [historyLoading, setHistoryLoading] = useState(true);
+    const [historyError, setHistoryError] = useState(false);
     const [startingDriveId, setStartingDriveId] = useState(null);
     const [advancingDriveId, setAdvancingDriveId] = useState(null);
     const [toast, setToast] = useState(null);
 
     const loadData = useCallback(async () => {
         setLoading(true);
+        if (isResultsPage) {
+            setHistoryLoading(true);
+            setHistoryError(false);
+            try {
+                const historyRes = await api.get('/mock-drives/history');
+                setDriveHistory(historyRes.data || []);
+            } catch {
+                setHistoryError(true);
+            } finally {
+                setHistoryLoading(false);
+                setLoading(false);
+            }
+            return;
+        }
         try {
             const [profile, drivesRes] = await Promise.all([
                 getProfile().catch(() => null),
@@ -50,7 +69,7 @@ export default function MockDriveOverview() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [isResultsPage]);
 
     useEffect(() => {
         loadData();
@@ -124,7 +143,7 @@ export default function MockDriveOverview() {
                     <div>
                         <h1 className="text-3xl font-black text-slate-900 tracking-tight mb-2">Mock Drive</h1>
                         <p className="text-slate-600 text-sm">
-                            Company-specific mock hiring drives calibrated against real eligibility criteria and recruitment patterns
+                            {isResultsPage ? 'Review your mock drive history and open each drive-specific performance report.' : 'Company-specific mock hiring drives calibrated against real eligibility criteria and recruitment patterns'}
                         </p>
                     </div>
                     <button
@@ -134,6 +153,16 @@ export default function MockDriveOverview() {
                         ↻ Refresh
                     </button>
                 </div>
+
+                {isResultsPage ? (
+                    <section aria-labelledby="student-drive-results" className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+                        <div className="mb-4"><h2 id="student-drive-results" className="text-lg font-bold text-slate-900">Results</h2><p className="mt-1 text-sm text-slate-500">Reports are linked to the mock drive you participated in.</p></div>
+                        {historyLoading ? <p role="status" className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">Loading your mock drive results…</p>
+                            : historyError ? <div role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800"><p>Mock drive results could not be loaded.</p><button type="button" onClick={loadData} className="mt-2 font-semibold underline">Try again</button></div>
+                                : driveHistory.length === 0 ? <p className="rounded-xl bg-slate-50 p-5 text-sm text-slate-600">No mock drive results are available yet. Drives you start will appear here.</p>
+                                    : <div className="space-y-3">{driveHistory.map((drive) => <article key={drive.mock_drive_id} className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4"><div><p className="font-semibold text-slate-900">{drive.company_name || 'Information unavailable'}</p><p className="text-sm text-slate-600">{drive.target_role || 'Information unavailable'}</p><span className={`mt-2 inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${drive.status === 'completed' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-blue-200 bg-blue-50 text-blue-800'}`}>{drive.status === 'completed' ? 'Completed' : 'In progress'}</span></div><button type="button" onClick={() => navigate(`/student/mock-drives/${drive.mock_drive_id}/report`)} className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700">View Performance Report</button></article>)}</div>}
+                    </section>
+                ) : <>
 
                 {/* Active drive progress banner */}
                 {activeDriveStatus && activeDriveStatus.status === 'in_progress' && (
@@ -145,7 +174,7 @@ export default function MockDriveOverview() {
                                     <span className="text-xs text-violet-500">— {activeDriveStatus.target_role}</span>
                                 </div>
                                 <div className="flex items-center gap-2 text-xs">
-                                    {activeDriveStatus.enabled_rounds.map((r, i) => {
+                                    {activeDriveStatus.enabled_rounds.map((r) => {
                                         const isDone = activeDriveStatus.completed_rounds.includes(r);
                                         const isCurrent = r === activeDriveStatus.current_round;
                                         return (
@@ -279,6 +308,7 @@ export default function MockDriveOverview() {
                         })}
                     </div>
                 )}
+                </>}
             </div>
         </StudentModeLayout>
     );

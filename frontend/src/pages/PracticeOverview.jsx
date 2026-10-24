@@ -1,12 +1,33 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import StudentModeLayout from '../components/StudentModeLayout';
 import { startPractice } from '../services/sessionService';
+import api from '../services/api';
+import { formatAvailabilityDate, getAssignmentAvailabilityMessage } from '../utils/assignedAssessmentAvailability';
 
 export default function PracticeOverview() {
     const navigate = useNavigate();
     const location = useLocation();
     const [starting, setStarting] = useState(null);
+    const [assignedAssessments, setAssignedAssessments] = useState([]);
+    const [assignmentsLoading, setAssignmentsLoading] = useState(true);
+    const [assignmentsError, setAssignmentsError] = useState(null);
+
+    const loadAssignments = async () => {
+        setAssignmentsLoading(true);
+        setAssignmentsError(null);
+        try {
+            const response = await api.get('/student/practice-assignments');
+            setAssignedAssessments(Array.isArray(response.data) ? response.data : []);
+        } catch (error) {
+            setAssignmentsError(error?.response?.status === 403
+                ? 'Assigned practice assessments are available to student accounts only.'
+                : 'Assigned assessments could not be loaded. Retry to check again.');
+        } finally {
+            setAssignmentsLoading(false);
+        }
+    };
+    useEffect(() => { loadAssignments(); }, []);
 
     // Detect which practice type is selected from URL
     const getSelectedPracticeType = () => {
@@ -21,8 +42,9 @@ export default function PracticeOverview() {
 
     const selectedType = getSelectedPracticeType();
 
-    const handleStartPractice = async (practiceType, subject = null) => {
-        setStarting(practiceType);
+    const handleStartPractice = async (practiceType, subject = null, assignment = null, assignedRound = null) => {
+        const startKey = assignment ? `${assignment.assignment_id}-${assignedRound.id}` : practiceType;
+        setStarting(startKey);
         try {
             const config = { practice_type: practiceType, subject: subject };
             localStorage.setItem('edi5_practice_config', JSON.stringify(config));
@@ -31,11 +53,19 @@ export default function PracticeOverview() {
             if (practiceType === 'coding') roundType = "coding";
             if (practiceType === 'interview') roundType = "interview";
 
-            await startPractice(roundType, practiceType);
+            if (assignment && assignedRound) {
+                roundType = assignedRound.round_type;
+                await startPractice(roundType, assignedRound.practice_type, {
+                    assignment_id: assignment.assignment_id,
+                    assessment_round_id: assignedRound.id,
+                });
+            } else {
+                await startPractice(roundType, practiceType);
+            }
 
             // Navigate to appropriate assessment page
             if (practiceType === 'mcq' || practiceType === 'technical' || practiceType === 'combined') {
-                navigate('/aptitude');
+                navigate('/aptitude', { state: { facultyAssignment: Boolean(assignment) } });
             } else if (practiceType === 'coding') {
                 navigate('/coding');
             } else if (practiceType === 'interview') {
@@ -74,6 +104,11 @@ export default function PracticeOverview() {
                             : 'Practice independently across different assessment types. Each practice session is separate and repeatable.'}
                     </p>
                 </div>
+
+                {!selectedType && <section aria-labelledby="assigned-practice-title" className="mb-8 rounded-2xl border border-indigo-100 bg-white p-5 shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 id="assigned-practice-title" className="text-lg font-bold text-slate-900">Assigned Practice Assessments</h2><p className="mt-1 text-sm text-slate-600">Complete assigned rounds in order. Independent practice remains available below.</p></div><button type="button" onClick={loadAssignments} disabled={assignmentsLoading} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50">Refresh</button></div>
+                    {assignmentsError ? <div role="alert" className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{assignmentsError}<button type="button" onClick={loadAssignments} className="ml-2 font-semibold underline">Retry</button></div> : assignmentsLoading ? <p className="mt-4 text-sm text-slate-500">Loading assigned assessments…</p> : !assignedAssessments.length ? <p className="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">You have no assigned practice assessments.</p> : <div className="mt-4 space-y-3">{assignedAssessments.map((assignment) => <article key={assignment.assignment_id} className="rounded-xl border border-slate-200 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-semibold text-slate-900">{assignment.title}</h3>{assignment.description && <p className="mt-1 text-sm text-slate-600">{assignment.description}</p>}{assignment.instructions && <p className="mt-2 text-xs text-slate-600"><span className="font-semibold">Instructions:</span> {assignment.instructions}</p>}<p className="mt-2 text-xs text-slate-500">{assignment.availability_start ? formatAvailabilityDate(assignment.availability_start) : 'Available now'}{assignment.availability_end ? ` – ${formatAvailabilityDate(assignment.availability_end)}` : ''}</p></div><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${assignment.status === 'completed' ? 'bg-emerald-50 text-emerald-800' : assignment.status === 'in_progress' ? 'bg-blue-50 text-blue-800' : 'bg-slate-100 text-slate-700'}`}>{assignment.status.replaceAll('_', ' ')}</span></div><ol className="mt-3 flex flex-wrap gap-2">{assignment.rounds.map((round) => <li key={round.id} className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{round.sequence}. {round.round_type === 'aptitude' ? `Aptitude · ${round.practice_type}` : round.round_type} · {round.status.replaceAll('_', ' ')}</li>)}</ol>{assignment.next_round ? <button type="button" disabled={starting === `${assignment.assignment_id}-${assignment.next_round.id}`} onClick={() => handleStartPractice(assignment.next_round.practice_type, null, assignment, assignment.next_round)} className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">{starting === `${assignment.assignment_id}-${assignment.next_round.id}` ? 'Opening…' : assignment.next_round.status === 'in_progress' ? 'Resume assigned round' : `Start ${assignment.next_round.round_type === 'aptitude' ? 'Aptitude' : assignment.next_round.round_type} round`}</button> : <p className="mt-3 text-xs font-medium text-slate-600">{assignment.status === 'completed' ? 'All assigned rounds are complete.' : getAssignmentAvailabilityMessage(assignment)}</p>}</article>)}</div>}
+                </section>}
 
                 {/* Show only selected practice type, or all if on overview */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

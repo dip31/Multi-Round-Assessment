@@ -26,6 +26,7 @@ from app.schemas.mock_drive import (
     MockDriveCreate,
     MockDriveResponse,
     MockDriveResultResponse,
+    StudentMockDriveHistoryItem,
     MockDriveRosterResponse,
     MockDriveUpdate,
 )
@@ -35,6 +36,7 @@ from app.services.mock_drive_service import (
     delete_mock_drive,
     get_mock_drive,
     get_mock_drive_result,
+    get_student_mock_drive_history,
     get_mock_drive_roster,
     get_mock_drive_status,
     list_eligible_mock_drives,
@@ -208,6 +210,16 @@ def get_available_drives(
     return list_eligible_mock_drives(db=db, student_id=current_user.id)
 
 
+@student_router.get("/history", response_model=List[StudentMockDriveHistoryItem])
+def get_student_drive_history(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return only mock drives the authenticated student has started."""
+    _require_student(current_user)
+    return get_student_mock_drive_history(db=db, student_id=current_user.id)
+
+
 @student_router.post("/{mock_drive_id}/start")
 def start_drive(
     mock_drive_id: int,
@@ -242,10 +254,10 @@ def get_drive_result(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return the consolidated result for the student's mock drive attempt.
+    """Return drive-scoped round results for the authenticated student.
 
-    Aggregates per-round results (aptitude, coding, interviews) into a single
-    consolidated view with overall score and per-round details.
+    Round scores retain their source scales. No cross-round overall score is
+    returned because the configured assessment types use incompatible scales.
     """
     _require_student(current_user)
     result = get_mock_drive_result(

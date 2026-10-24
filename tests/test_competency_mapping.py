@@ -359,7 +359,6 @@ def _coding_round(db, session):
 def test_legacy_blueprint_without_competencies_is_valid(db_session):
     tpo = _make_user(db_session, "tpo")
     bp = _make_blueprint(db_session, tpo)
-
     assert "competencies" not in bp.blueprint_data
     snapshot = snapshot_company_blueprint(bp)
     assert configured_competencies(snapshot) == []
@@ -373,12 +372,14 @@ def test_legacy_blueprint_without_competencies_is_valid(db_session):
         tpo.id,
     )
     assert updated.blueprint_data.get("overall_difficulty") == "hard"
+    assert updated.version == 2
     assert "competencies" not in updated.blueprint_data
 
 
 def test_configured_competencies_persist_through_approval_and_snapshot(db_session):
     tpo = _make_user(db_session, "tpo")
     bp = _make_blueprint(db_session, tpo)
+    historical_snapshot = snapshot_company_blueprint(bp)
     payload = UpdateBlueprintRequest(
         competencies=[
             BlueprintCompetency(
@@ -394,12 +395,17 @@ def test_configured_competencies_persist_through_approval_and_snapshot(db_sessio
     updated = update_blueprint(
         db_session, bp.company_name, bp.target_role, payload, tpo.id
     )
+    assert updated.version == 2
+    assert updated.blueprint_data["version"] == 2
+    assert historical_snapshot["blueprint_version"] == 1
+    assert configured_competencies(historical_snapshot) == []
     stored = updated.blueprint_data["competencies"]
     assert [c["name"] for c in stored] == ["Quantitative", "Reasoning"]
     assert [c["weight_pct"] for c in stored] == [60.0, 40.0]
     assert stored[0]["id"] == "quant"
 
     snapshot = snapshot_company_blueprint(updated)
+    assert snapshot["blueprint_version"] == 2
     assert snapshot["blueprint_data"]["competencies"] == stored
     assert [c["name"] for c in configured_competencies(snapshot)] == [
         "Quantitative",

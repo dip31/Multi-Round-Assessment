@@ -19,4 +19,5 @@ def add_cors_middleware(app: FastAPI) -> None:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["WWW-Authenticate"],
     )

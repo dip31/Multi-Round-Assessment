@@ -66,7 +66,9 @@ export default function AptitudeTest() {
 
             // Standalone assessment progression only. Mock Drives advance on
             // the server after a successful aptitude finish.
-            await startCodingAfterAptitude();
+            if (!location.state?.facultyAssignment) {
+                await startCodingAfterAptitude();
+            }
             if (sessionId && roundId) {
                 navigate(`/result/${sessionId}/${roundId}`);
             } else {
@@ -77,7 +79,7 @@ export default function AptitudeTest() {
                 message: err.response?.data?.detail || 'Could not finish this round. You can retry after resolving the issue.',
             });
         }
-    }, [navigate, sessionId, roundId]);
+    }, [navigate, sessionId, roundId, location.state?.facultyAssignment]);
 
     // Guard: proctoring violations should not terminate the test until the first
     // question has been shown. This prevents camera-init errors from killing

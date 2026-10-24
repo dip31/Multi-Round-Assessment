@@ -34,6 +34,8 @@ import TPOStudentsPage from './pages/TPOStudentsPage';
 import TPOMockDrivesPage from './pages/TPOMockDrivesPage';
 import TPOAnalyticsPage from './pages/TPOAnalyticsPage';
 import TPOReadinessPage from './pages/TPOReadinessPage';
+import StudentMockDrivePerformanceReport from './pages/StudentMockDrivePerformanceReport';
+import StudentMockDriveReportPage from './pages/StudentMockDriveReportPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 export default function App() {
@@ -210,6 +212,22 @@ export default function App() {
           element={
             <RoleRoute allowedRoles={['student']}>
               <MockDriveOverview />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/student/mock-drive-report-preview"
+          element={
+            <RoleRoute allowedRoles={['student']}>
+              <StudentMockDrivePerformanceReport />
+            </RoleRoute>
+          }
+        />
+        <Route
+          path="/student/mock-drives/:mockDriveId/report"
+          element={
+            <RoleRoute allowedRoles={['student']}>
+              <StudentMockDriveReportPage />
             </RoleRoute>
           }
         />

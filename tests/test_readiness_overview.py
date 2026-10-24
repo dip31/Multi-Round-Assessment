@@ -73,6 +73,7 @@ from app.models.assessment_context import (  # noqa: E402
     AssessmentContext,
     AssessmentPolicy,
 )
+from app.models.coding import CodingProblem, CodingSubmission  # noqa: E402
 from app.models.mock_drive import MockDrive  # noqa: E402
 from app.models.user import User                            # noqa: E402
 
@@ -324,6 +325,103 @@ def test_readiness_legitimate_zero_score_is_kept():
     assert avg["available"] is True
     assert avg["value"] == 0.0
     assert data["coverage"]["scored_attempts"] == 1
+
+
+def test_skill_gaps_include_supported_assessment_sources_and_unassessed_attempts():
+    tpo_headers, tpo_email = _register_and_login("tpo")
+    _, student_email = _register_and_login("student")
+    _seed_attempt(_user_id(tpo_email), _user_id(student_email), is_correct=True)
+
+    skill_gaps = client.get(READINESS_URL, headers=tpo_headers).json()["skill_gaps"]
+    assert skill_gaps["assessment_types"] == ["aptitude", "coding"]
+
+    overall_quant = next(
+        row for row in skill_gaps["competencies"] if row["competency_id"] == "quant"
+    )
+    assert overall_quant["avg_score"] == 100.0
+    assert overall_quant["assessment_types"] == ["aptitude"]
+
+    aptitude_quant = next(
+        row for row in skill_gaps["by_assessment_type"]["aptitude"]["competencies"]
+        if row["competency_id"] == "quant"
+    )
+    assert aptitude_quant["assessed"] == 1
+    assert aptitude_quant["candidates"] == 1
+    assert aptitude_quant["evidence_count"] == 1
+
+    coding_quant = next(
+        row for row in skill_gaps["by_assessment_type"]["coding"]["unassessed"]
+        if row["competency_id"] == "quant"
+    )
+    assert coding_quant["avg_score"] is None
+    assert coding_quant["assessed"] == 0
+    assert coding_quant["candidates"] == 1
+    assert coding_quant["coverage_rate"] == 0.0
+
+
+def test_coding_skill_gap_uses_persisted_scores_and_counts_attempt_once():
+    tpo_headers, tpo_email = _register_and_login("tpo")
+    _, student_email = _register_and_login("student")
+    competencies = [
+        {"id": "coding", "name": "Coding Proficiency", "weight_pct": 100, "topics": ["Arrays"]}
+    ]
+    seeded = _seed_attempt(
+        _user_id(tpo_email), _user_id(student_email), topic="Unmapped aptitude topic",
+        snapshot_competencies=competencies,
+    )
+    _, missing_result_email = _register_and_login("student")
+    _seed_attempt(
+        _user_id(tpo_email), _user_id(missing_result_email), topic="Unmapped aptitude topic",
+        snapshot_competencies=competencies,
+    )
+
+    db = TestingSessionLocal()
+    try:
+        coding_round = AssessmentRound(
+            session_id=seeded["session_id"], round_type="coding", status="completed", score=0.8
+        )
+        problem = CodingProblem(title="Arrays", description="Array task", difficulty="easy")
+        problem.tags_list = ["Arrays"]
+        db.add_all([coding_round, problem])
+        db.flush()
+        db.add_all([
+            CodingSubmission(
+                round_id=coding_round.id, problem_id=problem.id, code="solution",
+                language="python", status="accepted", score=0.8,
+            ),
+            CodingSubmission(
+                round_id=coding_round.id, problem_id=problem.id, code="solution retry",
+                language="python", status="wrong_answer", score=0.4,
+            ),
+        ])
+        db.flush()
+        session = db.query(AssessmentSession).filter(
+            AssessmentSession.id == seeded["session_id"]
+        ).first()
+        map_session_evidence(db, session)
+        db.commit()
+    finally:
+        db.close()
+
+    result = client.get(READINESS_URL, headers=tpo_headers).json()["skill_gaps"]
+    coding_row = result["by_assessment_type"]["coding"]["competencies"][0]
+    assert coding_row["competency_name"] == "Coding Proficiency"
+    assert coding_row["avg_score"] == 60.0
+    assert coding_row["gap_to_100"] == 40.0
+    assert coding_row["assessed_attempts"] == 1
+    assert coding_row["eligible_attempts"] == 2
+    assert coding_row["coverage_percent"] == 50.0
+    assert coding_row["evidence_items"] == 2
+    assert coding_row["evidence_sources"] == ["coding"]
+
+    combined_row = result["competencies"][0]
+    assert combined_row["avg_score"] == 60.0
+    assert combined_row["evidence_sources"] == ["coding"]
+
+    aptitude_only = result["by_assessment_type"]["aptitude"]
+    assert aptitude_only["competencies"] == []
+    assert aptitude_only["unassessed"][0]["avg_score"] is None
+    assert aptitude_only["unassessed"][0]["eligible_attempts"] == 2
 
 
 def test_readiness_improvement_pairs_earliest_and_latest():

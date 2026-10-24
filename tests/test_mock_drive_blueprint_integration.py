@@ -169,6 +169,16 @@ def auth_headers_student(db_session):
     return {"Authorization": f"Bearer {token}"}, student
 
 
+def _blueprintless_round_config(*round_types, duration_minutes=30):
+    return {
+        round_type: {
+            "question_count": 5,
+            "duration_minutes": duration_minutes,
+            "difficulty_distribution": {"easy": 0.5, "medium": 0.5, "hard": 0.0},
+        }
+        for round_type in round_types
+    }
+
 
 @pytest.fixture
 def sample_approved_blueprint(db_session, auth_headers_tpo):
@@ -716,6 +726,9 @@ def test_legacy_mock_drive_without_blueprint_still_works(client, auth_headers_tp
             "minimum_cgpa": 6.0,
             "maximum_backlogs": 0,
             "selected_rounds": {"aptitude": True, "hr_interview": True},
+            "round_configurations": _blueprintless_round_config(
+                "aptitude", "hr_interview"
+            ),
         },
         headers=tpo_headers,
     )
@@ -723,7 +736,10 @@ def test_legacy_mock_drive_without_blueprint_still_works(client, auth_headers_tp
     drive_id = drive_res.json()["id"]
     assert drive_res.json()["blueprint_id"] is None
 
-    client.post(f"/api/v1/tpo/mock-drives/{drive_id}/publish", headers=tpo_headers)
+    publish_res = client.post(
+        f"/api/v1/tpo/mock-drives/{drive_id}/publish", headers=tpo_headers
+    )
+    assert publish_res.status_code == 200, publish_res.text
 
     # Start legacy drive
     start_res = client.post(f"/api/v1/mock-drives/{drive_id}/start", headers=student_headers)
@@ -744,6 +760,7 @@ def test_draft_aptitude_and_coding_saved_reopened_and_published(client, auth_hea
         "minimum_cgpa": 6.5,
         "maximum_backlogs": 0,
         "selected_rounds": {"aptitude": True, "coding": True},
+        "round_configurations": _blueprintless_round_config("aptitude", "coding"),
     }
     create_res = client.post("/api/v1/tpo/mock-drives", json=payload, headers=headers)
     assert create_res.status_code == 201
@@ -778,6 +795,9 @@ def test_draft_coding_and_interview_saved_reopened_and_published(client, auth_he
         "minimum_cgpa": 7.5,
         "maximum_backlogs": 0,
         "selected_rounds": {"coding": True, "technical_interview": True},
+        "round_configurations": _blueprintless_round_config(
+            "coding", "technical_interview"
+        ),
     }
     create_res = client.post("/api/v1/tpo/mock-drives", json=payload, headers=headers)
     assert create_res.status_code == 201
@@ -1944,6 +1964,7 @@ def test_g3_session_start_legacy_blueprintless_unchanged(
             "company_name": "Legacy Corp",
             "target_role": "Software Engineer",
             "selected_rounds": {"technical_interview": True},
+            "round_configurations": _blueprintless_round_config("technical_interview"),
         },
         headers=tpo_headers,
     )
@@ -2890,6 +2911,163 @@ def test_blueprint_less_drive_still_persists_client_round_configurations(
     assert res.json()["round_configurations"] == DIVERGENT_CLIENT_CONFIG
 
 
+@pytest.mark.parametrize(
+    ("round_key", "round_type", "duration_minutes"),
+    [
+        ("aptitude", "aptitude", 17),
+        ("coding", "coding", 23),
+        ("technical_interview", "interview", 19),
+        ("hr_interview", "interview", 11),
+    ],
+)
+def test_blueprint_less_round_uses_configured_duration(
+    client,
+    db_session,
+    auth_headers_tpo,
+    auth_headers_student,
+    round_key,
+    round_type,
+    duration_minutes,
+):
+    _reset_rate_limit_window()
+    tpo_headers, _ = auth_headers_tpo
+    student_headers, _ = auth_headers_student
+
+    create_res = client.post(
+        "/api/v1/tpo/mock-drives",
+        json={
+            "company_name": f"Legacy Timer {round_key} {uuid.uuid4().hex[:6]}",
+            "target_role": "Software Engineer",
+            "selected_rounds": {round_key: True},
+            "round_configurations": _blueprintless_round_config(
+                round_key, duration_minutes=duration_minutes
+            ),
+        },
+        headers=tpo_headers,
+    )
+    assert create_res.status_code == 201, create_res.text
+    drive_id = create_res.json()["id"]
+    assert create_res.json()["blueprint_id"] is None
+
+    publish_res = client.post(
+        f"/api/v1/tpo/mock-drives/{drive_id}/publish", headers=tpo_headers
+    )
+    assert publish_res.status_code == 200, publish_res.text
+
+    start_res = client.post(
+        f"/api/v1/mock-drives/{drive_id}/start", headers=student_headers
+    )
+    assert start_res.status_code == 200, start_res.text
+
+    active_round = (
+        db_session.query(AssessmentRound)
+        .filter_by(session_id=start_res.json()["session_id"], status="active")
+        .one()
+    )
+    assert active_round.round_type == round_type
+    assert active_round.practice_type == round_key
+    assert active_round.expires_at - active_round.started_at == timedelta(
+        minutes=duration_minutes
+    )
+
+
+def test_blueprint_less_publish_requires_timer_for_every_enabled_round(
+    client, db_session, auth_headers_tpo
+):
+    _reset_rate_limit_window()
+    tpo_headers, _ = auth_headers_tpo
+
+    create_res = client.post(
+        "/api/v1/tpo/mock-drives",
+        json={
+            "company_name": "Missing Timer Co",
+            "target_role": "Software Engineer",
+            "selected_rounds": {"aptitude": True, "hr_interview": True},
+        },
+        headers=tpo_headers,
+    )
+    assert create_res.status_code == 201, create_res.text
+    drive_id = create_res.json()["id"]
+
+    publish_res = client.post(
+        f"/api/v1/tpo/mock-drives/{drive_id}/publish", headers=tpo_headers
+    )
+    assert publish_res.status_code == 422, publish_res.text
+    errors = publish_res.json()["detail"]["errors"]
+    assert (
+        "Missing or invalid timer configuration for round 'aptitude'."
+        in errors
+    )
+    assert (
+        "Missing or invalid timer configuration for round 'hr_interview'."
+        in errors
+    )
+    assert db_session.query(MockDrive).filter_by(id=drive_id).one().status == "draft"
+
+
+def test_blueprint_less_publish_rejects_partial_timer_configuration(
+    client, auth_headers_tpo
+):
+    _reset_rate_limit_window()
+    tpo_headers, _ = auth_headers_tpo
+
+    create_res = client.post(
+        "/api/v1/tpo/mock-drives",
+        json={
+            "company_name": "Partial Timer Co",
+            "target_role": "Software Engineer",
+            "selected_rounds": {"aptitude": True, "coding": True},
+            "round_configurations": _blueprintless_round_config("aptitude"),
+        },
+        headers=tpo_headers,
+    )
+    assert create_res.status_code == 201, create_res.text
+    drive_id = create_res.json()["id"]
+
+    publish_res = client.post(
+        f"/api/v1/tpo/mock-drives/{drive_id}/publish", headers=tpo_headers
+    )
+    assert publish_res.status_code == 422, publish_res.text
+    errors = publish_res.json()["detail"]["errors"]
+    assert any("coding" in error for error in errors)
+    assert not any("aptitude" in error for error in errors)
+
+
+def test_existing_published_blueprint_less_drive_without_config_keeps_policy_default(
+    client, db_session, auth_headers_tpo, auth_headers_student
+):
+    _reset_rate_limit_window()
+    _, tpo = auth_headers_tpo
+    student_headers, _ = auth_headers_student
+
+    drive = MockDrive(
+        company_name="Legacy Published Co",
+        target_role="Software Engineer",
+        status="published",
+        minimum_cgpa=0.0,
+        maximum_backlogs=100,
+        eligible_branches=[],
+        selected_rounds={"aptitude": True},
+        round_configurations={},
+        created_by_id=tpo.id,
+    )
+    db_session.add(drive)
+    db_session.commit()
+    db_session.refresh(drive)
+
+    start_res = client.post(
+        f"/api/v1/mock-drives/{drive.id}/start", headers=student_headers
+    )
+    assert start_res.status_code == 200, start_res.text
+
+    active_round = (
+        db_session.query(AssessmentRound)
+        .filter_by(session_id=start_res.json()["session_id"], status="active")
+        .one()
+    )
+    assert active_round.expires_at - active_round.started_at == timedelta(minutes=30)
+
+
 def test_live_blueprint_change_does_not_mutate_pinned_snapshot_or_derived_cache(
     client, db_session, auth_headers_tpo, auth_headers_student, sample_full_config_blueprint
 ):
@@ -3051,11 +3229,32 @@ def test_g6_result_endpoint_completed_drive(
         print("Interview start error:", interview_res.status_code, interview_res.json())
     assert interview_res.status_code == 200
     interview_id = interview_res.json()["interview_id"]
+    # Persist only a scored follow-up turn to verify that interview evaluation
+    # evidence is counted even when there is no scored main turn to aggregate.
+    from app.models.interview import InterviewTurn
+    db_session.add(InterviewTurn(
+        interview_id=interview_id,
+        turn_number=1,
+        question_text="Fixture interview question",
+        candidate_response="Fixture response",
+        is_followup=True,
+        followup_number=1,
+        final_score=0.75,
+    ))
+    db_session.commit()
     complete_res = client.post(
         f"/api/v1/interview/session/{interview_id}/complete",
         headers=student_headers
     )
     assert complete_res.status_code == 200
+
+    # The live Results page reads the report endpoint directly, so pending
+    # mapping recovery must not depend on a separate status poll.
+    context = db_session.query(AssessmentContext).filter_by(
+        mock_drive_id=drive_id, student_id=student.id
+    ).one()
+    context.competency_mapping_status = "pending"
+    db_session.commit()
 
     # Now fetch the consolidated result
     result_res = client.get(f"/api/v1/mock-drives/{drive_id}/result", headers=student_headers)
@@ -3066,12 +3265,26 @@ def test_g6_result_endpoint_completed_drive(
     assert result["candidate_id"] == student.id
     assert set(result["enabled_rounds"]) == {"aptitude", "technical_interview"}
     assert len(result["rounds"]) == 2
-    for round_summary in result["rounds"]:
-        assert round_summary["status"] == "completed"
-        assert round_summary["score"] is not None
-        assert round_summary["max_score"] is not None
-    assert result["overall_score"] is not None
+    aptitude_result = next(r for r in result["rounds"] if r["round_type"] == "aptitude")
+    interview_result = next(r for r in result["rounds"] if r["round_type"] == "technical_interview")
+    assert aptitude_result["status"] == "completed"
+    assert aptitude_result["score"] == 100.0
+    assert aptitude_result["max_score"] == 100.0
+    assert aptitude_result["evaluation_status"] == "evaluated"
+    assert aptitude_result["details"]["graded_count"] == 4
+    assert aptitude_result["details"]["correct_count"] == 4
+    assert aptitude_result["details"]["question_set_complete"] is True
+    assert aptitude_result["details"]["total_questions"] == 4
+    assert aptitude_result["details"]["unanswered_count"] == 0
+    assert interview_result["status"] == "completed"
+    assert interview_result["score"] is None  # completed without evaluated turns
+    assert interview_result["evaluation_status"] == "evaluated"
+    assert len(interview_result["details"]["turns"]) == 1
+    assert interview_result["details"]["turns"][0]["score"] == 0.75
+    assert result["overall_score"] is None  # round scales are intentionally not combined
     assert result["completed_at"] is not None
+    db_session.refresh(context)
+    assert context.competency_mapping_status == "not_applicable"
 
 
 def test_g6_result_endpoint_partial_drive(
@@ -3187,8 +3400,65 @@ def test_g6_result_endpoint_partial_drive(
     assert set(result["enabled_rounds"]) == {"aptitude", "coding"}
     assert len(result["rounds"]) == 2
     for round_summary in result["rounds"]:
-        assert round_summary["status"] in ("not_started", "in_progress")
+        assert round_summary["status"] in ("not_started", "in_progress", "active")
         assert round_summary["score"] is None
+
+    # A persisted compilation error is an evaluated zero score, distinct from
+    # no attempt and from a still-running submission.
+    from app.models.coding import CodingSubmission
+    session = db_session.query(AssessmentSession).filter_by(id=result["session_id"]).one()
+    coding_round = AssessmentRound(
+        session_id=session.id,
+        round_type="coding",
+        practice_type="coding",
+        status="completed",
+        score=0.475,
+    )
+    db_session.add(coding_round)
+    db_session.flush()
+    problems = db_session.query(CodingProblem).order_by(CodingProblem.id).limit(4).all()
+    for index, problem in enumerate(problems, start=1):
+        db_session.add(SessionProblem(
+            round_id=coding_round.id,
+            problem_id=problem.id,
+            problem_order=index,
+            assigned_at=datetime.utcnow(),
+        ))
+    submission_specs = [
+        (problems[0], "compilation_error", 0.0),
+        (problems[1], "running", None),
+        (problems[2], "accepted", 1.0),
+        # The problem's best finalized attempt is used across retries.
+        (problems[3], "wrong_answer", 0.4),
+        (problems[3], "accepted", 0.9),
+    ]
+    for problem, submission_status, score in submission_specs:
+        db_session.add(CodingSubmission(
+            round_id=coding_round.id,
+            problem_id=problem.id,
+            code="isolated report fixture",
+            language="python",
+            status=submission_status,
+            score=score,
+        ))
+    db_session.commit()
+
+    result_res = client.get(f"/api/v1/mock-drives/{drive_id}/result", headers=student_headers)
+    assert result_res.status_code == 200
+    coding_result = next(r for r in result_res.json()["rounds"] if r["round_type"] == "coding")
+    assert coding_result["score"] == 0.475
+    assert coding_result["evaluation_status"] == "evaluated"
+    coding_problems = coding_result["details"]["problems"]
+    assert len(coding_problems) == 4
+    assert sum(problem["attempted"] for problem in coding_problems) == 4
+    assert sum(problem["status"] == "accepted" for problem in coding_problems) == 2
+    by_id = {problem["problem_id"]: problem for problem in coding_problems}
+    assert by_id[problems[0].id]["evaluation_status"] == "evaluated"
+    assert by_id[problems[0].id]["score"] == 0.0
+    assert by_id[problems[1].id]["evaluation_status"] == "pending"
+    assert by_id[problems[1].id]["score"] is None
+    assert by_id[problems[2].id]["score"] == 1.0
+    assert by_id[problems[3].id]["score"] == 0.9
 
 
 def test_g6_result_endpoint_cross_candidate_denied(

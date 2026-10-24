@@ -3,6 +3,8 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
     formatScore,
+    formatCount,
+    formatReadinessAverage,
     formatDelta,
     formatPercent,
     kpiDisplay,
@@ -37,6 +39,29 @@ test('formatScore renders one decimal and em-dashes missing values', () => {
     assert.equal(formatScore(null), '—');
     assert.equal(formatScore(undefined), '—');
     assert.equal(formatScore('x'), '—');
+});
+
+test('drive-table counts distinguish a real zero from an unavailable count', () => {
+    assert.equal(formatCount(0), '0');
+    assert.equal(formatCount('2'), '2');
+    assert.equal(formatCount(null), '—');
+    assert.equal(formatCount(undefined), '—');
+    assert.equal(formatCount(''), '—');
+    assert.equal(formatCount('  '), '—');
+    assert.equal(formatCount('unknown'), '—');
+    assert.equal(formatCount(false), '—');
+    assert.match(readinessPageSource, /Evidence unavailable/);
+    assert.doesNotMatch(readinessPageSource, /No scores/);
+});
+
+test('drive readiness averages retain genuine precision and distinguish missing scores', () => {
+    assert.equal(formatReadinessAverage(29.0), '29.0');
+    assert.equal(formatReadinessAverage(43.89), '43.89');
+    assert.equal(formatReadinessAverage(0), '0.0');
+    assert.equal(formatReadinessAverage(null), '—');
+    assert.equal(formatReadinessAverage(undefined), '—');
+    assert.equal(formatReadinessAverage('  '), '—');
+    assert.equal(formatReadinessAverage(false), '—');
 });
 
 test('formatDelta signs values and em-dashes missing', () => {
@@ -204,13 +229,34 @@ test('unavailable KPI cards use concise honest copy with no repeated explanation
 
 test('the readiness charts are conditional on real scored evidence', () => {
     assert.match(readinessPageSource, /hasScoredEvidence/);
-    // Cohort outcomes / skill gaps / intervention only render when there is
-    // scored competency evidence, so they are wrapped in the conditional.
+    // Cohort outcomes and intervention depend on scored evidence; skill gaps
+    // remain visible with an honest empty state and source filter when present.
     assert.match(readinessPageSource, /Cohort Outcomes/);
-    assert.match(readinessPageSource, /Skill Gaps Map/);
-    assert.match(readinessPageSource, /Intervention Impact/);
+    assert.match(readinessPageSource, /Competency Skill Gaps/);
+    assert.match(readinessPageSource, /Filter competency gaps by assessment type/);
+    assert.match(readinessPageSource, /codingSkillGapPresentation/);
+    assert.doesNotMatch(readinessPageSource, /Intervention Impact/);
 });
 
+test('competency gaps retain the summary and demonstrated table without the examples section', () => {
+    assert.match(readinessPageSource, /Identify competencies that need improvement using mapped evidence from completed assessments\./);
+    assert.match(readinessPageSource, /data-testid="skill-gap-summary"/);
+    assert.match(readinessPageSource, /Competencies Assessed/);
+    assert.match(readinessPageSource, /Competencies Unassessed/);
+    assert.match(readinessPageSource, /Average Competency Score/);
+    assert.match(readinessPageSource, /Largest Competency Gap/);
+    assert.match(readinessPageSource, /No demonstrated competency gaps yet/);
+    assert.match(readinessPageSource, /No competencies are configured for this assessment scope\./);
+    assert.match(readinessPageSource, /evidence_sources/);
+    assert.doesNotMatch(readinessPageSource, /Competency Assessment Examples/);
+    assert.doesNotMatch(readinessPageSource, /data-testid="unassessed-competencies"/);
+});
+
+test('the readiness page no longer renders the competency assessment examples section', () => {
+    assert.doesNotMatch(readinessPageSource, /Illustrative demo rows/);
+    assert.doesNotMatch(readinessPageSource, /Actual API data — unassessed/);
+    assert.doesNotMatch(readinessPageSource, /competencyGapPresentation/);
+});
 test('routing and the shared sidebar include the readiness page', () => {
     assert.match(appSource, /path="\/tpo\/readiness"/);
     assert.match(appSource, /<TPOReadinessPage \/>/);

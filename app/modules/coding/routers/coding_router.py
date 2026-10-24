@@ -35,6 +35,7 @@ from app.models.assessment import AssessmentRound, AssessmentSession
 from app.services import session_service
 from app.services.mock_drive_service import try_advance_mock_drive
 from app.services.assessment_blueprint_service import get_session_blueprint_round_config
+from app.services.faculty_access_service import require_faculty_student_access
 from app.config.settings import settings
 
 router = APIRouter(prefix="/coding", tags=["Coding Round"])
@@ -187,6 +188,8 @@ def submit_code(payload: CodingSubmissionRequest, db: Session = Depends(get_db),
 		if expired_round is not None:
 			# Finalize the expired round and advance mock drive
 			finalize_coding_round(db, expired_round.id)
+			from app.services.faculty_practice_assignment_service import finalize_faculty_assigned_attempt
+			finalize_faculty_assigned_attempt(db, current_user.id, expired_round.id)
 			try_advance_mock_drive(db, expired_round.session_id)
 			raise HTTPException(status_code=400, detail="coding round has expired")
 		raise HTTPException(status_code=404, detail="no active coding round")
@@ -204,6 +207,8 @@ def submit_code(payload: CodingSubmissionRequest, db: Session = Depends(get_db),
 	if datetime.utcnow() > end_time:
 		# finalize and unlock interview
 		finalize_coding_round(db, active_round.id)
+		from app.services.faculty_practice_assignment_service import finalize_faculty_assigned_attempt
+		finalize_faculty_assigned_attempt(db, current_user.id, active_round.id)
 		try_advance_mock_drive(db, active_round.session_id)
 		raise HTTPException(status_code=400, detail="coding round has expired")
 	# Ensure problem is assigned to this round
@@ -267,6 +272,16 @@ def start_round(db: Session = Depends(get_db), current_user=Depends(get_current_
 @router.post("/start-after-aptitude", response_model=List[CodingProblemResponse])
 def start_after_aptitude(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
 	"""Finalize the user's aptitude round and ensure coding round is available next."""
+	latest_session = db.query(AssessmentSession).filter(
+		AssessmentSession.user_id == current_user.id
+	).order_by(AssessmentSession.id.desc()).first()
+	if latest_session and latest_session.context_id:
+		from app.models.assessment_context import AssessmentContext
+		context = db.query(AssessmentContext).filter_by(id=latest_session.context_id).first()
+		if context and (context.purpose or "").startswith("faculty_assignment:"):
+			# Faculty-assigned sequencing is controlled by the persisted assignment,
+			# and its next round starts in a separate engine session from Practice.
+			return []
 	active_aptitude = session_service.get_user_active_round(db, current_user.id, round_type="aptitude")
 	if active_aptitude is not None:
 		session_service.end_round(db, active_aptitude.id)
@@ -345,11 +360,17 @@ def finish_round(db: Session = Depends(get_db), current_user=Depends(get_current
 	"""Explicitly finalize the user's active coding round (called when candidate clicks Finish)."""
 	active_round = session_service.get_user_active_round(db, current_user.id, round_type="coding")
 	if active_round is None:
+		active_session = session_service.get_active_session(db, current_user.id)
+		if active_session is not None:
+			from app.services.faculty_practice_assignment_service import finalize_faculty_assigned_session
+			finalize_faculty_assigned_session(db, current_user.id, active_session.id)
 		# If there is no active coding round, nothing to do — idempotent
 		return {"status": "no_active_round"}
 
 	# Finalize and unlock interview round
 	score = finalize_coding_round(db, active_round.id)
+	from app.services.faculty_practice_assignment_service import finalize_faculty_assigned_attempt
+	finalize_faculty_assigned_attempt(db, current_user.id, active_round.id)
 
 	# If this coding round was part of a Mock Drive, advance to the next enabled round
 	mock_drive_advance = try_advance_mock_drive(db, active_round.session_id)
@@ -389,8 +410,11 @@ def get_submission(
 		)
 		owner_id = session_obj.user_id if session_obj is not None else None
 
-	if owner_id != current_user.id and current_user.role not in ("admin", "faculty", "tpo"):
-		raise HTTPException(status_code=404, detail="submission not found")
+	if owner_id != current_user.id:
+		if current_user.role == "faculty" and owner_id is not None:
+			require_faculty_student_access(db, current_user, owner_id)
+		elif current_user.role not in ("admin", "tpo"):
+			raise HTTPException(status_code=404, detail="submission not found")
 
 	return {
 		"submission_id": sub.id,

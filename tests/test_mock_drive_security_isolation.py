@@ -165,6 +165,17 @@ def _published_coding_drive(client, tpo_headers, *, name="Isolation Co"):
             "minimum_cgpa": 0.0,
             "maximum_backlogs": 100,
             "selected_rounds": {"coding": True},
+            "round_configurations": {
+                "coding": {
+                    "question_count": 5,
+                    "duration_minutes": 30,
+                    "difficulty_distribution": {
+                        "easy": 0.5,
+                        "medium": 0.5,
+                        "hard": 0.0,
+                    },
+                }
+            },
         },
         headers=tpo_headers,
     )
@@ -617,6 +628,11 @@ def test_completed_drive_hidden_from_own_list_but_visible_to_others(
     # A's completed attempt stays reachable via the result endpoint.
     result = client.get(f"/api/v1/mock-drives/{drive_id}/result", headers=a_headers)
     assert result.status_code == 200, result.text
+    own_history = client.get("/api/v1/mock-drives/history", headers=a_headers)
+    other_history = client.get("/api/v1/mock-drives/history", headers=b_headers)
+    assert own_history.status_code == 200
+    assert any(item["mock_drive_id"] == drive_id for item in own_history.json())
+    assert all(item["mock_drive_id"] != drive_id for item in other_history.json())
 
 
 # ══════════════════════════════════════════════════════════════════════

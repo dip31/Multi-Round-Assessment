@@ -12,6 +12,12 @@ from .mock_drive import MockDrive
 from .company_data import CompanyBlueprint, CompanyHistoricalData, CompanyPattern
 from .question_pool_generation import GeneratedQuestionPool
 from .competency import CompetencyEvidenceMapping
+from .faculty_practice_assessment import (
+    FacultyPracticeAssessment,
+    FacultyPracticeAssessmentRound,
+    FacultyPracticeAssignment,
+    FacultyPracticeRoundAttempt,
+)
 
 __all__ = [
     "User",
@@ -39,4 +45,8 @@ __all__ = [
     "CompanyBlueprint",
     "GeneratedQuestionPool",
     "CompetencyEvidenceMapping",
+    "FacultyPracticeAssessment",
+    "FacultyPracticeAssessmentRound",
+    "FacultyPracticeAssignment",
+    "FacultyPracticeRoundAttempt",
 ]

@@ -6,6 +6,7 @@ import {
     formatWeekLabel,
     toDepartmentBars,
     visibleDrives,
+    sortDriveRowsAlphabetically,
     toStatusSlices,
     toParticipationPoints,
     toEvidenceCoverageRows,
@@ -163,9 +164,11 @@ test('visibleDrives tolerates empty and invalid input', () => {
 
 // ── Page wiring for the charts and drive controls ─────────────────────
 
-test('the readiness page wires the department chart to a derived, real dataset', () => {
+test('the readiness page keeps live charts separate from table-only demo presentation data', () => {
     assert.match(pageSource, /toDepartmentBars\(byDepartment\)/);
     assert.match(pageSource, /visibleDrives\(tableDrives, drivesExpanded\)/);
+    assert.match(pageSource, /withReadinessDemoValues\(sortedTableDrives\)/);
+    assert.match(pageSource, /Illustrative readiness values fill rows without eligible results/);
 });
 
 test('Cohort Outcomes keeps only Department Readiness and its empty state', () => {
@@ -450,8 +453,33 @@ test('a zero completion-rate denominator is disclosed as unavailable, never 0%',
     assert.match(pageSource, /No participants — rate unavailable, not 0%/);
 });
 
-test('the drive table shows every filtered drive with participant-first ordering', () => {
+test('drive rows sort alphabetically before the visible-row limit without merging duplicates', () => {
+    const input = [
+        { drive_id: 7, company_name: ' xyc comp ', target_role: 'Analyst' },
+        { drive_id: 9, company_name: 'abcde', target_role: 'Z Engineer' },
+        { drive_id: 6, company_name: 'ABCDE', target_role: 'A Engineer' },
+        { drive_id: 8, company_name: 'TestCo', target_role: 'Analyst' },
+        { drive_id: 5, company_name: ' testco ', target_role: 'Analyst' },
+    ];
+    const sorted = sortDriveRowsAlphabetically(input);
+    assert.deepEqual(sorted.map((row) => row.drive_id), [6, 9, 5, 8, 7]);
+    assert.equal(sorted[0].company_name, 'ABCDE');
+    assert.equal(sorted[2].company_name, ' testco ');
+    assert.equal(input[0].drive_id, 7); // sorting keeps the source array unchanged
+    assert.deepEqual(sortDriveRowsAlphabetically(undefined), []);
+
+    const visible = visibleDrives(sorted, false, 3);
+    assert.deepEqual(visible.visible.map((row) => row.drive_id), [6, 9, 5]);
+    assert.equal(visible.hiddenCount, 2);
+});
+
+test('the drive table shows every filtered drive in sorted order', () => {
     assert.match(pageSource, /visibleDrives\(tableDrives, drivesExpanded\)/);
+    assert.match(pageSource, /sortDriveRowsAlphabetically\(byDrive\)/);
+    assert.doesNotMatch(pageSource, /Number\(b\?\.enrolled\).*Number\(a\?\.enrolled\)/s);
+    assert.doesNotMatch(pageSource, />\s*Demo\s*</);
+    assert.match(pageSource, /sr-only.*Illustrative display-only value/s);
+    assert.match(pageSource, /not an assessment result and not persisted/);
     assert.doesNotMatch(pageSource, /byDrive\.filter\(\(d\) => d\.enrolled > 0\)/);
     assert.match(pageSource, /Participants/);
     assert.match(pageSource, /Contexts/);
@@ -481,7 +509,8 @@ test('the page renders the assessment evidence sections and exports them', () =>
 test('Assessment Completion & Scoring uses the required compact headers', () => {
     assert.match(pageSource, /Assessment Completion & Scoring/);
     assert.doesNotMatch(pageSource, /Assessment Evidence Performance/);
-    assert.match(pageSource, /See how many completed assessment rounds produced valid scores/);
+    assert.match(pageSource, /Completion & Scoring Summary/);
+    assert.match(pageSource, /completed round\(s\) with valid scores/);
     for (const header of [
         'Completed Rounds',
         'Valid Scores',

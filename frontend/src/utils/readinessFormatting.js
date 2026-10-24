@@ -46,6 +46,31 @@ export function formatScore(value) {
     return Number(value).toFixed(1);
 }
 
+// Counts may legitimately be zero, while null/invalid values mean the count
+// was not supplied. Keep those cases visually distinct in the drive table.
+export function formatCount(value) {
+    if (typeof value !== 'number' && typeof value !== 'string') {
+        return '—';
+    }
+    if (typeof value === 'string' && !value.trim()) return '—';
+    const count = Number(value);
+    return Number.isFinite(count) ? String(count) : '—';
+}
+
+export function formatReadinessAverage(value) {
+    if (typeof value !== 'number' && typeof value !== 'string') return '—';
+    if (typeof value === 'string' && !value.trim()) return '—';
+    const average = Number(value);
+    if (!Number.isFinite(average)) {
+        return '—';
+    }
+    return average.toLocaleString('en-US', {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 2,
+        useGrouping: false,
+    });
+}
+
 export function formatDelta(value) {
     if (value === null || value === undefined || Number.isNaN(Number(value))) return '—';
     const n = Number(value);

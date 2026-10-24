@@ -66,7 +66,7 @@ import app.models.interview          # noqa: F401, E402
 import app.models.competency         # noqa: F401, E402
 import app.models.company_data       # noqa: F401, E402
 
-from app.models.assessment import AssessmentRound          # noqa: E402
+from app.models.assessment import AssessmentRound, AssessmentSession  # noqa: E402
 from app.models.assessment_context import AssessmentPolicy  # noqa: E402
 from app.models.user import User                            # noqa: E402
 
@@ -427,6 +427,8 @@ def test_analytics_empty_db_returns_zeroed_structure_not_crash():
     assert data["funnel"]["stages"] == []  # no invented funnel stages
     assert data["competency_insights"] == []
     assert data["competency_by_department"]["available"] is False
+    assert data["competency_coverage"]["eligible_contexts"] == 0
+    assert data["competency_coverage"]["contexts_without_snapshot"] == 0
     assert data["drives"] == []
     assert "generated_at" in data
 
@@ -442,7 +444,7 @@ def test_analytics_returns_expected_shape_with_data():
     for key in (
         "kpis", "filters", "activity_trend", "round_performance",
         "funnel", "competency_by_department", "competency_insights",
-        "drives", "generated_at",
+        "competency_coverage", "drives", "generated_at",
     ):
         assert key in data
 
@@ -524,6 +526,7 @@ def test_analytics_without_snapshot_stays_read_only():
     )
     r = client.get(ANALYTICS_URL, headers=tpo_headers)
     assert r.status_code == 200, r.text
+    assert r.json()["competency_coverage"]["contexts_without_snapshot"] == 1
 
     db = TestingSessionLocal()
     try:
@@ -548,3 +551,48 @@ def test_analytics_competency_insights_from_scoring_service():
     quant = next(c for c in data["competency_insights"] if c["competency_id"] == "quant")
     assert quant["assessed"] >= 1
     assert quant["evidence_count"] >= 1
+    assert data["competency_coverage"]["eligible_contexts"] == 1
+    # Only aptitude evidence is seeded; configured competencies without evidence
+    # remain unassessed, so the overall score is provisional by the scoring contract.
+    assert data["competency_coverage"]["provisional_scored_contexts"] == 1
+
+
+def test_cohort_stats_uses_distinct_candidates_and_round_types():
+    """Repeated round rows/sessions do not inflate candidate completion rates."""
+    tpo_headers, _ = _register_and_login("tpo")
+    _, first_email = _register_and_login("student")
+    _, second_email = _register_and_login("student")
+    first_id = _user_id(first_email)
+    second_id = _user_id(second_email)
+
+    db = TestingSessionLocal()
+    try:
+        first_session = AssessmentSession(user_id=first_id, status="completed", total_score=75)
+        repeated_session = AssessmentSession(user_id=first_id, status="completed", total_score=85)
+        second_session = AssessmentSession(user_id=second_id, status="completed", total_score=0)
+        db.add_all([first_session, repeated_session, second_session])
+        db.flush()
+        db.add_all([
+            AssessmentRound(session_id=first_session.id, round_type="aptitude", status="completed"),
+            AssessmentRound(session_id=first_session.id, round_type="coding", status="completed"),
+            AssessmentRound(session_id=first_session.id, round_type="technical_interview", status="completed"),
+            AssessmentRound(session_id=repeated_session.id, round_type="aptitude", status="completed"),
+            AssessmentRound(session_id=repeated_session.id, round_type="aptitude", status="completed"),
+            AssessmentRound(session_id=repeated_session.id, round_type="aptitude", status="completed"),
+            AssessmentRound(session_id=second_session.id, round_type="coding", status="completed"),
+        ])
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/api/v1/report/admin/cohort-stats", headers=tpo_headers)
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["total_candidates"] == 2
+    assert data["completed_sessions"] == 3
+    assert data["completion_rates"] == {
+        "aptitude": 0.5,
+        "coding": 1.0,
+        "interview": 0.5,
+        "all_three": 0.5,
+    }

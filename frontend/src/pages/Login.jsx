@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { Toast } from '../components/Toast';
@@ -10,8 +10,13 @@ export default function Login() {
     const [loading, setLoading] = useState(false);
     const [toast, setToast] = useState(null);
     const [dismissError, setDismissError] = useState(false);
+    const [sessionExpired, setSessionExpired] = useState(() => sessionStorage.getItem('auth_session_expired') === 'true');
     const { login } = useAuth();
     const navigate = useNavigate();
+
+    useEffect(() => {
+        sessionStorage.removeItem('auth_session_expired');
+    }, []);
 
     const validateEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
@@ -19,6 +24,8 @@ export default function Login() {
         e.preventDefault();
         setApiError('');
         setDismissError(false);
+        setSessionExpired(false);
+        sessionStorage.removeItem('auth_session_expired');
 
         // Validation
         if (!email.trim()) {
@@ -88,6 +95,11 @@ export default function Login() {
             {/* Main Content */}
             <main className="flex-1 flex items-center justify-center px-6 py-20 pt-28">
                 <div className="w-full max-w-md">
+                    {sessionExpired && (
+                        <div role="alert" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                            Your session expired. Please sign in again to continue.
+                        </div>
+                    )}
                     {/* Heading */}
                     <div className="mb-8 text-center">
                         <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200 mb-3">

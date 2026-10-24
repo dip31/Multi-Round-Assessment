@@ -13,9 +13,11 @@ from sqlalchemy.orm import Session
 from app.config.settings import settings
 from app.models.assessment import AssessmentRound, AssessmentSession
 from app.models.assessment_context import AssessmentContext
+from app.models.user import User
 from app.models.interview import InterviewSession
 from app.models.mock_drive import MockDrive
 from app.services.mock_drive_service import (
+    _configured_round_duration_minutes,
     _mock_round_key_for_round,
     _enabled_rounds_in_order,
     advance_mock_drive_round,
@@ -265,6 +267,9 @@ def create_session(db: Session, user_id: int, context_id: Optional[int] = None) 
     - If context_id provided, uses policy from context
     - Otherwise falls back to legacy behavior
     """
+    # A stable per-user row lock serializes concurrent first-session creation;
+    # locking only an existing session cannot protect the no-session case.
+    db.query(User.id).filter(User.id == user_id).with_for_update().first()
     existing = get_active_session(db, user_id, for_update=True)
     if existing is not None:
         return existing
@@ -477,6 +482,20 @@ def start_round(
             time_limit = round_config.get("time_limit_minutes")
             if isinstance(time_limit, (int, float)) and not isinstance(time_limit, bool) and time_limit > 0:
                 assessment_round.expires_at = started_at + timedelta(minutes=int(time_limit))
+    elif context and context.mock_drive_id:
+        drive = (
+            db.query(MockDrive)
+            .filter(MockDrive.id == context.mock_drive_id)
+            .first()
+        )
+        if drive is not None:
+            configured_minutes = _configured_round_duration_minutes(
+                drive, practice_type or round_type
+            )
+            if configured_minutes is not None:
+                assessment_round.expires_at = started_at + timedelta(
+                    minutes=configured_minutes
+                )
     if practice_type and not pending:  # Set practice_type for new rounds
         assessment_round.practice_type = practice_type
     db.add(assessment_round)

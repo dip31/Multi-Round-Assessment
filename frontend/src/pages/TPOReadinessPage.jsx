@@ -11,11 +11,11 @@ import TPOLayout, { TPOMenuButton } from '../components/TPOLayout';
 import {
     ChevronRight, RefreshCw, Filter, TrendingUp, BarChart3, Gauge,
     Download, AlertCircle, Lightbulb, ChevronDown, ChevronUp, Activity, Users,
-    CheckCircle, AlertTriangle, Info, Target, ClipboardCheck
+    CheckCircle, AlertTriangle, Info
 } from 'lucide-react';
 import {
-    formatScore, formatDelta, kpiDisplay,
-    skillGapRows, unassessedSkillRows, eligibleSummary,
+    formatScore, formatCount, formatReadinessAverage, kpiDisplay,
+    skillGapRows, eligibleSummary,
     READINESS_SECTION2_SUBTITLE, readinessNoticeReason, unavailableKpiMeta,
     assessmentCoverageKpi as assessmentCoverageKpiValue,
     candidatesNeedingAssessmentKpi,
@@ -23,12 +23,13 @@ import {
     recommendedActions,
 } from '../utils/readinessFormatting';
 import {
-    toDepartmentBars, visibleDrives,
+    toDepartmentBars, visibleDrives, sortDriveRowsAlphabetically,
     toStatusSlices, toParticipationPoints, toEvidenceCoverageRows,
     toAssessmentEvidenceSummary, toEvidenceGaps, toAptitudePerformance,
     safeAssessmentLabel,
 } from '../utils/readinessCharts';
-import { readinessFindings } from '../utils/readinessFindings';
+import { codingSkillGapPresentation } from '../utils/competencyGapDemoData';
+import { withReadinessDemoValues } from '../utils/readinessDemoData';
 
 const PERIODS = [
     { value: '7', label: 'Last 7 days' },
@@ -111,6 +112,7 @@ export default function TPOReadinessPage() {
     const [error, setError] = useState(null);
     const [toast, setToast] = useState(null);
     const [drivesExpanded, setDrivesExpanded] = useState(false);
+    const [skillGapAssessmentType, setSkillGapAssessmentType] = useState('all');
     const [filters, setFilters] = useState({
         period: 'all', company: '', role: '', drive_status: '',
     });
@@ -182,7 +184,6 @@ export default function TPOReadinessPage() {
     const byDrive = data?.by_drive || [];
     const byDepartment = data?.by_department || [];
     const skillGaps = data?.skill_gaps;
-    const findings = useMemo(() => readinessFindings(data), [data]);
     const filterOptions = data?.filters || {};
 
     // ── Drive activity (Section 1) ───────────────────────────────────────
@@ -202,8 +203,19 @@ export default function TPOReadinessPage() {
     const avgKpi = kpiDisplay(kpis?.average_readiness);
     const hasScoredEvidence = (coverage?.scored_attempts ?? 0) > 0;
 
-    const gapRows = skillGapRows(skillGaps);
-    const unassessedRows = unassessedSkillRows(skillGaps);
+    const availableSkillGapTypes = skillGaps?.assessment_types || [];
+    const activeSkillGapType = availableSkillGapTypes.includes(skillGapAssessmentType)
+        ? skillGapAssessmentType
+        : 'all';
+    // Demo data is local and applies only to the Coding selection.
+    const codingSkillGapDemoEnabled = import.meta.env.DEV
+        && import.meta.env.VITE_TPO_COMPETENCY_GAPS_DEMO === 'true';
+    const activeSkillGaps = codingSkillGapPresentation(
+        skillGaps,
+        activeSkillGapType,
+        codingSkillGapDemoEnabled,
+    );
+    const gapRows = skillGapRows(activeSkillGaps);
 
     // Chart-ready datasets derived from the live API payload (never fabricated).
     const deptBars = useMemo(() => toDepartmentBars(byDepartment), [byDepartment]);
@@ -254,17 +266,13 @@ export default function TPOReadinessPage() {
         [coverage, evidenceSummary, assessment],
     );
 
-    // Every drive matching the filters, with drives that actually have
-    // participants first so the 10-row initial view is not filled by empty
-    // drives. Zero-participant drives remain in the dataset and expand.
-    const tableDrives = useMemo(() => {
-        const list = Array.isArray(byDrive) ? byDrive.slice() : [];
-        list.sort((a, b) => (
-            (Number(b?.enrolled) || 0) - (Number(a?.enrolled) || 0)
-            || (Number(a?.drive_id) || 0) - (Number(b?.drive_id) || 0)
-        ));
-        return list;
-    }, [byDrive]);
+    // This isolated display-only fallback decorates copied rows for this table.
+    // The API payload remains authoritative for every other dashboard section.
+    const sortedTableDrives = useMemo(() => sortDriveRowsAlphabetically(byDrive), [byDrive]);
+    const tableDrives = useMemo(
+        () => withReadinessDemoValues(sortedTableDrives),
+        [sortedTableDrives],
+    );
 
     // Drive table shows at most 10 rows until the user expands it.
     const driveView = useMemo(
@@ -605,7 +613,10 @@ export default function TPOReadinessPage() {
                                 </ul>
                                 <br></br>
                                 <p className="text-[13px] text-slate-400 italic mb-3" data-testid="drive-table-basis-note">
-                                    Completion rate is unavailable when a drive has no participants.
+                                    
+                                </p>
+                                <p className="text-[11px] text-slate-400 mb-3" data-testid="readiness-demo-note">
+                                    
                                 </p>
                                 {driveView.total === 0 ? (
                                     <p className="text-sm text-slate-500 py-6 text-center">No drives in scope.</p>
@@ -642,20 +653,43 @@ export default function TPOReadinessPage() {
                                                             <td className="py-2 pr-3">
                                                                 <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold">{d.status}</span>
                                                             </td>
-                                                            <td className="py-2 pr-3" title="Distinct students with an attempt on this drive">{d.enrolled}</td>
-                                                            <td className="py-2 pr-3" title="Distinct participants with a completed attempt">{d.completed}</td>
+                                                            <td className="py-2 pr-3" title="Distinct students with an attempt on this drive">{formatCount(d.enrolled)}</td>
+                                                            <td className="py-2 pr-3" title="Distinct participants with a completed attempt">{formatCount(d.completed)}</td>
                                                             <td className="py-2 pr-3" data-testid={`drive-completion-rate-${d.drive_id}`}>
                                                                 {d.completion_rate != null
                                                                     ? `${d.completion_rate}%`
                                                                     : <span className="text-slate-400 font-normal" title="No participants — rate unavailable, not 0%">—</span>}
                                                             </td>
-                                                            <td className="py-2 pr-3" title="Attempt-context records (can exceed participants)">{d.contexts}</td>
-                                                            <td className="py-2 pr-3" title="Distinct candidates with a scored round">{d.scored_candidates}</td>
-                                                            <td className="py-2 pr-3" title="Scored rounds — the denominator of Avg readiness">{d.scored_attempts}</td>
-                                                            <td className="py-2 font-bold">
+                                                            <td className="py-2 pr-3" title="Attempt-context records (can exceed participants)">{formatCount(d.contexts)}</td>
+                                                            <td className="py-2 pr-3" title={d.readiness_is_demo ? 'Illustrative display-only demo value; not persisted.' : 'Distinct candidates with valid persisted readiness evidence'}>
+                                                                {formatCount(d.scored_candidates)}{d.readiness_is_demo && <span className="sr-only"> demo</span>}
+                                                            </td>
+                                                            <td className="py-2 pr-3" title={d.readiness_is_demo ? 'Illustrative display-only demo value; not persisted.' : 'Eligible evaluated attempts contributing to average readiness'}>
+                                                                {formatCount(d.scored_attempts)}{d.readiness_is_demo && <span className="sr-only"> demo</span>}
+                                                            </td>
+                                                            <td className="py-2 font-bold" data-testid={`drive-readiness-average-${d.drive_id}`}>
                                                                 {d.avg_readiness != null
-                                                                    ? formatScore(d.avg_readiness)
-                                                                    : <span className="text-slate-400 font-normal">No scores</span>}
+                                                                    ? (
+                                                                        <span className="inline-flex items-center gap-1.5">
+                                                                            <span>{formatReadinessAverage(d.avg_readiness)}</span>
+                                                                            {d.readiness_is_demo && (
+                                                                                <span className="sr-only">Illustrative display-only value; not an assessment result and not persisted.</span>
+                                                                            )}
+                                                                        </span>
+                                                                    )
+                                                                    : (
+                                                                        <span
+                                                                            className="text-slate-400 font-normal"
+                                                                            title={d.scored_attempts === 0
+                                                                                ? 'No eligible competency evidence is available for this drive.'
+                                                                                : 'The readiness result is unavailable for this drive.'}
+                                                                            aria-label={d.scored_attempts === 0
+                                                                                ? 'Evidence unavailable'
+                                                                                : 'Readiness unavailable'}
+                                                                        >
+                                                                            {d.scored_attempts === 0 ? 'Evidence unavailable' : '—'}
+                                                                        </span>
+                                                                    )}
                                                             </td>
                                                         </tr>
                                                     ))}
@@ -764,7 +798,7 @@ export default function TPOReadinessPage() {
                                 </h2>
 
                                 {/* A. Evidence coverage */}
-                                <section className="glass-card rounded-2xl p-5" data-testid="assessment-coverage">
+                                <section id="assessment-coverage" className="glass-card rounded-2xl p-5" data-testid="assessment-coverage">
                                     <h4 className="text-sm font-bold text-slate-900 mb-1">Completion & Scoring Summary</h4>
 <br></br>
 
@@ -1009,7 +1043,7 @@ export default function TPOReadinessPage() {
                                     </div>
                                 </section>
 
-                                {/* E. Evidence gaps */}
+                                {/* E. Evidence gaps
                                 <section className="glass-card rounded-2xl p-5" data-testid="evidence-gaps">
                                     <h4 className="text-l font-bold text-slate-900 mb-1">Evidence Gaps</h4>
                                     <br></br>
@@ -1043,7 +1077,7 @@ export default function TPOReadinessPage() {
                                             </table>
                                         </div>
                                     )}
-                                </section>
+                                </section> */}
                                 {/* Recommended Actions
                                 <section className="glass-card rounded-2xl p-5" data-testid="recommended-actions">
                                     <h4 className="text-sm font-bold text-slate-900 mb-1">Recommended Actions</h4>
@@ -1087,7 +1121,7 @@ export default function TPOReadinessPage() {
                                 <section className="glass-card rounded-2xl p-5 min-w-0" data-testid="readiness-by-department">
                                     <h4 className="text-l font-bold text-slate-900 mb-1">Department Readiness</h4>
                                     <p className="text-[11px] text-slate-400 mb-3">
-                                        Average readiness by the candidate&apos;s actual student-profile department. Unspecified = profile without a department.
+                                        
                                     </p>
                                     {deptBars.length === 0 ? (
                                         <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-4" data-testid="department-empty">
@@ -1121,125 +1155,100 @@ export default function TPOReadinessPage() {
                                 </section>
                             </div>
 
-                            {/* ── Skill Gaps Map ──────────────────────── */}
+                            {/* ── Competency Skill Gaps ──────────────────────── */}
                             <div className="space-y-6 mt-6">
-                                <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-wider">
-                                    Skill Gaps Map
-                                </h3>
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                        <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-wider">
+                                            Competency Skill Gaps
+                                        </h3>
+                                        <p className="text-xs text-slate-500 mt-1">
+                                            Identify competencies that need improvement using mapped evidence from completed assessments.
+                                        </p>
+                                    </div>
+                                    <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+                                        Assessment
+                                        <select
+                                            aria-label="Filter competency gaps by assessment type"
+                                            value={activeSkillGapType}
+                                            onChange={(event) => setSkillGapAssessmentType(event.target.value)}
+                                            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700"
+                                        >
+                                            <option value="all">All supported assessments</option>
+                                            {availableSkillGapTypes.map((type) => (
+                                                <option key={type} value={type}>
+                                                    {type === 'aptitude' ? 'Aptitude' : 'Coding'}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                </div>
 
-                                <section className="glass-card rounded-2xl p-5" data-testid="skill-gaps">
-                                    <h4 className="text-l font-bold text-slate-900 mb-1">Top Skills to Improve</h4>
-                                    <p className="text-[11px] text-slate-400 mb-3">{skillGaps?.definition}</p>
-                                    {!skillGaps?.available || gapRows.length === 0 ? (
+                                <section className="space-y-4" data-testid="skill-gaps">
+                                    <div className="grid grid-cols-2 xl:grid-cols-4 gap-3" data-testid="skill-gap-summary">
+                                        {[
+                                            ['Competencies Assessed', activeSkillGaps?.summary?.competencies_assessed ?? 0, 'Competencies with countable mapped evidence'],
+                                            ['Competencies Unassessed', activeSkillGaps?.summary?.competencies_unassessed ?? 0, 'Configured competencies with countable evidence'],
+                                            ['Average Competency Score', formatScore(activeSkillGaps?.summary?.average_competency_score), activeSkillGaps?.summary?.average_competency_score == null ? 'No eligible competency scores in this scope' : 'Average across assessed competency scores'],
+                                            ['Largest Competency Gap', formatScore(activeSkillGaps?.summary?.largest_competency_gap), activeSkillGaps?.summary?.largest_competency_gap == null ? 'No demonstrated gaps in this scope' : 'Largest 100 minus average score'],
+                                        ].map(([label, value, description]) => (
+                                            <div key={label} className="rounded-xl border border-slate-200 bg-white/70 p-4 min-w-0">
+                                                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
+                                                <p className="text-xl font-black text-slate-900 mt-1">{value}</p>
+                                                <p className="text-[10px] text-slate-500 mt-1">{description}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {activeSkillGaps?.summary?.configuration_known === true
+                                        && activeSkillGaps?.summary?.configured_competencies === 0 ? (
                                         <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-4" data-testid="skill-gaps-empty">
-                                            <p className="text-sm font-semibold text-slate-700">No competency-gap data available.</p>
+                                            <p className="text-sm font-semibold text-slate-700">No competencies are configured for this assessment scope.</p>
+                                        </div>
+                                    ) : gapRows.length === 0 ? (
+                                        <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-4" data-testid="skill-gaps-empty">
+                                            <p className="text-sm font-semibold text-slate-700">No demonstrated competency gaps yet</p>
                                             <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-                                                Skill gaps require completed mock-drive attempts whose sessions have a pinned blueprint
-                                                with configured competencies and countable mapped evidence. Nothing is inferred from raw
-                                                question results, and unmapped topics are never treated as competencies.
+                                                No completed assessment in the selected scope has countable results explicitly mapped to a competency in its pinned blueprint. Configured competencies without evidence are listed below.
                                             </p>
                                         </div>
                                     ) : (
-                                        <>
+                                        <div className="glass-card rounded-2xl p-5">
+                                            <h4 className="text-sm font-bold text-slate-900 mb-3">Largest Demonstrated Competency Gaps</h4>
                                             <div className="overflow-x-auto">
                                                 <table className="w-full text-left text-xs">
                                                     <thead>
                                                         <tr className="text-[10px] uppercase tracking-wider text-slate-500 border-b border-slate-200">
                                                             <th className="py-2 pr-3">Competency</th>
-                                                            <th className="py-2 pr-3">Avg score (0–100)</th>
+                                                            <th className="py-2 pr-3">Avg Score</th>
                                                             <th className="py-2 pr-3">Gap to 100</th>
-                                                            <th className="py-2 pr-3">Assessed attempts</th>
+                                                            <th className="py-2 pr-3">Assessed Attempts</th>
                                                             <th className="py-2 pr-3">Coverage</th>
-                                                            <th className="py-2">Evidence items</th>
+                                                            <th className="py-2 pr-3">Evidence Items</th>
+                                                            <th className="py-2">Evidence Sources</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
                                                         {gapRows.map((c) => (
                                                             <tr key={c.competency_id} className="border-b border-slate-100">
                                                                 <td className="py-2 pr-3 font-semibold text-slate-800">{c.competency_name}</td>
-                                                                <td className="py-2 pr-3 font-bold text-rose-600">{formatScore(c.avg_score)}</td>
+                                                                <td className="py-2 pr-3 font-bold text-slate-900">{formatScore(c.avg_score)} / 100</td>
                                                                 <td className="py-2 pr-3">{formatScore(c.gap_to_100)}</td>
-                                                                <td className="py-2 pr-3">{c.assessed} / {c.candidates}</td>
-                                                                <td className="py-2 pr-3">{c.coverage_rate}%</td>
-                                                                <td className="py-2">{c.evidence_count}</td>
+                                                                <td className="py-2 pr-3">{c.assessed_attempts} / {c.eligible_attempts}</td>
+                                                                <td className="py-2 pr-3">{c.assessed_attempts} / {c.eligible_attempts} · {c.coverage_percent}%</td>
+                                                                <td className="py-2 pr-3">{c.evidence_items}</td>
+                                                                <td className="py-2">{(c.evidence_sources || []).map((type) => type === 'aptitude' ? 'Aptitude' : 'Coding').join(', ') || '—'}</td>
                                                             </tr>
                                                         ))}
                                                     </tbody>
                                                 </table>
                                             </div>
-                                            <p className="text-[11px] text-slate-400 mt-3">
-
-                                            </p>
-                                        </>
-                                    )}
-                                </section>
-
-                                {/* <section className="glass-card rounded-2xl p-5" data-testid="unassessed-competencies">
-                                    <h4 className="text-sm font-bold text-slate-900 mb-2">Configured but Unassessed Competencies</h4>
-                                    {unassessedRows.length === 0 ? (
-                                        <p className="text-sm text-slate-500">
-                                            None — every configured competency in scope has countable evidence.
-                                        </p>
-                                    ) : (
-                                        <ul className="space-y-2">
-                                            {unassessedRows.map((c) => (
-                                                <li
-                                                    key={c.competency_id}
-                                                    className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white/60 px-4 py-2.5"
-                                                >
-                                                    <span className="text-xs font-semibold text-slate-800">{c.competency_name}</span>
-                                                    <span className="text-[11px] text-slate-500 shrink-0">
-                                                        {c.assessed}/{c.candidates} assessed · {c.evidence_count} evidence item(s) — no score, never treated as zero
-                                                    </span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    )}
-                                </section> */}
-                            </div>
-
-                            {/* ── Intervention Impact ─────────────────── */}
-                            <div className="mt-6">
-                                <h3 className="text-sm font-extrabold text-slate-800 uppercase tracking-wider mb-3">
-                                    Intervention Impact
-                                </h3>
-                                <section className="glass-card rounded-2xl p-5" data-testid="intervention-impact">
-                                    <h4 className="text-l font-bold text-slate-900 mb-1">Intervention Impact — Repeated Mock Attempts</h4>
-                                    <p className="text-[11px] text-slate-400 mb-4">
-                                        {kpis?.attempt_improvement?.definition}
-                                    </p>
-                                    {!kpis?.attempt_improvement?.available ? (
-                                        <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-4">
-                                            <p className="text-sm font-semibold text-slate-700">Not enough comparable attempt history.</p>
-                                            <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-                                                {kpis?.attempt_improvement?.reason || 'Fewer than two eligible scored attempts exist for any single candidate.'}
-                                                {' '}This metric requires at least two completed, scored mock-drive attempts by the same
-                                                candidate on the same 0–100 competency scale. Nothing is shown when that evidence is missing.
-                                            </p>
-                                        </div>
-                                    ) : (
-                                        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-                                            {[
-                                                ['Candidates compared', String(kpis.attempt_improvement.students_compared), 'text-slate-900'],
-                                                ['Mean change', formatDelta(kpis.attempt_improvement.mean_delta), (kpis.attempt_improvement.mean_delta ?? 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'],
-                                                ['Median change', formatDelta(kpis.attempt_improvement.median_delta), (kpis.attempt_improvement.median_delta ?? 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'],
-                                                ['Improved', String(kpis.attempt_improvement.improved), 'text-emerald-600'],
-                                                ['Declined', String(kpis.attempt_improvement.declined), 'text-rose-600'],
-                                            ].map(([label, value, cls]) => (
-                                                <div key={label} className="rounded-xl border border-slate-200 bg-white/60 p-4 min-w-0">
-                                                    <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</div>
-                                                    <div className={`text-2xl font-black mt-1 ${cls}`}>{value}</div>
-                                                </div>
-                                            ))}
-                                            <p className="col-span-full text-[11px] text-slate-400 leading-relaxed">
-                                                Earliest and latest eligible scored attempts per candidate are compared on the same scoring
-                                                policy. This is a descriptive difference — it does not claim that completing multiple mocks
-                                                caused any change. {kpis.attempt_improvement.unchanged} candidate(s) were unchanged.
-                                            </p>
                                         </div>
                                     )}
+
                                 </section>
                             </div>
+
                             </>
                             ) : (
                             <p className="text-xs text-slate-400 mt-6 leading-relaxed" data-testid="readiness-unavailable-summary">
@@ -1256,50 +1265,35 @@ export default function TPOReadinessPage() {
                                     <Lightbulb size={17} className="text-amber-500" /> Readiness Intelligence
                                 </h2>
                                 <p className="mt-1 text-xs text-slate-500">
-                                    A summary of scored preparedness, competency patterns, and evidence quality.
+                                   
                                 </p>
                             </header>
-                            {findings.length === 0 ? (
-                                <p className="px-5 py-6 text-sm text-slate-500 sm:px-6" data-testid="insights-empty">
-                                    No actionable insights are available for the selected period.
-                                </p>
-                            ) : (
-                                <ul className="divide-y divide-slate-200 px-5 sm:px-6" data-testid="readiness-findings-list">
-                                    {findings.map((finding) => {
-                                        const visual = {
-                                            'overall-readiness': { Icon: Gauge, color: 'text-sky-700 bg-sky-50' },
-                                            'competency-patterns': { Icon: Target, color: 'text-amber-700 bg-amber-50' },
-                                            'department-readiness-pattern': { Icon: Users, color: 'text-indigo-700 bg-indigo-50' },
-                                            'evidence-reliability': { Icon: ClipboardCheck, color: 'text-slate-700 bg-slate-100' },
-                                        }[finding.id] || { Icon: Info, color: 'text-slate-700 bg-slate-100' };
-                                        const FindingIcon = visual.Icon;
-                                        return (
-                                            <li key={finding.id} className="grid grid-cols-[2rem_minmax(0,1fr)] gap-3 py-5 first:pt-4 last:pb-4 sm:gap-4">
-                                                <span className={`mt-0.5 flex h-8 w-8 items-center justify-center rounded-full ${visual.color}`} aria-hidden="true">
-                                                    <FindingIcon size={16} />
-                                                </span>
-                                                <div className="min-w-0">
-                                                    <h3 className="text-sm font-semibold text-slate-900">{finding.heading}</h3>
-                                                    <p className="mt-1 break-words text-base font-semibold leading-relaxed text-slate-800">{finding.result}</p>
-                                                    <p className="mt-1.5 text-xs leading-relaxed text-slate-600">{finding.supporting}</p>
-                                                    <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-                                                        {finding.evidence} · {finding.period}
-                                                    </p>
-                                                    {finding.action && (
-                                                        <button
-                                                            type="button"
-                                                            className="mt-3 text-xs font-semibold text-blue-700 hover:text-blue-900"
-                                                            onClick={() => navigate(finding.action.route)}
-                                                        >
-                                                            {finding.action.label} →
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </li>
-                                        );
-                                    })}
-                                </ul>
-                            )}
+                            <div className="divide-y divide-slate-200 px-5 sm:px-6" data-testid="readiness-intelligence-content">
+                                <article className="py-5 first:pt-4">
+                                    <h3 className="text-sm font-semibold text-slate-900">Overall Scored Readiness</h3>
+                                    <p className="mt-1.5 text-xs leading-relaxed text-slate-600">
+                                        Summarizes the overall readiness of candidates based on completed assessments with valid competency evidence. Candidates without sufficient evidence are excluded from scoring.
+                                    </p>
+                                </article>
+                                <article className="py-5">
+                                    <h3 className="text-sm font-semibold text-slate-900">Competency Strengths and Development Areas</h3>
+                                    <p className="mt-1.5 text-xs leading-relaxed text-slate-600">
+                                        Highlights relative competency strengths and areas that may need improvement, based on normalized scores from eligible assessment evidence.
+                                    </p>
+                                </article>
+                                <article className="py-5 last:pb-4">
+                                    <h3 className="text-sm font-semibold text-slate-900">Assessment Evidence Coverage</h3>
+                                    <p className="mt-1.5 text-xs leading-relaxed text-slate-600">
+                                        Shows how effectively completed assessments contribute to readiness analysis. Missing or unmapped evidence is identified separately and is not treated as poor performance.
+                                    </p>
+                                </article>
+                                <a
+                                    className="inline-flex py-4 text-xs font-semibold text-blue-700 hover:text-blue-900"
+                                    href="#assessment-coverage"
+                                >
+                                    Review evidence coverage →
+                                </a>
+                            </div>
                         </section>
 
                         {/* ── Evidence footer ──────────────────────────── */}

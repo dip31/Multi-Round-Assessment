@@ -18,8 +18,9 @@ export const SCORE_STATUS_LABELS = {
 };
 
 export const SCORING_ERROR_MESSAGES = {
-    no_configured_competencies: 'This drive\'s pinned blueprint has no competency configuration. Save competencies to the blueprint, then create a new drive to enable competency scoring.',
-    invalid_competency_weights: 'The competency weights in the pinned blueprint do not sum to 100%. Please correct the blueprint configuration and create a new drive.',
+    blueprint_snapshot_unavailable: 'A valid blueprint snapshot is not available.',
+    no_configured_competencies: 'Blueprint competencies are not configured.',
+    invalid_competency_weights: 'Blueprint competency weights must total 100%.',
 };
 
 export function scoringErrorMessage(errorCode) {
@@ -43,20 +44,49 @@ export function participantStatusLabel(entry) {
     if (!entry) return 'Unknown';
     if (entry.context_status === 'completed') return 'Completed';
     if (entry.session_status === 'expired') return 'Expired';
+    if (entry.session_status === 'not_started') return 'Not started';
     if (entry.session_status === 'in_progress' || entry.context_status === 'active') {
         return 'In progress';
     }
+    if (!entry.session_id) return 'Not started';
     return 'Not started';
 }
 
 export function rosterScoreLabel(value) {
-    if (value === null || value === undefined || Number.isNaN(Number(value))) return '—';
-    return Number(value).toFixed(1);
+    if (typeof value !== 'number' || !Number.isFinite(value)) return 'Unavailable';
+    return value.toFixed(1);
 }
 
 export function coverageLabel(value) {
-    if (value === null || value === undefined) return '—';
+    if (typeof value !== 'number' || !Number.isFinite(value)) return 'Unavailable';
     return `${Math.round(value * 100)}%`;
+}
+
+export function roundStatusLabel(status) {
+    const labels = {
+        completed: 'Completed',
+        active: 'In progress',
+        in_progress: 'In progress',
+        expired: 'Expired',
+        not_started: 'Not started',
+        pending: 'Pending',
+        unavailable: 'Unavailable',
+        not_applicable: 'Not applicable',
+    };
+    if (labels[status]) return labels[status];
+    return status ? String(status).replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()) : 'Unavailable';
+}
+
+function competencySummary(competencies = []) {
+    return competencies
+        .filter((item) => item?.status === 'assessed'
+            && item.competency_name
+            && typeof item.normalized_score === 'number'
+            && Number.isFinite(item.normalized_score))
+        .map((item) => ({
+            name: item.competency_name,
+            score: item.normalized_score.toFixed(1),
+        }));
 }
 
 // Normalise the GET /tpo/mock-drives/{id}/roster payload for rendering.
@@ -65,19 +95,21 @@ export function summarizeRoster(payload) {
         ...entry,
         candidateId: entry.candidate_id,
         displayName: entry.name || entry.email || `Candidate #${entry.candidate_id}`,
+        sessionId: entry.session_id ?? null,
         statusLabel: participantStatusLabel(entry),
-        scoreLabel: entry.overall_score == null
-            ? '—'
-            : Number(entry.overall_score).toFixed(1),
+            scoreLabel: ['final', 'provisional'].includes(entry.overall_score_status)
+                ? rosterScoreLabel(entry.overall_score)
+                : 'Unavailable',
         competencyScoreStatus: entry.overall_score_status,
         competencyScoreStatusLabel: scoreStatusLabel(entry.overall_score_status),
         evidenceCoverage: entry.evidence_coverage,
         evidenceCoverageLabel: coverageLabel(entry.evidence_coverage),
         assessedCompetencyCount: entry.assessed_competency_count,
         requiredCompetencyCount: entry.required_competency_count,
-        missingCompetencies: entry.missing_competencies || [],
+        missingCompetencies: Array.isArray(entry.missing_competencies) ? entry.missing_competencies : [],
         scoringError: entry.scoring_error || null,
-        rounds: entry.rounds || [],
+        competencySummary: competencySummary(Array.isArray(entry.competencies) ? entry.competencies : []),
+        rounds: Array.isArray(entry.rounds) ? entry.rounds : [],
     }));
 
     return {
@@ -86,5 +118,11 @@ export function summarizeRoster(payload) {
         total: payload?.total_participants ?? candidates.length,
         inProgress: payload?.in_progress_count ?? 0,
         completed: payload?.completed_count ?? 0,
+        hasOverallScores: candidates.some((candidate) => candidate.scoreLabel !== 'Unavailable'),
+        hasCompetencyMetrics: candidates.some((candidate) => (
+            candidate.competencySummary.length > 0
+            || (typeof candidate.evidenceCoverage === 'number' && Number.isFinite(candidate.evidenceCoverage))
+            || (typeof candidate.requiredCompetencyCount === 'number' && candidate.requiredCompetencyCount > 0)
+        )),
     };
 }

@@ -16,6 +16,7 @@ from app.api.v1.mock_drive import router as mock_drive_router
 from app.api.v1.mock_drive import student_router as student_mock_drive_router
 from app.api.v1.company_data import router as company_data_router
 from app.modules.practice.routers.practice_router import router as practice_router
+from app.api.v1.faculty_practice_assessments import router as faculty_practice_assessments_router
 
 api_router = APIRouter(prefix="/api/v1")
 
@@ -27,6 +28,7 @@ api_router.include_router(student_mock_drive_router)
 api_router.include_router(company_data_router)
 api_router.include_router(session_router)
 api_router.include_router(practice_router)
+api_router.include_router(faculty_practice_assessments_router)
 api_router.include_router(aptitude_router)
 api_router.include_router(admin_question_router)
 api_router.include_router(coding_router)

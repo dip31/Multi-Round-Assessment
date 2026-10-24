@@ -214,6 +214,7 @@ class RoundResultSummary(BaseModel):
     status: str  # "not_started" | "in_progress" | "completed" | "expired" | "expired"
     score: Optional[float] = None
     max_score: Optional[float] = None
+    evaluation_status: Optional[str] = None  # evaluated | pending | unavailable
     completion_reason: Optional[str] = None
     completed_at: Optional[datetime] = None
     details: Optional[Dict[str, Any]] = None
@@ -238,6 +239,14 @@ class MockDriveResultResponse(BaseModel):
     competency_scoring: Optional[CompetencyScoringSummary] = None
 
     model_config = {"from_attributes": True}
+
+
+class StudentMockDriveHistoryItem(BaseModel):
+    mock_drive_id: int
+    company_name: str
+    target_role: str
+    status: str
+    completed_at: Optional[datetime] = None
 
 
 # ── Derived candidate roster (G4) ───────────────────────────────────────
@@ -274,6 +283,8 @@ class MockDriveRosterEntry(BaseModel):
     assessed_competency_count: Optional[int] = None
     required_competency_count: Optional[int] = None
     missing_competencies: List[str] = Field(default_factory=list)
+    scoring_error: Optional[str] = None
+    competencies: List[Dict[str, Any]] = Field(default_factory=list)
     rounds: List[MockDriveRosterRound] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}

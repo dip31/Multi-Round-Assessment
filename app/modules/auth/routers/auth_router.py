@@ -42,6 +42,7 @@ def register(payload: UserCreate, db: Session = Depends(get_db)) -> UserResponse
         email=payload.email,
         password=payload.password,
         role=payload.role,
+        department=payload.department,
     )
     return user
 

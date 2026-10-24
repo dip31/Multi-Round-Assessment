@@ -442,6 +442,9 @@ def test_groq_role_assessment_uses_json_mode_timeout_and_rejects_malformed_json(
     assert captured["timeout"] == 45.0
     assert captured["response_format"] == {"type": "json_object"}
     assert captured["messages"][0]["role"] == "system"
+    assert "copy the requested target_role verbatim" in captured["messages"][0]["content"]
+    assert '"role": "Data Analyst"' in captured["messages"][1]["content"]
+    assert "exact target_role string" in captured["messages"][1]["content"]
 
     class MalformedCompletions:
         def create(self, **kwargs):

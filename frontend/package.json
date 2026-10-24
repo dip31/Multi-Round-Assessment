@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node --test src/utils/mockDriveRounds.test.js src/utils/mockDriveHistory.test.js src/utils/mockDriveForm.test.js src/utils/questionPoolDisplay.test.js src/utils/historicalRoundConfig.test.js src/utils/mockDriveRoster.test.js src/utils/readinessFormatting.test.js src/utils/readinessCharts.test.js",
+    "test": "node --test src/utils/mockDriveRounds.test.js src/utils/mockDriveHistory.test.js src/utils/mockDriveForm.test.js src/utils/questionPoolDisplay.test.js src/utils/historicalRoundConfig.test.js src/utils/mockDriveRoster.test.js src/utils/readinessFormatting.test.js src/utils/readinessCharts.test.js src/utils/readinessDemoData.test.js src/utils/candidateEligibility.test.js src/pages/StudentMockDriveReportPage.test.js",
     "test:e2e": "echo 'No E2E tests configured yet'"
   },
   "dependencies": {

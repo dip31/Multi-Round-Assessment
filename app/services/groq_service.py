@@ -34,6 +34,8 @@ class GroqService:
         company_evidence = context.get("company_evidence")
         system = (
             "You design role-specific assessment definitions. Understand the requested role; "
+            "copy the requested target_role verbatim into the output role field; do not singularize, "
+            "pluralize, abbreviate, or otherwise rephrase it. "
             "identify realistic responsibilities, skills, tools, competencies and assessment topics for each supplied round. "
             "Do not use a generic Software Engineer assessment. Do not add unrelated DSA/OOP/OS topics unless "
             "they are genuinely relevant to this role. Do not invent company-specific requirements: use them only "
@@ -48,7 +50,7 @@ class GroqService:
             "company_evidence": company_evidence,
             "configured_rounds": rounds,
             "required_json_shape": {
-                "role": "string",
+                "role": context["target_role"],
                 "role_understanding": {
                     "summary": "string", "responsibilities": ["string"], "core_skills": ["string"],
                     "tools_and_technologies": ["string"], "competencies": ["string"]
@@ -62,6 +64,7 @@ class GroqService:
             },
             "constraints": [
                 "Return exactly the configured round keys.",
+                "Set role to the exact target_role string shown above, preserving spelling and singular/plural form.",
                 "Use non-empty, distinct, role-relevant topics for every configured round.",
                 "Topic weights must be positive and sum to 100 for each round.",
                 "Use the company only as context, not as evidence of hiring history.",

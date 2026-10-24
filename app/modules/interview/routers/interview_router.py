@@ -48,6 +48,7 @@ from app.models.interview import (
 from app.models.assessment import AssessmentSession
 from app.services.resume_service import parse_resume
 from app.services.groq_service import GroqService
+from app.services.faculty_access_service import require_faculty_student_access
 from app.services.assessment_blueprint_service import (
     configured_question_count,
     get_session_active_blueprint_round_config,
@@ -94,10 +95,8 @@ def _try_advance_mock_drive(db, session_id):
 
 
 # ── Candidate isolation helpers ───────────────────────────────────────
-# Staff roles allowed to READ candidate interview data, matching the existing
-# /interview/report frontend route (student/faculty/tpo/admin) and the report
-# module's role policy. Write actions remain owner-only.
-_STAFF_ROLES = ("admin", "faculty", "tpo")
+# TPO/admin have institution-wide read scope. Faculty access is constrained to
+# the authenticated faculty profile's department in the helper below.
 
 
 def _assessment_session_owner_id(db: Session, assessment_session_id: Optional[int]) -> Optional[int]:
@@ -124,7 +123,7 @@ def _get_interview_for_user(
     The owning candidate always has access; staff roles may read when
     ``allow_staff`` is set. Any other caller receives the same 404 as a
     missing interview so another student's data (or even its existence) is
-    never exposed.
+    never exposed. Faculty staff access is limited by department.
     """
     interview = (
         db.query(InterviewSession)
@@ -137,7 +136,10 @@ def _get_interview_for_user(
     owner_id = _assessment_session_owner_id(db, interview.session_id)
     if owner_id == current_user.id:
         return interview
-    if allow_staff and current_user.role in _STAFF_ROLES:
+    if allow_staff and current_user.role == "faculty" and owner_id is not None:
+        require_faculty_student_access(db, current_user, owner_id)
+        return interview
+    if allow_staff and current_user.role in ("admin", "tpo"):
         return interview
     raise HTTPException(status_code=404, detail="Interview not found")
 
@@ -574,7 +576,9 @@ async def get_pool(
         raise HTTPException(status_code=404, detail="Question pool not found")
 
     owner_id = _assessment_session_owner_id(db, pool.session_id)
-    if owner_id != current_user.id and current_user.role not in _STAFF_ROLES:
+    if owner_id != current_user.id and current_user.role == "faculty" and owner_id is not None:
+        require_faculty_student_access(db, current_user, owner_id)
+    elif owner_id != current_user.id and current_user.role not in ("admin", "tpo"):
         raise HTTPException(status_code=404, detail="Question pool not found")
 
     return QuestionPoolResponse(
@@ -1479,6 +1483,8 @@ async def submit_response(
                 int_round.status = "completed"
                 int_round.completed_at = datetime.now()
                 db.commit()
+                from app.services.faculty_practice_assignment_service import finalize_faculty_assigned_attempt
+                finalize_faculty_assigned_attempt(db, current_user.id, int_round.id)
             _try_advance_mock_drive(db, asmnt_session.id)
 
     return SubmitResponseResponse(
@@ -1646,6 +1652,8 @@ async def complete_interview(
 
     # Idempotent: if already completed, return existing computed values
     if interview.status == "COMPLETED":
+        from app.services.faculty_practice_assignment_service import finalize_faculty_assigned_session
+        finalize_faculty_assigned_session(db, current_user.id, interview.session_id)
         turns = db.query(InterviewTurn).filter(
             InterviewTurn.interview_id == interview_id,
             InterviewTurn.is_followup == False
@@ -1698,6 +1706,8 @@ async def complete_interview(
             interview_round.status = "completed"
             interview_round.completed_at = datetime.now()
             db.commit()
+            from app.services.faculty_practice_assignment_service import finalize_faculty_assigned_attempt
+            finalize_faculty_assigned_attempt(db, current_user.id, interview_round.id)
 
         # If this session is part of a Mock Drive, advance/finalize it
         mock_drive_result = _try_advance_mock_drive(db, assessment_session.id)

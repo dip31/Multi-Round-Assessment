@@ -56,7 +56,9 @@ _WEIGHT_SUM_TOLERANCE = 0.1
 
 # Coding statuses that are not candidate performance (infrastructure / non-final)
 # and therefore never countable evidence.
-_NON_COUNTABLE_CODING_STATUSES = frozenset({"internal_error", "running"})
+_NON_COUNTABLE_CODING_STATUSES = frozenset({
+    "internal_error", "running", "compilation_error",
+})
 
 
 def _clamp(value: float, low: float, high: float) -> float:
@@ -149,16 +151,23 @@ def _safe_snapshot(db: Session, session: AssessmentSession):
 
 
 def score_session_competencies(
-    db: Session, session: AssessmentSession
+    db: Session,
+    session: AssessmentSession,
+    *,
+    evidence_mappings: list[CompetencyEvidenceMapping] | None = None,
 ) -> dict:
-    """Compute the competency scoring view for one session (read-only)."""
+    """Compute the competency scoring view for one session (read-only).
+
+    Callers aggregating several sessions may pass their already-batched mapping
+    rows to avoid issuing one evidence query per session.
+    """
     snapshot, snapshot_error = _safe_snapshot(db, session)
     competencies = configured_competencies(snapshot)
 
     blueprint_id = snapshot.get("blueprint_id") if snapshot else None
     blueprint_version = snapshot.get("blueprint_version") if snapshot else None
 
-    mappings = (
+    mappings = evidence_mappings if evidence_mappings is not None else (
         db.query(CompetencyEvidenceMapping)
         .filter(CompetencyEvidenceMapping.session_id == session.id)
         .all()
@@ -173,6 +182,18 @@ def score_session_competencies(
         rows = by_competency.get(competency_id, [])
         countable = [_countable_score(row) for row in rows]
         scores = [score for score in countable if score is not None]
+        type_scores: dict[str, list[float]] = {"aptitude": [], "coding": []}
+        type_evidence: dict[str, int] = {"aptitude": 0, "coding": 0}
+        for row, score in zip(rows, countable):
+            if score is None:
+                continue
+            assessment_type = {
+                "aptitude_attempt": "aptitude",
+                "coding_submission": "coding",
+            }.get(row.evidence_type)
+            if assessment_type:
+                type_scores[assessment_type].append(score)
+                type_evidence[assessment_type] += 1
         if scores:
             normalized = round(sum(scores) / len(scores), 2)
             status = COMPETENCY_ASSESSED
@@ -191,6 +212,14 @@ def score_session_competencies(
             "evidence_count": evidence_count,
             "evidence_types": sorted({row.evidence_type for row in countable_rows}),
             "sources": sorted({row.source for row in countable_rows}),
+            "assessment_type_scores": {
+                assessment_type: round(sum(values) / len(values), 2)
+                for assessment_type, values in type_scores.items() if values
+            },
+            "assessment_type_evidence_counts": {
+                assessment_type: count
+                for assessment_type, count in type_evidence.items() if count
+            },
         })
 
     required = len(summaries)

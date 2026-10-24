@@ -657,6 +657,8 @@ def update_blueprint(
     bp = get_blueprint(db, company_name, target_role)
 
     bdata = dict(bp.blueprint_data or {})
+    original_content = dict(bdata)
+    original_content.pop("updated_at", None)
 
     if payload.rounds is not None:
         rounds_list = []
@@ -704,6 +706,19 @@ def update_blueprint(
 
     if payload.review_notes is not None:
         bp.review_notes = payload.review_notes
+
+    updated_content = dict(bdata)
+    updated_content.pop("updated_at", None)
+    if updated_content != original_content:
+        # Drives and assessment contexts pin snapshots by (blueprint_id,
+        # version). Reusing a version for changed content makes a historical
+        # snapshot impossible to distinguish from the current blueprint.
+        bp.version = (bp.version or 0) + 1
+        bdata["version"] = bp.version
+    else:
+        # Keep the JSON and relational version fields aligned, including for
+        # legacy records where the JSON value was absent or stale.
+        bdata["version"] = bp.version
 
     bdata["updated_at"] = datetime.now(timezone.utc).isoformat()
     bp.blueprint_data = bdata

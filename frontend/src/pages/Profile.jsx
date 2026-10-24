@@ -15,7 +15,7 @@ export default function Profile() {
 
     // Form states for Student Profile
     const [fullName, setFullName] = useState('');
-    const [department, setDepartment] = useState('Computer Science');
+    const [department, setDepartment] = useState('');
     const [cgpa, setCgpa] = useState('7.50');
     const [graduationYear, setGraduationYear] = useState('2026');
     const [backlogsCount, setBacklogsCount] = useState('0');
@@ -73,7 +73,7 @@ export default function Profile() {
             if (user.role === 'student' && user.student_profile) {
                 const sp = user.student_profile;
                 setFullName(sp.full_name || user.name || '');
-                setDepartment(sp.department || 'Computer Science');
+                setDepartment(sp.department || 'Department Not Specified');
                 setCgpa(String(sp.cgpa || '7.50'));
                 setGraduationYear(String(sp.graduation_year || '2026'));
                 setBacklogsCount(String(sp.backlogs_count || '0'));
@@ -507,6 +507,7 @@ export default function Profile() {
                                                     onChange={(e) => setDepartment(e.target.value)}
                                                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
                                                 >
+                                                    <option value="Department Not Specified">Department Not Specified</option>
                                                     <option value="Computer Science">Computer Science</option>
                                                     <option value="Information Technology">Information Technology</option>
                                                     <option value="Electronics & Communication">Electronics & Communication</option>
@@ -743,9 +744,13 @@ export default function Profile() {
                                             <input
                                                 type="text"
                                                 value={department}
-                                                onChange={(e) => setDepartment(e.target.value)}
-                                                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900"
+                                                readOnly
+                                                aria-describedby="faculty-department-scope-note"
+                                                className="w-full px-3.5 py-2.5 bg-slate-100 border border-slate-300 rounded-xl text-slate-700"
                                             />
+                                            <p id="faculty-department-scope-note" className="mt-1 text-[11px] text-slate-500">
+                                                Department access is managed by an administrator.
+                                            </p>
                                         </div>
                                         <div>
                                             <label className="block font-semibold text-slate-700 mb-1.5">Designation</label>
@@ -933,7 +938,7 @@ export default function Profile() {
                                     <div className="space-y-3 text-xs mt-4">
                                         <div className="flex justify-between py-2 border-b border-slate-100">
                                             <span className="text-slate-500">Department</span>
-                                            <span className="font-bold text-indigo-600">{department || 'Computer Science'}</span>
+                                            <span className="font-bold text-indigo-600">{department || (profileData?.role === 'student' ? 'Department Not Specified' : 'Computer Science')}</span>
                                         </div>
                                         <div className="flex justify-between py-2 border-b border-slate-100">
                                             <span className="text-slate-500">Designation</span>

@@ -19,6 +19,10 @@ from app.models.profile import StudentProfile
 from app.models.assessment_context import AssessmentContext
 from app.models.assessment import AssessmentSession, AssessmentRound
 from app.models.aptitude import AptitudeAttempt
+from app.models.aptitude import AptitudeRoundQuestion
+from app.models.coding import CodingSubmission
+from app.models.session_problem import SessionProblem
+from app.models.interview import InterviewSession, InterviewTurn
 from app.schemas.mock_drive import MockDriveCreate, MockDriveUpdate
 from app.services.assessment_context_service import (
     MODE_MOCK_DRIVE,
@@ -106,6 +110,41 @@ def _validate_and_attach_blueprint(
         )
 
     return bp
+
+
+def _configured_round_duration_minutes(
+    drive: MockDrive, round_key: Optional[str]
+) -> Optional[int]:
+    """Return a valid configured duration for a MockDrive round, if any."""
+    if not round_key:
+        return None
+    configurations = drive.round_configurations or {}
+    if not isinstance(configurations, dict):
+        return None
+    round_config = configurations.get(round_key)
+    if not isinstance(round_config, dict):
+        return None
+    duration = round_config.get("duration_minutes")
+    if (
+        isinstance(duration, bool)
+        or not isinstance(duration, (int, float))
+        or not 5 <= duration <= 300
+    ):
+        return None
+    return int(duration)
+
+
+def _blueprintless_timer_configuration_errors(drive: MockDrive) -> list[str]:
+    """Return publish-blocking timer errors for blueprint-less drives."""
+    if drive.blueprint_id is not None:
+        return []
+    errors = []
+    for round_key in _enabled_rounds_in_order(drive):
+        if _configured_round_duration_minutes(drive, round_key) is None:
+            errors.append(
+                f"Missing or invalid timer configuration for round {round_key!r}."
+            )
+    return errors
 
 
 def _round_configurations_from_snapshot(
@@ -371,6 +410,8 @@ def publish_mock_drive(db: Session, mock_drive_id: int) -> MockDrive:
     unknown = set((drive.selected_rounds or {}).keys()) - set(VALID_ROUNDS)
     if unknown:
         errors.append(f"Unknown round(s) in selected_rounds: {unknown}")
+    if drive.blueprint_id is None:
+        errors.extend(_blueprintless_timer_configuration_errors(drive))
 
     # LLM-provenance guard: any enabled round the seeded bank cannot satisfy
     # (interview rounds always; aptitude/coding rounds with role-specific topics)
@@ -1585,12 +1626,7 @@ def get_mock_drive_result(
 
     Returns None if no context/session exists for this student+drive.
     """
-    from app.modules.aptitude.services.aptitude_service import (
-        get_latest_completed_aptitude_result,
-    )
-    from app.modules.coding.routers.coding_router import get_results as coding_get_results
-    from app.modules.interview.routers.interview_router import get_report
-    from app.models.interview import InterviewSession
+    from app.models.aptitude import AptitudeQuestion
 
     drive = _get_or_404(db, mock_drive_id)
 
@@ -1610,6 +1646,11 @@ def get_mock_drive_result(
     if ctx is None:
         return None
 
+    # The Results page may be the first read after completion. Reuse the
+    # existing idempotent recovery for mappings explicitly marked pending or
+    # failed so a report read can expose eligible pinned-blueprint evidence.
+    _opportunistic_competency_mapping_retry(db, ctx)
+
     # Find the session (active or completed)
     session = (
         db.query(AssessmentSession)
@@ -1627,12 +1668,8 @@ def get_mock_drive_result(
     enabled = _enabled_rounds_in_order(drive)
 
     # Get completed/expired rounds
-    finished_rounds = _completed_rounds_for_context(db, ctx, drive)
-
-    # Build per-round summaries
+    # Build report summaries exclusively from rounds in this student's session.
     rounds_summary = []
-    overall_score_sum = 0.0
-    round_count = 0
 
     # Fetch per-round data for each enabled round
     for round_key in enabled:
@@ -1650,92 +1687,123 @@ def get_mock_drive_result(
             "details": None,
         }
 
-        if round_key in finished_rounds:
-            round_summary["status"] = "completed"
-
-            # Get the specific round
-            round_obj = (
-                db.query(AssessmentRound)
-                .join(AssessmentSession, AssessmentRound.session_id == AssessmentSession.id)
-                .filter(
-                    AssessmentSession.context_id == ctx.id,
-                    AssessmentRound.round_type == round_type,
-                    AssessmentRound.status.in_(("completed", "expired")),
-                )
-                .order_by(AssessmentRound.id.desc())
-                .first()
-            )
-
-            if round_obj:
-                round_summary["completed_at"] = round_obj.completed_at
-
-                if round_key in ("technical_interview", "hr_interview"):
-                    # Interview round
-                    interview = (
-                        db.query(InterviewSession)
-                        .filter(
-                            InterviewSession.session_id == round_obj.session_id,
-                            InterviewSession.phase == ("HR" if round_key == "hr_interview" else "TECHNICAL"),
-                        )
-                        .first()
+        round_query = db.query(AssessmentRound).filter(
+            AssessmentRound.session_id == session.id,
+            AssessmentRound.round_type == round_type,
+        )
+        if round_key in ("technical_interview", "hr_interview"):
+            # Both interview variants share round_type="interview". The
+            # canonical practice_type is the persisted discriminator; selecting
+            # the newest row by round_type alone assigns the HR record to both.
+            round_obj = round_query.filter(
+                AssessmentRound.practice_type == round_key
+            ).order_by(AssessmentRound.id.desc()).first()
+            if round_obj is None and sum(
+                ROUND_TYPE_MAP.get(key) == "interview" for key in enabled
+            ) == 1:
+                # Older single-interview drives may predate canonical keys.
+                round_obj = round_query.filter(
+                    or_(
+                        AssessmentRound.practice_type.is_(None),
+                        AssessmentRound.practice_type == "interview",
                     )
-                    if interview:
-                        round_summary["completion_reason"] = interview.completion_reason
-                        # Interview score is computed from turns
-                        try:
-                            # Compute interview score directly from turns
-                            from app.modules.interview.routers.interview_router import _get_interview_for_user
-                            from app.models.interview import InterviewTurn
-                            turns = db.query(InterviewTurn).filter(
-                                InterviewTurn.interview_id == interview.id
-                            ).order_by(InterviewTurn.id).all()
-                            main_turns = [t for t in turns if not t.is_followup]
-                            if main_turns:
-                                final_scores = [t.final_score for t in turns if not t.is_followup and t.final_score is not None]
-                                if final_scores:
-                                    round_summary["score"] = round(sum(final_scores) / len(final_scores), 2)
-                                else:
-                                    round_summary["score"] = 0.0
-                            else:
-                                round_summary["score"] = 0.0
-                            round_summary["max_score"] = 100.0
-                        except:
-                            pass
-
-                elif round_key == "aptitude":
-                    # Aptitude round
-                    result = get_latest_completed_aptitude_result(db=db, user_id=student_id)
-                    if result:
-                        round_summary["score"] = result.get("score")
-                        round_summary["max_score"] = 100.0
-                        round_summary["details"] = result
-
-                elif round_key == "coding":
-                    # Coding round
-                    try:
-                        # Get the session for this context
-                        session_obj = (
-                            db.query(AssessmentSession)
-                            .filter(AssessmentSession.context_id == ctx.id)
-                            .order_by(AssessmentSession.id.desc())
-                            .first()
+                ).order_by(AssessmentRound.id.desc()).first()
+        else:
+            round_obj = round_query.order_by(AssessmentRound.id.desc()).first()
+        if round_obj:
+            round_summary["status"] = round_obj.status
+            round_summary["completed_at"] = round_obj.completed_at
+            finished = round_obj.status in ("completed", "expired")
+            if round_key == "aptitude":
+                assignments = db.query(AptitudeRoundQuestion).filter(
+                    AptitudeRoundQuestion.round_id == round_obj.id
+                ).order_by(AptitudeRoundQuestion.question_order).all()
+                attempts = db.query(AptitudeAttempt).filter(
+                    AptitudeAttempt.round_id == round_obj.id
+                ).order_by(AptitudeAttempt.attempt_number, AptitudeAttempt.id).all()
+                question_ids = [row.question_id for row in assignments] or list(dict.fromkeys(a.question_id for a in attempts))
+                # Attempts can recover question details for legacy rounds, but
+                # they cannot prove the full assigned question set or omissions.
+                question_set_complete = bool(assignments)
+                # Attempts are ordered ascending by attempt number and id, so
+                # the final row per question is the latest persisted response.
+                latest_attempt = {
+                    qid: attempt for attempt in attempts if (qid := attempt.question_id) in question_ids
+                }
+                questions = {q.id: q for q in db.query(AptitudeQuestion).filter(AptitudeQuestion.id.in_(question_ids)).all()} if question_ids else {}
+                graded = [a for a in latest_attempt.values() if a.is_correct is not None]
+                round_summary["score"] = round_obj.score if finished and graded else None
+                round_summary["max_score"] = 100.0 if round_summary["score"] is not None else None
+                round_summary["evaluation_status"] = "evaluated" if graded else ("pending" if finished and attempts else "unavailable")
+                round_summary["details"] = {"questions": [
+                    {"question_id": qid, "text": questions[qid].question_text if qid in questions else None,
+                     "topic": questions[qid].topic.name if qid in questions and questions[qid].topic else None,
+                     "difficulty": questions[qid].difficulty if qid in questions else None,
+                     "selected_option": latest_attempt[qid].selected_option if qid in latest_attempt else None,
+                     "is_correct": latest_attempt[qid].is_correct if qid in latest_attempt else None,
+                     "response_time": latest_attempt[qid].response_time if qid in latest_attempt else None,
+                     "response_status": "unanswered" if qid not in latest_attempt else "ungraded" if latest_attempt[qid].is_correct is None else "graded"}
+                    for qid in question_ids
+                ], "total_questions": len(assignments) if question_set_complete else None,
+                    "question_set_complete": question_set_complete,
+                    "graded_count": len(graded), "correct_count": sum(a.is_correct is True for a in graded),
+                    "ungraded_count": sum(a.is_correct is None for a in latest_attempt.values()),
+                    "unanswered_count": sum(qid not in latest_attempt for qid in question_ids) if question_set_complete else None,
+                    "accuracy_denominator": "graded_responses"}
+            elif round_key == "coding":
+                assigned = db.query(SessionProblem).filter(SessionProblem.round_id == round_obj.id).order_by(SessionProblem.problem_order).all()
+                problems = []
+                for item in assigned:
+                    submissions = db.query(CodingSubmission).filter(
+                        CodingSubmission.round_id == round_obj.id, CodingSubmission.problem_id == item.problem_id
+                    ).order_by(CodingSubmission.id).all()
+                    usable = [s for s in submissions if s.score is not None and s.status not in (None, "running", "internal_error")]
+                    # A persisted compilation_error with a score is a terminal
+                    # candidate outcome (normally zero), unlike infrastructure
+                    # failures, which the submission service does not persist.
+                    best = max(usable, key=lambda s: (s.score, s.id)) if usable else None
+                    latest_submission = submissions[-1] if submissions else None
+                    problem_evaluation_status = (
+                        "evaluated" if best is not None or any(
+                            s.status not in (None, "running", "internal_error")
+                            for s in submissions
                         )
-                        if session_obj:
-                            # For now, compute from round score
-                            if round_obj.score is not None:
-                                round_summary["score"] = round_obj.score
-                                round_summary["max_score"] = 100.0
-                    except:
-                        pass
-
-        if round_summary["score"] is not None:
-            overall_score_sum += round_summary["score"]
-            round_count += 1
-
+                        else "pending" if any(s.status == "running" for s in submissions)
+                        else "unavailable"
+                    )
+                    problems.append({"problem_id": item.problem_id, "title": item.problem.title if item.problem else None,
+                        "difficulty": item.problem.difficulty if item.problem else None, "tags": item.problem.tags_list if item.problem else [],
+                        "attempted": bool(submissions), "status": best.status if best else (latest_submission.status if latest_submission else "not_attempted"),
+                        "evaluation_status": problem_evaluation_status,
+                        "score": best.score if best else None, "score_scale": "0_to_1", "execution_time": best.execution_time if best else None,
+                        "memory_used": best.memory_used if best else None})
+                has_evaluation = any(p["evaluation_status"] == "evaluated" for p in problems)
+                round_summary["score"] = round_obj.score if finished and has_evaluation else None
+                round_summary["max_score"] = 1.0 if round_summary["score"] is not None else None
+                round_summary["evaluation_status"] = "evaluated" if has_evaluation else ("pending" if finished and any(p["attempted"] for p in problems) else "unavailable")
+                round_summary["details"] = {"problems": problems, "score_scale": "0_to_1"}
+            else:
+                phase = "HR" if round_key == "hr_interview" else "TECHNICAL"
+                interview = db.query(InterviewSession).filter(
+                    InterviewSession.session_id == session.id, InterviewSession.phase == phase
+                ).order_by(InterviewSession.id.desc()).first()
+                if interview:
+                    turns = db.query(InterviewTurn).filter(InterviewTurn.interview_id == interview.id).order_by(InterviewTurn.id).all()
+                    evaluated_turns = [t for t in turns if t.final_score is not None]
+                    main_scored = [t.final_score for t in turns if not t.is_followup and t.final_score is not None]
+                    round_summary["score"] = round(sum(main_scored) / len(main_scored), 4) if main_scored else None
+                    round_summary["max_score"] = 1.0 if main_scored else None
+                    round_summary["completion_reason"] = interview.completion_reason
+                    round_summary["evaluation_status"] = "evaluated" if evaluated_turns else ("pending" if finished and turns else "unavailable")
+                    round_summary["details"] = {"phase": phase, "turns": [
+                        {"turn_number": t.turn_number, "question": t.question_text, "response": t.candidate_response,
+                         "is_followup": t.is_followup, "parent_turn_id": t.parent_turn_id,
+                         "score": t.final_score, "content_score": t.content_score, "response_time_sec": t.response_time_sec}
+                        for t in turns
+                    ], "score_scale": "0_to_1"}
+                else:
+                    round_summary["evaluation_status"] = "unavailable"
         rounds_summary.append(round_summary)
-
-    # Calculate overall score (average of round scores)
-    overall_score = round(overall_score_sum / round_count, 2) if round_count > 0 else None
 
     # Determine overall completion status
     ctx_status = "not_started"
@@ -1755,12 +1823,44 @@ def get_mock_drive_result(
         "session_id": session.id,
         "enabled_rounds": enabled,
         "rounds": rounds_summary,
-        "overall_score": round(overall_score_sum / round_count, 2) if round_count > 0 else None,
-        "total_score": round(overall_score_sum, 2) if round_count > 0 else None,
+        # Round scales differ; no cross-round aggregate is defined.
+        "overall_score": None,
+        "total_score": None,
         "completed_at": ctx.completed_at,
         "completion_reason": ctx.competency_mapping_status if ctx.status == "completed" else None,
         "competency_scoring": score_session_competencies(db, session),
     }
+
+
+def get_student_mock_drive_history(db: Session, student_id: int) -> list[dict]:
+    """Return drives this student actually started, newest attempt per drive."""
+    rows = (
+        db.query(AssessmentContext, MockDrive, AssessmentSession)
+        .join(MockDrive, AssessmentContext.mock_drive_id == MockDrive.id)
+        .join(AssessmentSession, AssessmentSession.context_id == AssessmentContext.id)
+        .filter(
+            AssessmentContext.mode == MODE_MOCK_DRIVE,
+            AssessmentContext.student_id == student_id,
+            AssessmentContext.status.in_(("active", "completed")),
+        )
+        .order_by(AssessmentContext.id.desc(), AssessmentSession.id.desc())
+        .all()
+    )
+    history = []
+    seen = set()
+    for context, drive, session in rows:
+        if drive.id in seen:
+            continue
+        seen.add(drive.id)
+        status_value = "completed" if context.status == "completed" or session.status == "completed" else "in_progress"
+        history.append({
+            "mock_drive_id": drive.id,
+            "company_name": drive.company_name,
+            "target_role": drive.target_role,
+            "status": status_value,
+            "completed_at": context.completed_at or session.completed_at,
+        })
+    return history
 
 
 # ── G4: Derived candidate roster ──────────────────────────────────────
@@ -1802,6 +1902,51 @@ def _roster_rounds_for_session(
             })
         else:
             finished = row.status in ("completed", "expired")
+            round_type = (row.round_type or "").lower()
+            round_score = None
+            score_max = None
+            if finished and round_type in {"aptitude", "mcq", "combined", "technical"}:
+                attempts = db.query(AptitudeAttempt.is_correct).filter(
+                    AptitudeAttempt.round_id == row.id,
+                    AptitudeAttempt.is_correct.is_not(None),
+                ).all()
+                if attempts:
+                    # The aptitude workflow persists the canonical percentage
+                    # after evaluating the round. Attempts prove that the
+                    # default database zero is not being mistaken for a result.
+                    if row.score is not None:
+                        round_score = row.score
+                        score_max = 100.0
+            elif finished and round_type == "coding":
+                submissions = db.query(CodingSubmission.score).filter(
+                    CodingSubmission.round_id == row.id,
+                    CodingSubmission.score.is_not(None),
+                    CodingSubmission.status.is_not(None),
+                    CodingSubmission.status.notin_(("internal_error", "running")),
+                ).all()
+                if submissions:
+                    # finalize_coding_round scores the best submission for
+                    # each assigned problem, then persists the 0..1 result.
+                    # Re-averaging submissions here would use different rules.
+                    if row.score is not None:
+                        round_score = row.score
+                        score_max = 1.0
+            elif finished and round_type in {
+                "interview", "technical_interview", "hr_interview", "communication_interview",
+            }:
+                phase = "HR" if round_type == "hr_interview" else "TECHNICAL"
+                interviews = db.query(InterviewSession.id).filter(
+                    InterviewSession.session_id == session.id,
+                    InterviewSession.phase == phase,
+                ).subquery()
+                scores = db.query(InterviewTurn.final_score).filter(
+                    InterviewTurn.interview_id.in_(db.query(interviews.c.id)),
+                    InterviewTurn.is_followup.is_(False),
+                    InterviewTurn.final_score.is_not(None),
+                ).all()
+                if scores:
+                    round_score = round(sum(score for (score,) in scores) / len(scores), 4)
+                    score_max = 1.0
             result.append({
                 "round": key,
                 "round_type": row.round_type,
@@ -1810,8 +1955,8 @@ def _roster_rounds_for_session(
                     row.status == "expired"
                     or (row.expires_at and row.expires_at <= datetime.utcnow())
                 ),
-                "score": row.score if finished else None,
-                "max_score": 100.0 if finished else None,
+                "score": round_score,
+                "max_score": score_max if round_score is not None else None,
                 "completed_at": row.completed_at,
             })
     return result
@@ -1838,6 +1983,13 @@ def get_mock_drive_roster(db: Session, mock_drive_id: int) -> dict:
         .order_by(AssessmentContext.id)
         .all()
     )
+    # A student can have more than one context for a drive after legacy
+    # retries or re-entry. The roster represents participants, so show the
+    # latest context once per student.
+    latest_context_by_student: dict[int, AssessmentContext] = {}
+    for context in contexts:
+        latest_context_by_student[context.student_id] = context
+    contexts = list(latest_context_by_student.values())
 
     entries: list[dict] = []
     in_progress_count = 0
@@ -1870,9 +2022,7 @@ def get_mock_drive_roster(db: Session, mock_drive_id: int) -> dict:
             "session_status": session.status if session else None,
             "started_at": session.started_at if session else None,
             "completed_at": ctx.completed_at,
-            "overall_score": (
-                session.total_score if session and scoring.get("overall_score_status") != "unavailable" else None
-            ),
+            "overall_score": scoring.get("overall_score") if scoring else None,
             "competency_mapping_status": ctx.competency_mapping_status,
             "overall_score_status": scoring.get("overall_score_status") if scoring else None,
             "evidence_coverage": scoring.get("evidence_coverage") if scoring else None,
@@ -1880,6 +2030,7 @@ def get_mock_drive_roster(db: Session, mock_drive_id: int) -> dict:
             "required_competency_count": scoring.get("required_competency_count") if scoring else None,
             "missing_competencies": scoring.get("missing_competencies") if scoring else [],
             "scoring_error": scoring.get("scoring_error") if scoring else None,
+            "competencies": scoring.get("competencies", []) if scoring else [],
             "rounds": (
                 _roster_rounds_for_session(db, session, enabled) if session else []
             ),

@@ -9,6 +9,7 @@ class CompletionRates(BaseModel):
 
 class CohortStatsResponse(BaseModel):
     total_candidates: int
+    completed_sessions: int
     avg_aptitude_score: float
     avg_coding_score: float
     avg_interview_score: float

@@ -16,7 +16,14 @@ from app.models.user import User
 from app.models.profile import StudentProfile, FacultyProfile, TPOProfile
 
 
-def create_user(db: Session, name: str, email: str, password: str, role: str = "student") -> User:
+def create_user(
+    db: Session,
+    name: str,
+    email: str,
+    password: str,
+    role: str = "student",
+    department: str | None = None,
+) -> User:
     """Register a new user with a hashed password and initialize their role profile.
 
     Args:
@@ -40,7 +47,11 @@ def create_user(db: Session, name: str, email: str, password: str, role: str = "
     db.refresh(user)
 
     if role == "student":
-        student_prof = StudentProfile(user_id=user.id)
+        normalized_department = department.strip() if isinstance(department, str) else ""
+        student_prof = StudentProfile(
+            user_id=user.id,
+            department=normalized_department or "Department Not Specified",
+        )
         db.add(student_prof)
     elif role == "faculty":
         faculty_prof = FacultyProfile(user_id=user.id)

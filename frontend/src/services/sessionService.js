@@ -32,10 +32,14 @@ export const startFreshSession = async () => {
     return response.data;
 };
 
-export const startPractice = async (roundType, practiceType = null) => {
+export const startPractice = async (roundType, practiceType = null, assignment = null) => {
     const payload = { round_type: roundType };
     if (practiceType) {
         payload.practice_type = practiceType;
+    }
+    if (assignment) {
+        payload.assignment_id = assignment.assignment_id;
+        payload.assessment_round_id = assignment.assessment_round_id;
     }
     const response = await api.post('/practice/start', payload);
     return response.data;

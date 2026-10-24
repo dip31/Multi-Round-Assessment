@@ -111,6 +111,7 @@ export default function TPOAnalyticsPage() {
     const funnel = data?.funnel?.stages || [];
     const compByDept = data?.competency_by_department || { departments: [], available: false };
     const insights = data?.competency_insights || [];
+    const competencyCoverage = data?.competency_coverage;
     const drives = data?.drives || [];
     const filterOptions = data?.filters || {};
 
@@ -502,7 +503,6 @@ export default function TPOAnalyticsPage() {
                                         );
                                     })}
                                     <p className="text-[11px] text-slate-400 pt-1">
-                                        Passing/hiring is not shown: EDI5 does not persist an authoritative pass outcome.
                                     </p>
                                 </div>
                             )}
@@ -545,6 +545,42 @@ export default function TPOAnalyticsPage() {
                                         ))}
                                     </BarChart>
                                 </ResponsiveContainer>
+                            )}
+                        </section>
+
+                        {/* Competency evidence coverage and supported reasons */}
+                        <section className="glass-card rounded-2xl p-5 mb-6" data-testid="competency-coverage">
+                            <h2 className="text-sm font-bold text-slate-900">Competency Evidence Coverage</h2>
+                            <p className="mt-1 text-xs text-slate-500"></p>
+                            {!competencyCoverage ? (
+                                <p className="py-4 text-sm text-slate-500">Coverage details are unavailable from this response.</p>
+                            ) : competencyCoverage.eligible_contexts === 0 ? (
+                                <p className="mt-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-600" data-testid="competency-coverage-empty">
+                                    No eligible assessment contexts match the current filters.
+                                </p>
+                            ) : (
+                                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+                                    {[
+                                        ['Eligible contexts', competencyCoverage.eligible_contexts],
+                                        ['No session found', competencyCoverage.contexts_without_session],
+                                        ['Missing pinned snapshot', competencyCoverage.contexts_without_snapshot],
+                                        ['No competency configuration', competencyCoverage.contexts_without_competencies],
+                                        ['Mapping pending', competencyCoverage.mapping_statuses?.pending],
+                                        ['Mapping failed', competencyCoverage.mapping_statuses?.failed],
+                                        ['No countable mapped evidence', competencyCoverage.contexts_without_countable_evidence],
+                                        ['Final scores available', competencyCoverage.final_scored_contexts],
+                                        ['Provisional scores available', competencyCoverage.provisional_scored_contexts],
+                                        ['Scoring errors', competencyCoverage.scoring_errors],
+                                    ].map(([label, value]) => (
+                                        <div key={label} className="rounded-xl border border-slate-200 bg-white/70 p-3">
+                                            <div className="text-[11px] font-semibold text-slate-500">{label}</div>
+                                            <div className="mt-1 text-xl font-bold text-slate-900">{value ?? 'Unavailable'}</div>
+                                        </div>
+                                    ))}
+                                    <p className="col-span-full text-[11px] leading-relaxed text-slate-500">
+                                       
+                                    </p>
+                                </div>
                             )}
                         </section>
 
@@ -693,7 +729,6 @@ export default function TPOAnalyticsPage() {
                                 </div>
                             </div>
                             <p className="text-[11px] text-slate-400">
-                                Exports use the current filters. Generated at {data.generated_at}. CSV is UTF-8 with formula-injection guards.
                             </p>
                         </section>
                     </>

@@ -622,6 +622,9 @@ def finish_aptitude_round(
     )
     active_round = get_user_active_round(db, current_user.id, round_type="aptitude")
     if active_round is None:
+        if active_session is not None:
+            from app.services.faculty_practice_assignment_service import finalize_faculty_assigned_session
+            finalize_faculty_assigned_session(db, current_user.id, active_session.id)
         return {"status": "no_active_round", "is_mock_drive": is_mock_drive}
 
     # ── Calculate and persist aptitude score BEFORE completing the round ──
@@ -683,6 +686,9 @@ def finish_aptitude_round(
     if sess:
         sess.total_score = float(avg_score or 0.0)
         db.commit()
+
+    from app.services.faculty_practice_assignment_service import finalize_faculty_assigned_attempt
+    finalize_faculty_assigned_attempt(db, current_user.id, active_round.id)
 
     # Advance Mock Drive if applicable (no-op for standalone sessions)
     mock_drive_advance = try_advance_mock_drive(db, active_round.session_id)

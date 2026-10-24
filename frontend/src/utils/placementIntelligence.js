@@ -1,66 +1,96 @@
-const DAY_MS = 24 * 60 * 60 * 1000;
-const COMPARISON_DAYS = 30;
-
-function formatCount(count, singular) {
-    return `${count} ${singular}${count === 1 ? '' : 's'}`;
-}
-
-function driveCreationTrend(drives, now) {
-    const currentEnd = now.getTime();
-    const currentStart = currentEnd - COMPARISON_DAYS * DAY_MS;
-    const previousStart = currentStart - COMPARISON_DAYS * DAY_MS;
-    const timestamps = drives
-        .map((drive) => Date.parse(drive?.created_at))
-        .filter(Number.isFinite);
-
-    if (timestamps.length === 0) return null;
-
-    const recent = timestamps.filter((time) => time > currentStart && time <= currentEnd).length;
-    const previous = timestamps.filter((time) => time > previousStart && time <= currentStart).length;
-    if (recent === previous) return null;
-
-    const direction = recent > previous ? 'increased' : 'decreased';
-    return {
-        id: 'drive-creation-trend',
-        category: 'Drive activity',
-        priority: 2,
-        title: `Mock Drive creation ${direction}`,
-        result: `${formatCount(recent, 'Mock Drive')} · ${formatCount(previous, 'Mock Drive')}`,
-        summary: `Creation counts ${direction} from ${previous} to ${recent} across two equal 30-day periods. This describes drive setup activity, not placement outcomes.`,
-        evidence: `${timestamps.length} recorded Mock Drives with valid creation dates · Recent 30 days compared with the prior 30 days`,
-        href: '/tpo/mock-drives',
-        action: 'Review Mock Drives',
-    };
-}
-
 function unresolvedDeadlineRisk(rosters) {
-    let roundCount = 0;
-    const candidates = new Set();
-    const drives = new Set();
+    let hasOverdueStep = false;
 
-    Object.entries(rosters || {}).forEach(([driveId, roster]) => {
+    Object.values(rosters || {}).forEach((roster) => {
         (roster?.candidates || []).forEach((candidate) => {
             if (candidate?.context_status === 'completed') return;
-            (candidate?.rounds || []).forEach((round) => {
-                if (round?.status === 'completed' || !(round?.status === 'expired' || round?.deadline_passed === true)) return;
-                roundCount += 1;
-                drives.add(driveId);
-                if (candidate.candidate_id != null) candidates.add(candidate.candidate_id);
-            });
+            if ((candidate?.rounds || []).some((round) => (
+                round?.status !== 'completed'
+                && (round?.status === 'expired' || round?.deadline_passed === true)
+            ))) {
+                hasOverdueStep = true;
+            }
         });
     });
 
-    if (!roundCount) return null;
+    if (!hasOverdueStep) return null;
     return {
         id: 'unresolved-deadline-steps',
-        category: 'Current operational risk',
-        priority: 1,
-        title: 'Incomplete assessment steps are past their deadline',
-        result: `${formatCount(roundCount, 'step')} · ${formatCount(candidates.size, 'candidate')} · ${formatCount(drives.size, 'drive')}`,
-        summary: 'These assessment steps have passed their deadline and remain unfinished. Review the affected rosters and decide whether candidates need follow-up or a rescheduled round.',
-        evidence: `Across ${Object.keys(rosters).length} available non-draft drive rosters (the dashboard checks up to six)`,
+        title: 'Assessment completion needs attention',
+        meaning: 'Some candidates have unfinished assessment rounds that have passed their deadlines.',
+        action: 'Open the affected Mock Drives, review candidate progress, and decide whether to send a reminder or reschedule a round.',
         href: '/tpo/mock-drives',
-        action: 'Review affected drives',
+        linkText: 'Review affected drives',
+        priority: 1,
+    };
+}
+
+function pendingInterviewEvaluation(rosters) {
+    const hasPendingEvaluation = Object.values(rosters || {}).some((roster) => (
+        (roster?.candidates || []).some((candidate) => (
+            (candidate?.rounds || []).some((round) => {
+                const type = String(round?.round_type || '').toLowerCase();
+                return round?.status === 'completed'
+                    && ['interview', 'technical_interview', 'hr_interview', 'communication_interview'].includes(type)
+                    && round?.score == null;
+            })
+        ))
+    ));
+    if (!hasPendingEvaluation) return null;
+    return {
+        id: 'pending-interview-evaluation',
+        title: 'Assessment evaluations are pending',
+        meaning: 'Some completed interview rounds do not yet have an evaluated result.',
+        action: 'Coordinate with the interview evaluators to review and submit the outstanding assessments.',
+        href: '/tpo/mock-drives',
+        linkText: 'Review Mock Drives',
+        priority: 2,
+    };
+}
+
+function publishedDrivesWithoutAssignments(drives, rosters) {
+    const hasUnassignedPublishedDrive = drives.some((drive) => (
+        drive?.status === 'published'
+        && Array.isArray(rosters?.[drive.id]?.candidates)
+        && rosters[drive.id].candidates.length === 0
+    ));
+    if (!hasUnassignedPublishedDrive) return null;
+    return {
+        id: 'published-drive-without-assignments',
+        title: 'Placement drive readiness needs review',
+        meaning: 'A published Mock Drive has no candidates assigned in its roster.',
+        action: 'Review the drive and assign the intended candidates before its assessments begin.',
+        href: '/tpo/mock-drives',
+        linkText: 'Review drive assignments',
+        priority: 2,
+    };
+}
+
+function targetedPreparation(readiness) {
+    const gaps = readiness?.skill_gaps?.competencies;
+    const average = readiness?.kpis?.average_readiness?.value;
+    const hasBackendFinding = readiness?.insights?.some((insight) => (
+        insight?.id === 'competency-patterns'
+        && insight?.action?.route === '/tpo/analytics'
+    ));
+    if (!Array.isArray(gaps) || !Number.isFinite(average) || !hasBackendFinding) return null;
+
+    const repeatedlyAssessed = gaps.filter((gap) => gap.unique_candidates >= 2);
+    if (repeatedlyAssessed.length < 2) return null;
+    const developmentAreas = repeatedlyAssessed
+        .filter((gap) => Number.isFinite(gap.avg_score) && gap.avg_score < average)
+        .map((gap) => gap.competency_name)
+        .filter(Boolean);
+    if (!developmentAreas.length) return null;
+
+    return {
+        id: 'targeted-preparation',
+        title: 'Candidates may need targeted preparation',
+        meaning: `Evaluated results show development areas in ${developmentAreas.join(', ')} compared with the overall scored readiness average.`,
+        action: 'Review the competency evidence and arrange focused practice or training in these areas.',
+        href: '/tpo/analytics',
+        linkText: 'Review competency evidence',
+        priority: 3,
     };
 }
 
@@ -69,16 +99,21 @@ export function buildPlacementIntelligence({
     rosters = {},
     drivesAvailable = false,
     rostersAvailable = false,
-    now = new Date(),
+    readiness = null,
+    readinessAvailable = false,
 } = {}) {
     const findings = [];
-    if (drivesAvailable) {
-        const trend = driveCreationTrend(drives, now);
-        if (trend) findings.push(trend);
-    }
     if (drivesAvailable && rostersAvailable) {
         const risk = unresolvedDeadlineRisk(rosters);
         if (risk) findings.push(risk);
+        const evaluation = pendingInterviewEvaluation(rosters);
+        if (evaluation) findings.push(evaluation);
+        const driveSetup = publishedDrivesWithoutAssignments(drives, rosters);
+        if (driveSetup) findings.push(driveSetup);
+    }
+    if (readinessAvailable) {
+        const preparation = targetedPreparation(readiness);
+        if (preparation) findings.push(preparation);
     }
     return findings.sort((a, b) => a.priority - b.priority);
 }
@@ -86,7 +121,8 @@ export function buildPlacementIntelligence({
 export function placementIntelligenceUnavailable(availability) {
     if (!availability) return [];
     const messages = [];
-    if (!availability.drives) messages.push('Mock Drive activity could not be loaded.');
-    else if (!availability.rosters) messages.push('Current drive-roster checks could not be completed.');
+    if (!availability.drives) messages.push('Mock Drive information could not be loaded.');
+    else if (!availability.rosters) messages.push('Assessment progress could not be loaded for the available Mock Drives.');
+    if (!availability.readiness) messages.push('Evaluated competency information could not be loaded.');
     return messages;
 }

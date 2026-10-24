@@ -117,6 +117,22 @@ export function visibleDrives(drives, expanded, limit = DRIVE_ROW_LIMIT) {
     };
 }
 
+// Sort the complete filtered drive list before applying the visible-row limit.
+// Trim only for comparison; the original company and role values remain intact.
+export function sortDriveRowsAlphabetically(drives) {
+    if (!Array.isArray(drives)) return [];
+    const compareText = (left, right) => String(left ?? '').trim().localeCompare(
+        String(right ?? '').trim(),
+        undefined,
+        { sensitivity: 'base' },
+    );
+    return drives.slice().sort((a, b) => (
+        compareText(a?.company_name, b?.company_name)
+        || compareText(a?.target_role, b?.target_role)
+        || ((toNumber(a?.drive_id) ?? 0) - (toNumber(b?.drive_id) ?? 0))
+    ));
+}
+
 // ── Drive activity (operational counts — no readiness values) ───────────
 //
 // Everything below renders the `drive_activity` block of the readiness

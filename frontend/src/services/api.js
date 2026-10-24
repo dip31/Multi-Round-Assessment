@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { isExpiredBearerSession } from './authFailure';
 
 // Use a single base URL strategy across the app:
 // - If `VITE_API_BASE_URL` is set, use it (e.g. https://api.example.com)
@@ -30,7 +31,7 @@ api.interceptors.request.use(
 api.interceptors.response.use(
     (response) => response,
     (error) => {
-        if (error.response?.status === 401) {
+        if (isExpiredBearerSession(error)) {
             const requestUrl = error.config?.url || '';
             const skipAuthRedirect = error.config?.skipAuthRedirect === true;
 
@@ -40,6 +41,7 @@ api.interceptors.response.use(
             // Allow auth flows to handle their own error states without global logout.
             if (!skipAuthRedirect && !isProctoringRequest && !requestUrl.includes('/auth/login') && !requestUrl.includes('/auth/me') && !requestUrl.includes('/auth/register')) {
                 localStorage.removeItem('access_token');
+                sessionStorage.setItem('auth_session_expired', 'true');
                 if (window.location.pathname.startsWith('/admin')) {
                     window.location.href = '/admin/login';
                 } else {

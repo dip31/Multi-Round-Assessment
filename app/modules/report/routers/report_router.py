@@ -1,4 +1,5 @@
 from typing import List, Optional
+import logging
 from difflib import SequenceMatcher
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
@@ -27,12 +28,15 @@ from app.modules.report.schemas.report_schema import (
 )
 
 router = APIRouter(prefix="/report/admin", tags=["Admin & Staff Reporting"])
+logger = logging.getLogger(__name__)
 
 def check_admin(current_user: User):
-    if current_user.role not in ("admin", "faculty", "tpo"):
+    # These endpoints return institution-wide data. Faculty must use a
+    # department-scoped reporting capability rather than this global surface.
+    if current_user.role not in ("admin", "tpo"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Requires faculty, TPO, or admin privileges"
+            detail="Institution-wide reports require TPO or admin privileges"
         )
 
 @router.get("/cohort-stats", response_model=CohortStatsResponse)
@@ -48,6 +52,7 @@ def get_cohort_stats(
     if total_candidates == 0:
         return CohortStatsResponse(
             total_candidates=0,
+            completed_sessions=0,
             avg_aptitude_score=0,
             avg_coding_score=0,
             avg_interview_score=0,
@@ -61,23 +66,47 @@ def get_cohort_stats(
     avg_aptitude = db.query(func.avg(AssessmentRound.score)).filter(AssessmentRound.round_type == "aptitude", AssessmentRound.status == "completed").scalar() or 0
     avg_coding = db.query(func.avg(AssessmentRound.score)).filter(AssessmentRound.round_type == "coding", AssessmentRound.status == "completed").scalar() or 0
     avg_interview = db.query(func.avg(AssessmentRound.score)).filter(AssessmentRound.round_type == "interview", AssessmentRound.status == "completed").scalar() or 0
+    completed_sessions = db.query(AssessmentSession).filter(
+        AssessmentSession.status == "completed"
+    ).count()
     avg_overall = db.query(func.avg(AssessmentSession.total_score)).filter(AssessmentSession.status == "completed").scalar() or 0
 
     # 3. Completion Rates
     # aptitude_completed = db.query(AssessmentRound).filter(AssessmentRound.round_type == "aptitude", AssessmentRound.status == "completed").distinct(AssessmentRound.session_id).count()
     # (Simplified for performance)
-    aptitude_count = db.query(func.count(func.distinct(AssessmentRound.session_id))).filter(AssessmentRound.round_type == "aptitude", AssessmentRound.status == "completed").scalar() or 0
-    coding_count = db.query(func.count(func.distinct(AssessmentRound.session_id))).filter(AssessmentRound.round_type == "coding", AssessmentRound.status == "completed").scalar() or 0
-    interview_count = db.query(func.count(func.distinct(AssessmentRound.session_id))).filter(AssessmentRound.round_type == "interview", AssessmentRound.status == "completed").scalar() or 0
-
-    # All 3 completion: count sessions that have 3 completed rounds
-    all_three_count = db.query(AssessmentRound.session_id).filter(AssessmentRound.status == "completed").group_by(AssessmentRound.session_id).having(func.count(AssessmentRound.id) >= 3).count()
+    completed_round_rows = (
+        db.query(AssessmentSession.user_id, AssessmentSession.id, AssessmentRound.round_type)
+        .join(AssessmentRound, AssessmentRound.session_id == AssessmentSession.id)
+        .filter(AssessmentRound.status == "completed")
+        .all()
+    )
+    canonical_round = {
+        "aptitude": "aptitude", "mcq": "aptitude",
+        "coding": "coding",
+        "interview": "interview", "technical_interview": "interview",
+        "hr_interview": "interview", "communication_interview": "interview",
+    }
+    students_by_type = {"aptitude": set(), "coding": set(), "interview": set()}
+    types_by_session: dict[int, set[str]] = {}
+    student_by_session: dict[int, int] = {}
+    for user_id, session_id, round_type in completed_round_rows:
+        round_key = canonical_round.get((round_type or "").lower())
+        if round_key is None:
+            continue
+        students_by_type[round_key].add(user_id)
+        types_by_session.setdefault(session_id, set()).add(round_key)
+        student_by_session[session_id] = user_id
+    all_three_students = {
+        student_by_session[session_id]
+        for session_id, types in types_by_session.items()
+        if {"aptitude", "coding", "interview"}.issubset(types)
+    }
 
     completion_rates = CompletionRates(
-        aptitude=aptitude_count / total_candidates,
-        coding=coding_count / total_candidates,
-        interview=interview_count / total_candidates,
-        all_three=all_three_count / total_candidates
+        aptitude=len(students_by_type["aptitude"]) / total_candidates,
+        coding=len(students_by_type["coding"]) / total_candidates,
+        interview=len(students_by_type["interview"]) / total_candidates,
+        all_three=len(all_three_students) / total_candidates
     )
 
     # 4. Average Followup and Response Time (Interview Round focus)
@@ -99,6 +128,7 @@ def get_cohort_stats(
 
     return CohortStatsResponse(
         total_candidates=total_candidates,
+        completed_sessions=completed_sessions,
         avg_aptitude_score=round(avg_aptitude, 4),
         avg_coding_score=round(avg_coding, 4),
         avg_interview_score=round(avg_interview, 4),
@@ -729,6 +759,20 @@ def get_analytics_overview(
     dept_comp = defaultdict(lambda: defaultdict(lambda: {"name": None, "weight": None, "scores": [], "evidence": 0, "assessed": 0, "total": 0}))
     competency_index = {}  # cid -> {name, scores[], evidence, assessed, total, departments}
     enabled_round_keys = set()
+    competency_coverage = {
+        "eligible_contexts": 0,
+        "contexts_without_session": 0,
+        "contexts_without_snapshot": 0,
+        "contexts_without_competencies": 0,
+        "contexts_without_countable_evidence": 0,
+        "final_scored_contexts": 0,
+        "provisional_scored_contexts": 0,
+        "scoring_errors": 0,
+        "mapping_statuses": {
+            "pending": 0, "failed": 0, "completed": 0,
+            "not_applicable": 0, "untracked": 0,
+        },
+    }
 
     for drive in drives:
         enabled = _enabled_rounds_in_order(drive)
@@ -744,6 +788,11 @@ def get_analytics_overview(
         )
         if cutoff is not None:
             contexts = [c for c in contexts if _in_period(c.created_at)]
+        competency_coverage["eligible_contexts"] += len(contexts)
+        for ctx in contexts:
+            mapping_state = ctx.competency_mapping_status
+            mapping_key = mapping_state if mapping_state in competency_coverage["mapping_statuses"] else "untracked"
+            competency_coverage["mapping_statuses"][mapping_key] += 1
         if not contexts:
             drive_rows.append({
                 "drive_id": drive.id, "company_name": drive.company_name,
@@ -769,6 +818,7 @@ def get_analytics_overview(
                 .first()
             )
             if sess is None:
+                competency_coverage["contexts_without_session"] += 1
                 continue
             session_ids.append((sess, ctx))
             if ctx.status == "completed":
@@ -805,9 +855,22 @@ def get_analytics_overview(
                 funnel["interview"] += 1
 
             # competency scoring (read-only safeguard)
-            if ctx.blueprint_snapshot:
+            if not ctx.blueprint_snapshot:
+                competency_coverage["contexts_without_snapshot"] += 1
+            else:
                 try:
                     scoring = score_session_competencies(db, sess)
+                    if (scoring.get("scoring_error") or "").startswith("no_configured_competencies"):
+                        competency_coverage["contexts_without_competencies"] += 1
+                    elif scoring.get("scoring_error"):
+                        competency_coverage["scoring_errors"] += 1
+                    competencies = scoring.get("competencies", [])
+                    if competencies and not any((comp.get("evidence_count") or 0) > 0 for comp in competencies):
+                        competency_coverage["contexts_without_countable_evidence"] += 1
+                    if scoring.get("overall_score_status") == "final":
+                        competency_coverage["final_scored_contexts"] += 1
+                    elif scoring.get("overall_score_status") == "provisional":
+                        competency_coverage["provisional_scored_contexts"] += 1
                     for comp in scoring.get("competencies", []):
                         cid = comp["competency_id"]
                         dept = None
@@ -841,7 +904,12 @@ def get_analytics_overview(
                             if comp["normalized_score"] is not None:
                                 dc["scores"].append(comp["normalized_score"])
                 except Exception:
-                    pass  # scoring fails closed; skip, never fabricate
+                    competency_coverage["scoring_errors"] += 1
+                    logger.exception(
+                        "Skipped competency analytics scoring for context %s, session %s",
+                        ctx.id,
+                        sess.id,
+                    )
 
         rate = round(drive_completed / len(contexts) * 100, 1) if contexts else 0.0
         drive_rows.append({
@@ -950,6 +1018,7 @@ def get_analytics_overview(
         "funnel": {"stages": funnel_stages},
         "competency_by_department": {"departments": dept_payload, "available": bool(dept_payload)},
         "competency_insights": competency_insights,
+        "competency_coverage": competency_coverage,
         "drives": drive_rows,
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
@@ -1078,7 +1147,8 @@ def get_readiness_overview(
                 latest_session_by_ctx[_sess.context_id] = _sess
 
     # ── Per-drive pass: collect eligible scored attempts (aggregates only) ─
-    attempts = []  # {student_id, drive_id, score, score_status, at, competencies}
+    attempts = []  # scored attempts used by readiness metrics
+    skill_gap_attempts = []  # completed configured attempts, even without scores
     contexts_examined = 0
     completed_contexts = 0
     contexts_with_snapshot = 0
@@ -1167,6 +1237,24 @@ def get_readiness_overview(
             )
             if has_mappings:
                 contexts_with_evidence_mappings += 1
+            snapshot = ctx.blueprint_snapshot or {}
+            configured_rounds = snapshot.get("enabled_rounds")
+            if configured_rounds is None:
+                configured_rounds = [
+                    item.get("round_type")
+                    for item in (snapshot.get("blueprint_data") or {}).get("rounds", [])
+                    if isinstance(item, dict)
+                ]
+            supported_types = {
+                round_type for round_type in configured_rounds
+                if round_type in {"aptitude", "coding"}
+            }
+            if supported_types:
+                skill_gap_attempts.append({
+                    "student_id": ctx.student_id,
+                    "competencies": scoring.get("competencies", []),
+                    "assessment_types": supported_types,
+                })
             overall = scoring.get("overall_score")
             if overall is None:
                 # Classify the follow-up reason for this completed attempt.
@@ -2143,61 +2231,98 @@ def get_readiness_overview(
     ]
 
     # ── Skill gaps (configured snapshot competencies only) ──────────────
-    gap_index: dict[str, dict] = {}
-    for a in attempts:
-        for comp in a["competencies"]:
-            cid = comp["competency_id"]
-            gi = gap_index.setdefault(cid, {
-                "name": comp["competency_name"],
-                "scores": [],
-                "evidence": 0,
-                "assessed": 0,
-                "candidates": 0,
-                "candidate_ids": set(),
-            })
-            gi["candidates"] += 1
-            gi["candidate_ids"].add(a["student_id"])
-            gi["evidence"] += comp.get("evidence_count") or 0
-            if comp.get("status") == "assessed":
-                gi["assessed"] += 1
-            if comp.get("normalized_score") is not None:
-                gi["scores"].append(comp["normalized_score"])
+    def _skill_gap_view(source_type: str | None = None) -> dict:
+        gap_index: dict[str, dict] = {}
+        eligible_attempt_count = 0
+        for attempt in skill_gap_attempts:
+            if source_type and source_type not in attempt["assessment_types"]:
+                continue
+            eligible_attempt_count += 1
+            for comp in attempt["competencies"]:
+                cid = comp["competency_id"]
+                gi = gap_index.setdefault(cid, {
+                    "name": comp["competency_name"], "scores": [], "evidence": 0,
+                    "assessed": 0, "eligible": 0, "candidate_ids": set(), "sources": set(),
+                    "expected_sources": set(),
+                })
+                gi["eligible"] += 1
+                gi["expected_sources"].update(
+                    [source_type] if source_type else attempt["assessment_types"]
+                )
+                if attempt["student_id"] is not None:
+                    gi["candidate_ids"].add(attempt["student_id"])
+                score = comp.get("normalized_score") if source_type is None else (
+                    comp.get("assessment_type_scores", {}).get(source_type)
+                )
+                evidence = comp.get("evidence_count", 0) if source_type is None else (
+                    comp.get("assessment_type_evidence_counts", {}).get(source_type, 0)
+                )
+                gi["evidence"] += evidence or 0
+                if score is not None:
+                    gi["scores"].append(score)
+                    gi["assessed"] += 1
+                    gi["sources"].update(comp.get("sources", [])) if source_type is None else gi["sources"].add(source_type)
 
-    assessed_gaps = []
-    unassessed_gaps = []
-    for cid, gi in gap_index.items():
-        row = {
-            "competency_id": str(cid),
-            "competency_name": gi["name"],
-            "candidates": gi["candidates"],
-            "unique_candidates": len(gi["candidate_ids"]),
-            "assessed": gi["assessed"],
-            "evidence_count": gi["evidence"],
-            "coverage_rate": (
-                round(gi["assessed"] / gi["candidates"] * 100, 1) if gi["candidates"] else 0.0
-            ),
+        assessed_rows, unassessed_rows = [], []
+        for cid, gi in gap_index.items():
+            row = {
+                "competency_id": str(cid), "competency_name": gi["name"],
+                "candidates": gi["eligible"], "unique_candidates": len(gi["candidate_ids"]),
+                "assessed": gi["assessed"], "evidence_count": gi["evidence"],
+                "assessment_types": sorted(gi["sources"]),
+                "expected_assessment_types": sorted(gi["expected_sources"]),
+                "coverage_rate": round(gi["assessed"] / gi["eligible"] * 100, 1)
+                if gi["eligible"] else 0.0,
+            }
+            if gi["scores"]:
+                row["avg_score"] = round(sum(gi["scores"]) / len(gi["scores"]), 2)
+                row["gap_to_100"] = round(100.0 - row["avg_score"], 2)
+                assessed_rows.append(row)
+            else:
+                row["avg_score"] = row["gap_to_100"] = None
+                unassessed_rows.append(row)
+        for row in assessed_rows + unassessed_rows:
+            row["assessed_attempts"] = row["assessed"]
+            row["eligible_attempts"] = row["candidates"]
+            row["evidence_items"] = row["evidence_count"]
+            row["coverage_percent"] = row["coverage_rate"]
+            row["evidence_sources"] = row["assessment_types"]
+        assessed_rows.sort(
+            key=lambda item: (-item["gap_to_100"], item["competency_name"] or "")
+        )
+        unassessed_rows.sort(key=lambda item: item["competency_name"] or "")
+        scores = [row["avg_score"] for row in assessed_rows]
+        summary = {
+            "competencies_assessed": len(assessed_rows),
+            "competencies_unassessed": len(unassessed_rows),
+            "configured_competencies": len(assessed_rows) + len(unassessed_rows),
+            "eligible_attempts": eligible_attempt_count,
+            "configuration_known": eligible_attempt_count > 0,
+            "average_competency_score": round(sum(scores) / len(scores), 2) if scores else None,
+            "largest_competency_gap": max((row["gap_to_100"] for row in assessed_rows), default=None),
         }
-        if gi["scores"]:
-            avg = round(sum(gi["scores"]) / len(gi["scores"]), 2)
-            row["avg_score"] = avg
-            row["gap_to_100"] = round(100.0 - avg, 2)
-            assessed_gaps.append(row)
-        else:
-            row["avg_score"] = None
-            row["gap_to_100"] = None
-            unassessed_gaps.append(row)
-    assessed_gaps.sort(key=lambda x: x["avg_score"])
-    unassessed_gaps.sort(key=lambda x: x["competency_name"] or "")
+        return {
+            "available": bool(assessed_rows), "competencies": assessed_rows,
+            "unassessed": unassessed_rows, "summary": summary,
+        }
+
+    supported_skill_gap_types = sorted({
+        assessment_type for attempt in skill_gap_attempts
+        for assessment_type in attempt["assessment_types"]
+    })
     skill_gaps = {
-        "available": bool(assessed_gaps),
+        **_skill_gap_view(),
+        "assessment_types": supported_skill_gap_types,
+        "by_assessment_type": {
+            assessment_type: _skill_gap_view(assessment_type)
+            for assessment_type in supported_skill_gap_types
+        },
         "definition": (
-            "Gap = 100 - average normalized competency score (0-100) across assessed "
-            "eligible attempts. Only competencies configured on each session's pinned "
-            "blueprint snapshot are considered; a competency with no countable evidence "
-            "is listed as unassessed, never scored zero."
+            "Gap = 100 - average normalized competency score. Coverage is assessed "
+            "attempts over completed configured attempts where that source is enabled. "
+            "Scores use countable evidence explicitly mapped to the pinned blueprint. "
+            "Aptitude and coding are supported; unmapped interview results are excluded."
         ),
-        "competencies": assessed_gaps,
-        "unassessed": unassessed_gaps,
     }
 
     # ── Deterministic insights from verified aggregates only ────────────
@@ -2230,7 +2355,7 @@ def get_readiness_overview(
     # A population pattern requires multiple students for each competency and at
     # least two comparable competencies. The mean is descriptive, not a threshold.
     repeated_competencies = [
-        row for row in assessed_gaps if row.get("unique_candidates", 0) >= 2
+        row for row in skill_gaps["competencies"] if row.get("unique_candidates", 0) >= 2
     ]
     if len(repeated_competencies) >= 2 and scores:
         population_mean = sum(scores) / len(scores)
@@ -2259,7 +2384,7 @@ def get_readiness_overview(
                     "is descriptive relative to the scored-attempt mean, not a pass threshold."
                 ),
                 "sample_size": len(repeated_competencies),
-                "denominator": len(assessed_gaps),
+                "denominator": len(skill_gaps["competencies"]),
                 "metric": "normalized competency scores compared with the mean readiness score (0-100)",
                 "period": period,
                 "action": ({"label": "Review competency evidence", "route": "/tpo/analytics"}

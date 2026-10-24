@@ -26,13 +26,14 @@ from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user
 from app.database.db import get_db
 from app.models.assessment import AssessmentRound, AssessmentSession
 from app.models.user import User
+from app.models.faculty_practice_assessment import FacultyPracticeRoundAttempt
 from app.schemas.assessment import RoundResponse, SessionResponse
 from app.services.session_service import (
     advance_to_next_round,
@@ -48,12 +49,14 @@ from app.services.session_service import (
     start_round,
 )
 from app.services.assessment_context_service import (
+    create_context,
     get_or_create_practice_context,
     get_default_practice_policy,
     complete_context,
     is_context_available,
     can_create_attempt,
 )
+from app.services.faculty_practice_assignment_service import validate_assigned_round_start
 from app.modules.practice.services.practice_result_service import (
     get_round_result_summary,
     get_round_detailed_review,
@@ -95,6 +98,8 @@ class PracticeStatusResponse(BaseModel):
 class PracticeStartRequest(BaseModel):
     round_type: str
     practice_type: Optional[str] = None  # mcq | technical | combined | coding | interview
+    assignment_id: Optional[int] = Field(default=None, ge=1)
+    assessment_round_id: Optional[int] = Field(default=None, ge=1)
 
 
 class PracticeStartResponse(BaseModel):
@@ -201,6 +206,18 @@ def start_practice(
             detail="Invalid round type. Must be aptitude, coding, or interview.",
         )
 
+    if bool(payload.assignment_id) != bool(payload.assessment_round_id):
+        raise HTTPException(status_code=400, detail="Both assignment_id and assessment_round_id are required for an assigned round.")
+    assigned = None
+    if payload.assignment_id is not None:
+        assigned = validate_assigned_round_start(
+            db, current_user, payload.assignment_id, payload.assessment_round_id
+        )
+        _, _, assigned_definition, _ = assigned
+        configured_type = (assigned_definition.configuration or {}).get("practice_type")
+        if assigned_definition.round_type != payload.round_type or configured_type != payload.practice_type:
+            raise HTTPException(status_code=400, detail="Requested engine type does not match the assigned round configuration.")
+
     existing_session = get_active_session(db, current_user.id)
 
     if existing_session is not None:
@@ -220,6 +237,12 @@ def start_practice(
         )
 
         active_round = get_active_round(db, existing_session.id)
+        if assigned is not None:
+            assigned_attempt = assigned[3]
+            if assigned_attempt is None or assigned_attempt.session_id != existing_session.id:
+                raise HTTPException(status_code=409, detail="Finish the active assessment attempt before starting this assignment round.")
+            if active_round is None or active_round.id != assigned_attempt.round_id:
+                raise HTTPException(status_code=409, detail="The assigned round is no longer active.")
         if active_round is None:
             # No active round — start the requested one.
             active_round = start_round(db, existing_session.id, payload.round_type, payload.practice_type)
@@ -256,7 +279,22 @@ def start_practice(
 
     # New session: create context + session + activate first round.
     # M2-E: Create practice context
-    context = get_or_create_practice_context(db, current_user.id)
+    if assigned is None:
+        context = get_or_create_practice_context(db, current_user.id)
+    else:
+        assignment, assessment, assigned_definition, existing_attempt = assigned
+        if existing_attempt is not None:
+            raise HTTPException(status_code=409, detail="The assigned round has already been attempted.")
+        context = create_context(
+            db,
+            mode="practice",
+            purpose=f"faculty_assignment:{assignment.id}",
+            policy_id=get_default_practice_policy(db).id,
+            student_id=current_user.id,
+            created_by_id=assessment.faculty_id,
+            availability_start=assessment.availability_start,
+            availability_end=assessment.availability_end,
+        )
 
     # Check availability (practice has no restrictions, but enforce for future modes)
     if not is_context_available(context):
@@ -275,8 +313,21 @@ def start_practice(
     # Create session with context
     new_session = create_session(db, user_id=current_user.id, context_id=context.id)
 
+    if assigned is not None and new_session.context_id != context.id:
+        existing_context = db.query(AssessmentContext).filter_by(id=new_session.context_id).first()
+        expected_purpose = f"faculty_assignment:{assigned[0].id}"
+        complete_context(db, context.id)
+        if existing_context is None or existing_context.purpose != expected_purpose:
+            raise HTTPException(
+                status_code=409,
+                detail="Finish the active assessment attempt before starting this assignment round.",
+            )
+
     progression_mode = context.policy.progression_mode if context.policy else "sequential"
-    if progression_mode == "independent":
+    if assigned is not None:
+        round_type_to_start = assigned_definition.round_type
+        practice_type_to_use = (assigned_definition.configuration or {}).get("practice_type")
+    elif progression_mode == "independent":
         round_type_to_start = payload.round_type
         practice_type_to_use = payload.practice_type
     else:
@@ -284,6 +335,41 @@ def start_practice(
         practice_type_to_use = None
 
     first_round = start_round(db, new_session.id, round_type_to_start, practice_type_to_use)
+
+    if assigned is not None:
+        assignment, _, assigned_definition, _ = assigned
+        try:
+            db.add(FacultyPracticeRoundAttempt(
+                assignment_id=assignment.id,
+                assessment_round_id=assigned_definition.id,
+                session_id=new_session.id,
+                round_id=first_round.id,
+            ))
+            db.commit()
+        except Exception:
+            db.rollback()
+            existing_attempt = db.query(FacultyPracticeRoundAttempt).filter_by(
+                assignment_id=assignment.id,
+                assessment_round_id=assigned_definition.id,
+            ).first()
+            existing_session = db.query(AssessmentSession).filter_by(
+                id=existing_attempt.session_id if existing_attempt else None,
+                user_id=current_user.id,
+            ).first()
+            existing_round = db.query(AssessmentRound).filter_by(
+                id=existing_attempt.round_id if existing_attempt else None,
+                session_id=existing_session.id if existing_session else None,
+                status="active",
+            ).first()
+            if existing_attempt and existing_session and existing_round:
+                return PracticeStartResponse(
+                    session_id=existing_session.id,
+                    session_status=existing_session.status,
+                    active_round=RoundResponse.model_validate(existing_round),
+                    is_new=False,
+                    message=f"Resuming active {existing_round.round_type} round.",
+                )
+            raise HTTPException(status_code=409, detail="This assignment round could not be linked to the practice attempt.")
 
     return PracticeStartResponse(
         session_id=new_session.id,

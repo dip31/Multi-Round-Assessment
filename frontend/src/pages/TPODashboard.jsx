@@ -6,6 +6,7 @@ import PageSkeleton from '../components/shared/PageSkeleton';
 import TPOLayout, { TPOMenuButton } from '../components/TPOLayout';
 import CompanyPatternModal from '../components/CompanyPatternModal';
 import { buildPlacementIntelligence, placementIntelligenceUnavailable } from '../utils/placementIntelligence';
+import { candidateEligibility, summarizeEligibility } from '../utils/candidateEligibility';
 import { Users, X, UserPlus, Download, Building2, CalendarX, TriangleAlert, ArrowRight, TrendingUp } from 'lucide-react';
 import { CartesianGrid, XAxis, YAxis, Tooltip, Legend, BarChart, LineChart, Line, ResponsiveContainer } from 'recharts';
 
@@ -61,6 +62,8 @@ export default function TPODashboard() {
     const [drives, setDrives] = useState([]);
     const [rosters, setRosters] = useState({});
     const [attentionAvailability, setAttentionAvailability] = useState(null);
+    const [placementReadiness, setPlacementReadiness] = useState(null);
+    const [rosterSample, setRosterSample] = useState({ checked: 0, total: 0, failed: 0 });
     const [loading, setLoading] = useState(true);
     const [toast, setToast] = useState(null);
     const [exporting, setExporting] = useState(false);
@@ -90,11 +93,12 @@ export default function TPODashboard() {
         const silent = opts.silent === true;
         if (!silent) setLoading(true);
         try {
-            const [profRes, studentsRes, statsRes, drivesRes] = await Promise.all([
+            const [profRes, studentsRes, statsRes, drivesRes, readinessRes] = await Promise.all([
                 api.get('/profile/me'),
                 api.get('/profile/cohort/students').catch(() => ({ data: null, attentionUnavailable: true })),
-                api.get('/report/admin/cohort-stats').catch(() => ({ data: null })),
+                api.get('/report/admin/cohort-stats').catch(() => ({ data: null, attentionUnavailable: true })),
                 api.get('/tpo/mock-drives').catch(() => ({ data: null, attentionUnavailable: true })),
+                api.get('/report/admin/readiness/overview').catch(() => ({ data: null, attentionUnavailable: true })),
             ]);
 
             setTpoUser(profRes.data);
@@ -102,6 +106,7 @@ export default function TPODashboard() {
             const studentsAvailable = !studentsRes.attentionUnavailable && Array.isArray(studentsRes.data?.students);
             setStudents(studentList);
             setCohortStats(statsRes.data);
+            setPlacementReadiness(readinessRes.data);
             const drivesAvailable = !drivesRes.attentionUnavailable && Array.isArray(drivesRes.data);
             const driveList = drivesAvailable ? drivesRes.data : [];
             setDrives(driveList);
@@ -118,13 +123,24 @@ export default function TPODashboard() {
                 )
             );
             const rostersAvailable = drivesAvailable && rosterPairs.every(([, data]) => data !== null);
+            setRosterSample({
+                checked: rosterTargets.length,
+                total: driveList.filter((drive) => drive.status !== 'draft').length,
+                failed: rosterPairs.filter(([, data]) => data === null).length,
+            });
             setRosters(rosterPairs.reduce((acc, [id, data]) => {
                 if (data) acc[id] = data;
                 return acc;
             }, {}));
-            setAttentionAvailability({ students: studentsAvailable, drives: drivesAvailable, rosters: rostersAvailable });
+            setAttentionAvailability({
+                students: studentsAvailable,
+                drives: drivesAvailable,
+                rosters: rostersAvailable,
+                stats: !statsRes.attentionUnavailable && Boolean(statsRes.data),
+                readiness: !readinessRes.attentionUnavailable && Boolean(readinessRes.data),
+            });
         } catch (err) {
-            setAttentionAvailability({ students: false, drives: false, rosters: false });
+            setAttentionAvailability({ students: false, drives: false, rosters: false, stats: false, readiness: false });
             setToast({ type: 'error', message: 'Failed to load TPO dashboard data' });
         } finally {
             if (!silent) setLoading(false);
@@ -231,33 +247,34 @@ export default function TPODashboard() {
         setToast({ type: 'info', message: `${feature} is unavailable — ${reason}` });
     };
 
-    const eligiblePool = students.filter((s) => (s.cgpa || 0) >= 7.0 && (s.backlogs_count || 0) === 0);
+    const eligibilitySummary = summarizeEligibility(students, { minimumCgpa: 7, maximumBacklogs: 0 });
     const placementInsights = buildPlacementIntelligence({
         drives,
         rosters,
         drivesAvailable: attentionAvailability?.drives === true,
         rostersAvailable: attentionAvailability?.rosters === true,
+        readiness: placementReadiness,
+        readinessAvailable: attentionAvailability?.readiness === true,
     });
     const placementIntelligenceUnavailableReasons = placementIntelligenceUnavailable({
         drives: attentionAvailability?.drives === true,
         rosters: attentionAvailability?.rosters === true,
+        readiness: attentionAvailability?.readiness === true,
     });
     const placementIntelligenceChecksComplete = (
-        attentionAvailability?.drives === true && attentionAvailability?.rosters === true
+        attentionAvailability?.drives === true
+        && attentionAvailability?.rosters === true
+        && attentionAvailability?.readiness === true
     );
     const completedDriveCount = drives.filter((drive) => drive.status === 'completed').length;
-    const benchmarkLabel = typeof cohortStats?.avg_overall_score === 'number'
+    const benchmarkLabel = attentionAvailability?.stats && typeof cohortStats?.avg_overall_score === 'number'
         ? `${cohortStats.avg_overall_score.toFixed(1)}%`
         : '—';
-
-    const isEligibleForDrive = (s, d) => {
-        if ((s.cgpa || 0) < (d.minimum_cgpa || 0)) return false;
-        if ((s.backlogs_count || 0) > (d.maximum_backlogs || 0)) return false;
-        const branches = Array.isArray(d.eligible_branches) ? d.eligible_branches.filter(Boolean) : [];
-        if (!branches.length) return true;
-        const dept = (s.department || '').toLowerCase();
-        return branches.some((b) => String(b).toLowerCase() === dept);
-    };
+    const eligibilityForDrive = (student, drive) => candidateEligibility(student, {
+        minimumCgpa: drive.minimum_cgpa,
+        maximumBacklogs: drive.maximum_backlogs,
+        eligibleBranches: drive.eligible_branches,
+    });
 
     const pipelineDrives = drives
         .filter((d) => d.status !== 'completed')
@@ -330,9 +347,13 @@ export default function TPODashboard() {
                             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Eligible Candidate Pool</span>
                             <span className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-sm">✓</span>
                         </div>
-                        <div className="text-3xl font-black text-emerald-600">{eligiblePool.length}</div>
+                        <div className="text-3xl font-black text-emerald-600">{attentionAvailability?.students ? eligibilitySummary.eligible : '—'}</div>
                         <br></br>
-                        <div className="text-xs text-slate-500 mt-1 font-medium">CGPA ≥ 7.0 & 0 backlogs</div>
+                        <div className="text-xs text-slate-500 mt-1 font-medium">
+                            {attentionAvailability?.students
+                                ? `${eligibilitySummary.ineligible} ineligible · ${eligibilitySummary.unknown} unknown · CGPA ≥ 7.0 and no backlogs`
+                                : 'Candidate eligibility unavailable'}
+                        </div>
                     </div>
 
                     <div className="glass-card rounded-2xl p-6" data-testid="kpi-registered-pool">
@@ -340,7 +361,7 @@ export default function TPODashboard() {
                             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Registered Pool</span>
                             <span className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-sm">🎓</span>
                         </div>
-                        <div className="text-3xl font-black text-slate-900">{students.length}</div>
+                        <div className="text-3xl font-black text-slate-900">{attentionAvailability?.students ? students.length : '—'}</div>
                         <br></br>
                         <div className="text-xs text-slate-500 mt-1 font-medium">Candidates across all branches</div>
                     </div>
@@ -350,7 +371,7 @@ export default function TPODashboard() {
                             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Placement Drives Completed</span>
                             <span className="w-8 h-8 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center font-bold text-sm">🏢</span>
                         </div>
-                        <div className="text-3xl font-black text-sky-600">{completedDriveCount}</div>
+                        <div className="text-3xl font-black text-sky-600">{attentionAvailability?.drives ? completedDriveCount : '—'}</div>
                         <br></br>
                         <div className="text-xs text-slate-500 mt-1 font-medium">All-time drives marked completed</div>
                     </div>
@@ -358,14 +379,16 @@ export default function TPODashboard() {
                     <div className="glass-card rounded-2xl p-6" data-testid="kpi-benchmark">
                         <div className="flex items-center justify-between mb-3">
 
-                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Cohort Benchmark</span>
+                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Institution-wide Assessment Average</span>
                             <span className="w-8 h-8 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center font-bold text-sm">📊</span>
                         </div>
                         <div className="text-3xl font-black text-violet-600">{benchmarkLabel}</div>
                         <div className="text-xs text-slate-500 mt-1 font-medium">
                             <br></br>
                             <br></br>
-                            {cohortStats ? 'Average assessment readiness' : 'Cohort statistics unavailable'}
+                            {attentionAvailability?.stats && cohortStats
+                                ? `Mean of ${cohortStats.completed_sessions ?? '—'} completed assessment sessions`
+                                : 'Institution-wide statistics unavailable'}
                         </div>
                     </div>
                 </div>
@@ -428,7 +451,16 @@ export default function TPODashboard() {
                                                     className="font-bold text-indigo-600"
                                                     title="Computed by applying this drive's CGPA, backlog, and branch criteria to the current cohort"
                                                 >
-                                                    {students.filter((s) => isEligibleForDrive(s, d)).length}
+                                                    {(() => {
+                                                        const summary = summarizeEligibility(students, {
+                                                            minimumCgpa: d.minimum_cgpa,
+                                                            maximumBacklogs: d.maximum_backlogs,
+                                                            eligibleBranches: d.eligible_branches,
+                                                        });
+                                                        return attentionAvailability?.students
+                                                            ? `${summary.eligible} eligible · ${summary.ineligible} ineligible · ${summary.unknown} unknown`
+                                                            : 'Unavailable';
+                                                    })()}
                                                 </span>
                                             </div>
                                             <div className="flex justify-between gap-3">
@@ -523,9 +555,13 @@ export default function TPODashboard() {
                             </span>
                             <h2 className="text-base font-bold text-slate-900">Most Active Recruitment Drives</h2>
                         </div>
-                        {activityRows.length === 0 ? (
+                        {attentionAvailability?.drives !== true ? (
+                            <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Drive activity could not be loaded.</div>
+                        ) : rosterSample.failed > 0 && activityRows.length === 0 ? (
+                            <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">Activity is unavailable for {rosterSample.failed} of {rosterSample.checked} checked drive rosters.</div>
+                        ) : activityRows.length === 0 ? (
                             <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50/70 p-4">
-                                <p className="text-sm font-semibold text-slate-700">No candidate activity recorded yet.</p>
+                                <p className="text-sm font-semibold text-slate-700">{rosterSample.total === 0 ? 'No non-draft drives are available to check.' : 'No candidate activity recorded in the checked drives.'}</p>
                                 <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
                                     Drives will appear here once candidates are enrolled or start assessments. Ranking uses recorded
                                     drive activity, not placement outcomes.
@@ -558,8 +594,9 @@ export default function TPODashboard() {
                             </ol>
                         )}
                         <p className="text-[13px] text-slate-400 mt-3 leading-relaxed">
-                            Ranked by enrolled candidates in recorded drive activity across the most recent  drives —
-                            registration and assessment-completion counts.
+                            Ranked by enrolled candidates among the {rosterSample.checked} most recent non-draft drive rosters checked
+                            ({rosterSample.total} non-draft drives exist). This is a recent sample, not an all-drive ranking.
+                            {rosterSample.failed > 0 ? ` ${rosterSample.failed} roster request(s) failed; displayed results are partial.` : ''}
                         </p>
                     </div>
                 </div>
@@ -568,41 +605,36 @@ export default function TPODashboard() {
                 <section className="mb-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm" data-testid="placement-intelligence">
                     <header className="border-b border-slate-200 bg-slate-50 px-5 py-4 sm:px-6">
                         <h2 className="text-lg font-bold text-slate-900">Placement Intelligence</h2>
-                        <p className="mt-1 text-xs text-slate-500">
-                            Key patterns, emerging risks, and recommended actions across placement activities.
-                        </p>
                     </header>
                     {placementIntelligenceUnavailableReasons.length > 0 && (
                         <div role="status" className="mx-5 mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 sm:mx-6">
-                            <p className="font-semibold">Some placement intelligence checks are unavailable.</p>
+                            <p className="font-semibold">Placement information could not be loaded.</p>
                             <p className="mt-1">{placementIntelligenceUnavailableReasons.join(' ')}</p>
                         </div>
                     )}
                     {placementInsights.length === 0 && placementIntelligenceChecksComplete ? (
                         <p className="px-5 py-5 text-sm text-slate-500 sm:px-6" data-testid="placement-intelligence-empty">
-                            No significant placement patterns or actionable risks identified in the available data.
+                            <span className="block font-semibold text-slate-700">Everything looks up to date</span>
+                            <span className="mt-1 block">There are no new placement-related actions requiring attention right now. You can review your Mock Drives whenever you are ready.</span>
                         </p>
                     ) : placementInsights.length > 0 ? (
                         <ul className="divide-y divide-slate-200 px-5 sm:px-6" data-testid="placement-intelligence-list">
                             {placementInsights.map((item) => {
-                                const isRisk = item.category === 'Current operational risk';
                                 return (
                                     <li key={item.id} className="grid grid-cols-[2rem_minmax(0,1fr)] gap-3 py-4 first:pt-5 last:pb-5 sm:gap-4">
-                                        <span className={`mt-0.5 flex h-8 w-8 items-center justify-center rounded-full ${isRisk ? 'bg-rose-50 text-rose-700' : 'bg-sky-50 text-sky-700'}`} aria-hidden="true">
-                                            {isRisk ? <TriangleAlert size={16} /> : <TrendingUp size={16} />}
+                                        <span className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-full bg-rose-50 text-rose-700" aria-hidden="true">
+                                            <TriangleAlert size={16} />
                                         </span>
                                         <div className="min-w-0">
-                                            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{item.category}</p>
-                                            <h3 className="mt-0.5 text-sm font-semibold text-slate-900">{item.title}</h3>
-                                            <p className="mt-1 text-base font-semibold leading-relaxed text-slate-800">{item.result}</p>
-                                            <p className="mt-1 text-xs leading-relaxed text-slate-600">{item.summary}</p>
-                                            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                                <p className="text-[11px] leading-relaxed text-slate-500">{item.evidence}</p>
+                                            <h3 className="text-sm font-semibold text-slate-900">{item.title}</h3>
+                                            <p className="mt-1 text-sm leading-relaxed text-slate-600"><span className="font-semibold text-slate-700">What this means: </span>{item.meaning}</p>
+                                            <p className="mt-1 text-sm leading-relaxed text-slate-600"><span className="font-semibold text-slate-700">Recommended action: </span>{item.action}</p>
+                                            <div className="mt-2">
                                                 <a
                                                     href={item.href}
                                                     className="shrink-0 text-xs font-semibold text-sky-700 hover:text-sky-800 inline-flex items-center gap-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded"
                                                 >
-                                                    {item.action} <ArrowRight size={13} />
+                                                    {item.linkText} <ArrowRight size={13} />
                                                 </a>
                                             </div>
                                         </div>
