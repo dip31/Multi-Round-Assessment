@@ -1,0 +1,139 @@
+{
+  "phase": "EDI5 Phase 7K pre-restore audit",
+  "audit_started_utc": "2026-10-25T10:08:23.867472+00:00",
+  "git_initial_status": [
+    "M app/config/settings.py",
+    "M requirements.txt",
+    "?? -",
+    "?? certs/",
+    "?? docs/audits/EDI5_PHASE_6C_3_SUPABASE_DESTINATION_AUDIT.md",
+    "?? docs/audits/EDI5_PHASE_7_LOCAL_TO_SUPABASE_MIGRATION_STATUS.md",
+    "?? scripts/audit_supabase_destination.py",
+    "?? tests/test_supabase_audit_config.py"
+  ],
+  "staged_changes": false,
+  "backup": {
+    "path": "C:\\Users\\Akshada\\AppData\\Local\\EDI5-Backups\\ai_placement_platform_20261025T094836Z_phase7j_verified.dump",
+    "size_bytes": 530714,
+    "sha256": "466D701CAC2CA0C65B0793D7F5F4B2770BFE21C9BE88DD7C77DDD8C23418886B",
+    "manifest": "C:\\Users\\Akshada\\AppData\\Local\\EDI5-Backups\\ai_placement_platform_20261025T094836Z_phase7j_verified.manifest.json",
+    "manifest_match": true,
+    "snapshot_utc": "2026-10-25T09:49:18.920890+00:00",
+    "pg_dump_exit_code": 0,
+    "pg_restore_list_exit_code": 0
+  },
+  "source": {
+    "host": "localhost",
+    "server_address": "::1/128",
+    "port": 5432,
+    "database": "ai_placement_platform",
+    "role": "postgres",
+    "postgres_version": "16.13",
+    "cluster_system_identifier": "7612714455082792120",
+    "alembic_revision": "add_faculty_practice_assignments",
+    "database_size_bytes": 16833559,
+    "public_tables": 39,
+    "columns": 395,
+    "indexes": 151,
+    "constraints": 136,
+    "primary_keys": 39,
+    "foreign_keys": 61,
+    "validated_foreign_keys": 61,
+    "sequences": 37,
+    "views": 0,
+    "routines": 0,
+    "triggers": 0,
+    "extensions": [
+      "plpgsql 1.0"
+    ],
+    "table_row_counts_match_backup_snapshot": true,
+    "table_row_counts": {
+      "public.admin_question_feedback": 0,
+      "public.advanced_proctoring_events": 425,
+      "public.alembic_version": 1,
+      "public.approved_question_pools": 56,
+      "public.aptitude_attempts": 263,
+      "public.aptitude_questions": 905,
+      "public.aptitude_round_questions": 360,
+      "public.aptitude_topics": 75,
+      "public.assessment_contexts": 183,
+      "public.assessment_policies": 245,
+      "public.assessment_rounds": 562,
+      "public.assessment_sessions": 365,
+      "public.coding_problems": 180,
+      "public.coding_submissions": 9,
+      "public.coding_test_cases": 418,
+      "public.company_blueprints": 45,
+      "public.company_historical_data": 51,
+      "public.company_patterns": 70,
+      "public.competency_evidence_mappings": 52,
+      "public.faculty_practice_assessment_rounds": 9,
+      "public.faculty_practice_assessments": 3,
+      "public.faculty_practice_assignments": 8,
+      "public.faculty_practice_round_attempts": 1,
+      "public.faculty_profiles": 31,
+      "public.generated_question_pools": 64,
+      "public.interview_sessions": 20,
+      "public.interview_turns": 9,
+      "public.mock_drives": 104,
+      "public.proctoring_events": 0,
+      "public.proctoring_violations": 0,
+      "public.refresh_tokens": 0,
+      "public.rl_attempt_log": 263,
+      "public.rl_q_table": 169,
+      "public.rl_sessions": 263,
+      "public.session_problems": 224,
+      "public.student_profiles": 474,
+      "public.tpo_profiles": 93,
+      "public.user_resumes": 41,
+      "public.users": 600
+    }
+  },
+  "existing_alternate_scratch": {
+    "database": "edi5_restore_verify_20261025",
+    "owner": "postgres",
+    "size_bytes": 15645719,
+    "user_tables": 39,
+    "rows": 6641,
+    "active_sessions": 0,
+    "decision": "not reused; existing data preserved"
+  },
+  "new_scratch": {
+    "database": "edi5_restore_validation_20261025_022d4117",
+    "exists_at_preflight": false,
+    "endpoint": "localhost:5432",
+    "same_local_cluster_as_source": true,
+    "cluster_system_identifier": "7612714455082792120",
+    "owner": "postgres",
+    "encoding": "UTF8",
+    "lc_collate": "English_United States.1252",
+    "lc_ctype": "English_United States.1252",
+    "current_database_user_login_roles": [
+      "postgres"
+    ],
+    "postgres_role_is_superuser": true,
+    "postgres_role_has_createdb": true,
+    "configured_application_database_remains": "ai_placement_platform"
+  },
+  "capacity": {
+    "data_volume": "C:",
+    "free_bytes": 20111331328,
+    "conservative_required_bytes": 117609541,
+    "sufficient": true
+  },
+  "artifacts_preserved": [
+    {
+      "path": "D:/Git Projects/Multi-Round-Assessment/-",
+      "size_bytes": 530714,
+      "sha256": "673C36D9263548C88137B03612BB9AE20437B7AA4002E515EFA773278E7E3AEE",
+      "created_utc": "2026-10-25T09:47:26.160118+00:00",
+      "note": "root-level pg_dump output from Phase 7J"
+    },
+    {
+      "path": "C:/Users/Akshada/AppData/Local/EDI5-Backups/ai_placement_platform_20261025T094512Z_phase7j.dump",
+      "size_bytes": 0,
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "note": "failed Phase 7J target, preserved"
+    }
+  ]
+}

@@ -1,0 +1,130 @@
+{
+  "source_constraint_count": 136,
+  "scratch_constraint_count": 136,
+  "exact_signature_match": false,
+  "exact_definition_difference_count": 15,
+  "differences": [
+    {
+      "table": "admin_question_feedback",
+      "constraint": "admin_question_feedback_action_check",
+      "type": "c",
+      "only_definition_text_differs": true,
+      "validated_both": true,
+      "read_only_truth_table_match": true
+    },
+    {
+      "table": "advanced_proctoring_events",
+      "constraint": "advanced_proctoring_events_round_type_check",
+      "type": "c",
+      "only_definition_text_differs": true,
+      "validated_both": true,
+      "read_only_truth_table_match": true
+    },
+    {
+      "table": "advanced_proctoring_events",
+      "constraint": "chk_severity",
+      "type": "c",
+      "only_definition_text_differs": true,
+      "validated_both": true,
+      "read_only_truth_table_match": true
+    },
+    {
+      "table": "aptitude_questions",
+      "constraint": "aptitude_questions_difficulty_check",
+      "type": "c",
+      "only_definition_text_differs": true,
+      "validated_both": true,
+      "read_only_truth_table_match": true
+    },
+    {
+      "table": "assessment_rounds",
+      "constraint": "assessment_rounds_round_type_check",
+      "type": "c",
+      "only_definition_text_differs": true,
+      "validated_both": true,
+      "read_only_truth_table_match": true
+    },
+    {
+      "table": "assessment_rounds",
+      "constraint": "assessment_rounds_status_check",
+      "type": "c",
+      "only_definition_text_differs": true,
+      "validated_both": true,
+      "read_only_truth_table_match": true
+    },
+    {
+      "table": "assessment_sessions",
+      "constraint": "assessment_sessions_status_check",
+      "type": "c",
+      "only_definition_text_differs": true,
+      "validated_both": true,
+      "read_only_truth_table_match": true
+    },
+    {
+      "table": "coding_problems",
+      "constraint": "coding_problems_difficulty_check",
+      "type": "c",
+      "only_definition_text_differs": true,
+      "validated_both": true,
+      "read_only_truth_table_match": true
+    },
+    {
+      "table": "coding_submissions",
+      "constraint": "coding_submissions_status_check",
+      "type": "c",
+      "only_definition_text_differs": true,
+      "validated_both": true,
+      "read_only_truth_table_match": true
+    },
+    {
+      "table": "company_blueprints",
+      "constraint": "chk_blueprint_status",
+      "type": "c",
+      "only_definition_text_differs": true,
+      "validated_both": true,
+      "read_only_truth_table_match": true
+    },
+    {
+      "table": "company_historical_data",
+      "constraint": "chk_historical_source_type",
+      "type": "c",
+      "only_definition_text_differs": true,
+      "validated_both": true,
+      "read_only_truth_table_match": true
+    },
+    {
+      "table": "mock_drives",
+      "constraint": "mock_drives_status_check",
+      "type": "c",
+      "only_definition_text_differs": true,
+      "validated_both": true,
+      "read_only_truth_table_match": true
+    },
+    {
+      "table": "rl_sessions",
+      "constraint": "rl_sessions_action_taken_check",
+      "type": "c",
+      "only_definition_text_differs": true,
+      "validated_both": true,
+      "read_only_truth_table_match": true
+    },
+    {
+      "table": "rl_sessions",
+      "constraint": "rl_sessions_prev_difficulty_check",
+      "type": "c",
+      "only_definition_text_differs": true,
+      "validated_both": true,
+      "read_only_truth_table_match": true
+    },
+    {
+      "table": "users",
+      "constraint": "users_role_check",
+      "type": "c",
+      "only_definition_text_differs": true,
+      "validated_both": true,
+      "read_only_truth_table_match": true
+    }
+  ],
+  "non_definition_signature_fields_match": true,
+  "deparse_only_differences_semantically_validated": true
+}

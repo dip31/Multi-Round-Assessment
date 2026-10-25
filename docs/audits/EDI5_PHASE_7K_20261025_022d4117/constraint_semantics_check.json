@@ -1,0 +1,11 @@
+{
+  "source_check_constraints": 19,
+  "scratch_check_constraints": 19,
+  "exact_deparsed_text_matches": 4,
+  "deparse_differences": 15,
+  "differing_constraints": 15,
+  "differing_constraint_expression_pairs_validated": 15,
+  "read_only_truth_table_inputs": 69,
+  "all_differing_expressions_have_same_column_and_allowed_values": true,
+  "other_check_constraints_exact_text_match": 4
+}

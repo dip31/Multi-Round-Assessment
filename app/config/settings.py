@@ -53,6 +53,9 @@ class Settings(BaseSettings):
         "env_file": ".env",
         "env_file_encoding": "utf-8",
         "case_sensitive": True,
+        # Keep audit-only and deployment-specific dotenv keys out of the app
+        # settings model without making them application configuration.
+        "extra": "ignore",
     }
 
 

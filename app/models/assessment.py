@@ -7,7 +7,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, text
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, String, text
 from sqlalchemy.sql import func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -29,6 +29,15 @@ class AssessmentSession(Base):
     """
 
     __tablename__ = "assessment_sessions"
+    __table_args__ = (
+        Index(
+            "one_active_session_per_user",
+            "user_id",
+            unique=True,
+            postgresql_where=text("status = 'in_progress'"),
+            sqlite_where=text("status = 'in_progress'"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
@@ -90,6 +99,15 @@ class AssessmentRound(Base):
     """
 
     __tablename__ = "assessment_rounds"
+    __table_args__ = (
+        Index(
+            "one_active_round_per_session",
+            "session_id",
+            unique=True,
+            postgresql_where=text("status = 'active'"),
+            sqlite_where=text("status = 'active'"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     session_id: Mapped[int] = mapped_column(

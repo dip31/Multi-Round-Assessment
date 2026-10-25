@@ -44,8 +44,12 @@ class RLAttemptLog(Base):
 
     id: int = Column(Integer, primary_key=True, index=True)
     user_id: Optional[int] = Column(Integer, ForeignKey("users.id"), nullable=True)
-    session_id: Optional[int] = Column(Integer, nullable=True)
-    question_id: Optional[int] = Column(Integer, nullable=True)
+    session_id: Optional[int] = Column(
+        Integer, ForeignKey("assessment_sessions.id"), nullable=True
+    )
+    question_id: Optional[int] = Column(
+        Integer, ForeignKey("aptitude_questions.id"), nullable=True
+    )
     difficulty: Optional[str] = Column(Text, nullable=True)
     state_before: Optional[str] = Column(Text, nullable=True)
     action_taken: Optional[str] = Column(Text, nullable=True)
