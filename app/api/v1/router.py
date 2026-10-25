@@ -34,3 +34,5 @@ api_router.include_router(interview_router)
 api_router.include_router(async_resume_router)
 api_router.include_router(report_router)
 api_router.include_router(candidate_report_router)
+
+api_router.include_router(portfolio_builder_router)
